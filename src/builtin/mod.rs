@@ -109,20 +109,20 @@ pub fn register_builtins(globals: &mut HashMap<String, Value>) {
         Value::Module(Rc::new(RefCell::new(time_ns))),
     );
 
-    // CAS函数
-    register_fn(globals, "cas_parse", cas::cas_parse);
-    register_fn(globals, "cas_differentiate", cas::cas_differentiate);
-    register_fn(globals, "cas_solve_linear", cas::cas_solve_linear);
-    register_fn(globals, "cas_evaluate_at", cas::cas_evaluate_at);
-    register_fn(globals, "cas_store", cas::cas_store);
-    register_fn(globals, "cas_load", cas::cas_load);
+    // CAS函数（移除cas_前缀）
+    register_fn(globals, "parse", cas::parse);
+    register_fn(globals, "differentiate", cas::differentiate);
+    register_fn(globals, "solve_linear", cas::solve_linear);
+    register_fn(globals, "evaluate_at", cas::evaluate_at);
+    register_fn(globals, "store", cas::store);
+    register_fn(globals, "load", cas::load);
     register_fn(
         globals,
-        "cas_numerical_derivative",
-        cas::cas_numerical_derivative,
+        "numerical_derivative",
+        cas::numerical_derivative,
     );
-    register_fn(globals, "integrate", cas::cas_integrate);
-    register_fn(globals, "definite_integral", cas::cas_definite_integral);
+    register_fn(globals, "integrate", cas::integrate);
+    register_fn(globals, "definite_integral", cas::definite_integral);
 }
 
 fn register_fn(

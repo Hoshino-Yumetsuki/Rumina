@@ -75,7 +75,7 @@ if (result4.startsWith("Error:")) {
 
 #### `tan(x)`
 
-计算 x 的正切值（x 为弧度）。
+计算 x 的正切值（x 为弧度）。使用 mathcore 进行计算。
 
 ```javascript
 const result = await rumina('tan(0);');
@@ -89,7 +89,7 @@ console.log(result2); // "0.9999999999999999" (约等于 1)
 
 #### `exp(x)`
 
-计算 e 的 x 次方，其中 e 是自然对数的底数。
+计算 e 的 x 次方，其中 e 是自然对数的底数。使用 mathcore 进行计算。
 
 ```javascript
 const result = await rumina('exp(0);');
@@ -104,23 +104,23 @@ console.log(result3); // "7.38905609893065" (e^2)
 
 ### 微分
 
-#### `cas_differentiate(expr, var)`
+#### `differentiate(expr, var)`
 
 对表达式进行符号微分（求导）。
 
 - **参数**:
-  - `expr` - 要微分的数学表达式（字符串）
+  - `expr` - 要微分的数学表达式（字符串或函数对象）
   - `var` - 微分变量（字符串）
 - **返回值**: 导数表达式（字符串）
 
 ```javascript
-const result = await rumina('cas_differentiate("x^2", "x");');
+const result = await rumina('differentiate("x^2", "x");');
 console.log(result); // "(2 * x)"
 
-const result2 = await rumina('cas_differentiate("sin(x)", "x");');
+const result2 = await rumina('differentiate("sin(x)", "x");');
 console.log(result2); // "cos(x)"
 
-const result3 = await rumina('cas_differentiate("x^3 + 2*x^2 + x", "x");');
+const result3 = await rumina('differentiate("x^3 + 2*x^2 + x", "x");');
 console.log(result3); // "((3 * (x ^ 2)) + ((2 * 2) * x) + 1)"
 ```
 
@@ -131,7 +131,7 @@ console.log(result3); // "((3 * (x ^ 2)) + ((2 * 2) * x) + 1)"
 对表达式进行符号积分（不定积分）。
 
 - **参数**:
-  - `expr` - 要积分的数学表达式（字符串）
+  - `expr` - 要积分的数学表达式（字符串或函数对象）
   - `var` - 积分变量（字符串）
 - **返回值**: 积分结果表达式（字符串，不含常数项）
 
@@ -151,7 +151,7 @@ console.log(result3); // "(((2 * (x ^ 2)) / 2) + x)"
 计算定积分（数值积分）。
 
 - **参数**:
-  - `expr` - 要积分的数学表达式（字符串）
+  - `expr` - 要积分的数学表达式（字符串或函数对象）
   - `var` - 积分变量（字符串）
   - `lower` - 下限（数值）
   - `upper` - 上限（数值）

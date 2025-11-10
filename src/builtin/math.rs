@@ -1,5 +1,6 @@
 // 数学函数模块
 use crate::value::{IrrationalValue, Value};
+use mathcore::MathCore;
 use num::BigInt;
 use num::{One, Zero};
 
@@ -56,7 +57,12 @@ pub fn tan(args: &[Value]) -> Result<Value, String> {
         return Err("tan expects 1 argument".to_string());
     }
     let val = args[0].to_float()?;
-    Ok(Value::Float(val.tan()))
+    let math = MathCore::new();
+    let expr = format!("tan({})", val);
+    match math.calculate(&expr) {
+        Ok(result) => Ok(Value::Float(result)),
+        Err(e) => Err(format!("tan calculation error: {}", e)),
+    }
 }
 
 pub fn exp(args: &[Value]) -> Result<Value, String> {
@@ -64,7 +70,12 @@ pub fn exp(args: &[Value]) -> Result<Value, String> {
         return Err("exp expects 1 argument".to_string());
     }
     let val = args[0].to_float()?;
-    Ok(Value::Float(val.exp()))
+    let math = MathCore::new();
+    let expr = format!("exp({})", val);
+    match math.calculate(&expr) {
+        Ok(result) => Ok(Value::Float(result)),
+        Err(e) => Err(format!("exp calculation error: {}", e)),
+    }
 }
 
 pub fn abs_fn(args: &[Value]) -> Result<Value, String> {
