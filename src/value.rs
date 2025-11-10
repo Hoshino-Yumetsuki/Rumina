@@ -146,16 +146,147 @@ impl fmt::Display for Value {
 }
 
 fn format_irrational(irr: &IrrationalValue) -> String {
+    fn simplify_sqrt(n: &Value) -> (i64, i64) {
+        // Try to simplify √n into a*√b where a is the largest perfect square factor
+        if let Value::Int(num) = n {
+            if *num < 0 {
+                return (1, *num);
+            }
+            let mut n = *num;
+            let mut coef = 1i64;
+            
+            // Extract perfect squares
+            let mut i = 2i64;
+            while i * i <= n {
+                let square = i * i;
+                while n % square == 0 {
+                    n /= square;
+                    coef *= i;
+                }
+                i += 1;
+            }
+            
+            (coef, n)
+        } else {
+            (1, 0)
+        }
+    }
+    
+    fn format_sqrt(n: &Value) -> String {
+        let (coef, remaining) = simplify_sqrt(n);
+        if remaining == 1 {
+            format!("{}", coef)
+        } else if coef == 1 {
+            format!("√{}", remaining)
+        } else {
+            format!("{}√{}", coef, remaining)
+        }
+    }
+    
+    fn format_product(coef: &Value, irr: &IrrationalValue) -> String {
+        // Check if this is a square (e.g., π*π or e*e)
+        if let Value::Irrational(coef_irr) = coef {
+            match (coef_irr, irr) {
+                (IrrationalValue::Pi, IrrationalValue::Pi) => return "π²".to_string(),
+                (IrrationalValue::E, IrrationalValue::E) => return "e²".to_string(),
+                _ => {}
+            }
+        }
+        
+        // Flatten nested products: (a * (b * irr)) => format as a*b*irr
+        if let IrrationalValue::Product(inner_coef, inner_irr) = irr {
+            // If outer coef is Int/Rational and inner coef is Int/Rational, multiply them
+            match (coef, inner_coef.as_ref()) {
+                (Value::Int(a), Value::Int(b)) => {
+                    let combined = Value::Int(a * b);
+                    return format_product(&combined, inner_irr);
+                }
+                (Value::Rational(a), Value::Rational(b)) => {
+                    let combined = Value::Rational(a * b);
+                    return format_product(&combined, inner_irr);
+                }
+                (Value::Int(a), Value::Rational(b)) => {
+                    let combined = Value::Rational(num_rational::BigRational::from_integer(num_bigint::BigInt::from(*a)) * b);
+                    return format_product(&combined, inner_irr);
+                }
+                (Value::Rational(a), Value::Int(b)) => {
+                    let combined = Value::Rational(a * num_rational::BigRational::from_integer(num_bigint::BigInt::from(*b)));
+                    return format_product(&combined, inner_irr);
+                }
+                // If outer coef is Int/Rational but inner is Irrational, format as outer*inner*innerirr
+                (Value::Int(_) | Value::Rational(_), Value::Irrational(_)) => {
+                    let coef_str = match coef {
+                        Value::Int(1) => "".to_string(),
+                        Value::Int(n) => n.to_string(),
+                        Value::Rational(r) => format!("{}", r),
+                        _ => unreachable!(),
+                    };
+                    let inner_str = format_irrational(irr);
+                    if coef_str.is_empty() {
+                        return inner_str;
+                    } else {
+                        return format!("{}{}", coef_str, inner_str);
+                    }
+                }
+                _ => {
+                    // Other cases, format as-is
+                    let coef_str = match coef {
+                        Value::Int(1) => return format_irrational(irr),
+                        Value::Int(n) => n.to_string(),
+                        Value::Irrational(i) => format_irrational(i),
+                        other => other.to_string(),
+                    };
+                    let irr_str = format_irrational(irr);
+                    return format!("{}*{}", coef_str, irr_str);
+                }
+            }
+        }
+        
+        let coef_str = match coef {
+            Value::Int(1) => return format_irrational(irr),
+            Value::Int(n) => n.to_string(),
+            Value::Rational(r) if r.numer() == &num_bigint::BigInt::from(1) 
+                && r.denom() == &num_bigint::BigInt::from(1) => return format_irrational(irr),
+            Value::Irrational(i) => format_irrational(i),
+            other => other.to_string(),
+        };
+        
+        let irr_str = format_irrational(irr);
+        
+        // Special formatting for cleaner output
+        match irr {
+            IrrationalValue::Pi | IrrationalValue::E | IrrationalValue::Sqrt(_) => {
+                format!("{}{}", coef_str, irr_str)
+            }
+            _ => format!("{}*{}", coef_str, irr_str),
+        }
+    }
+    
+    fn format_sum_flat(irr: &IrrationalValue, terms: &mut Vec<String>) {
+        match irr {
+            IrrationalValue::Sum(a, b) => {
+                format_sum_flat(a, terms);
+                format_sum_flat(b, terms);
+            }
+            other => {
+                terms.push(format_irrational(other));
+            }
+        }
+    }
+    
     match irr {
-        IrrationalValue::Sqrt(n) => format!("√{}", n),
+        IrrationalValue::Sqrt(n) => format_sqrt(n),
         IrrationalValue::Pi => "π".to_string(),
         IrrationalValue::E => "e".to_string(),
-        IrrationalValue::Product(coef, irr) => format!("{} * {}", coef, format_irrational(irr)),
-        IrrationalValue::Sum(a, b) => {
-            format!("({} + {})", format_irrational(a), format_irrational(b))
+        IrrationalValue::Product(coef, inner_irr) => format_product(coef, inner_irr),
+        IrrationalValue::Sum(_, _) => {
+            let mut terms = Vec::new();
+            format_sum_flat(irr, &mut terms);
+            terms.join("+")
         }
     }
 }
+
 
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
