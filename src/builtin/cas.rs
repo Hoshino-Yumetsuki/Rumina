@@ -180,18 +180,20 @@ pub fn cas_numerical_derivative(args: &[Value]) -> Result<Value, String> {
 
     let math = MathCore::new();
     let h = 1e-8;
-    
+
     let mut vars_plus = std::collections::HashMap::new();
     vars_plus.insert(var.clone(), point + h);
-    
+
     let mut vars_minus = std::collections::HashMap::new();
     vars_minus.insert(var.clone(), point - h);
 
-    let f_plus = math.evaluate_with_vars(&expr_str, &vars_plus)
+    let f_plus = math
+        .evaluate_with_vars(&expr_str, &vars_plus)
         .map_err(|e| format!("Evaluation error: {}", e))?;
-    let f_minus = math.evaluate_with_vars(&expr_str, &vars_minus)
+    let f_minus = math
+        .evaluate_with_vars(&expr_str, &vars_minus)
         .map_err(|e| format!("Evaluation error: {}", e))?;
-    
+
     let derivative = (f_plus - f_minus) / (2.0 * h);
 
     Ok(Value::Float(derivative))

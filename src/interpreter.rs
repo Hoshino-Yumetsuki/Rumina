@@ -603,7 +603,10 @@ impl Interpreter {
                     // 展开无理数乘法
                     self.multiply_irrationals(a, b)
                 }
-                _ => Err(format!("Unsupported operation: irrational {} irrational", op)),
+                _ => Err(format!(
+                    "Unsupported operation: irrational {} irrational",
+                    op
+                )),
             },
 
             // 有理数/整数 与 无理数的运算
