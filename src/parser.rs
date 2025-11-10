@@ -65,12 +65,12 @@ impl Parser {
             Token::Loop => self.parse_loop(),
             Token::Break => {
                 self.advance();
-                self.expect(Token::Semicolon)?;
+                self.match_token(&Token::Semicolon);
                 Ok(Stmt::Break)
             }
             Token::Continue => {
                 self.advance();
-                self.expect(Token::Semicolon)?;
+                self.match_token(&Token::Semicolon);
                 Ok(Stmt::Continue)
             }
             Token::Include => self.parse_include(),
@@ -83,7 +83,7 @@ impl Parser {
                 // 检查是否是赋值
                 if self.match_token(&Token::Equal) {
                     let value = self.parse_expression()?;
-                    self.expect(Token::Semicolon)?;
+                    self.match_token(&Token::Semicolon);
 
                     // 判断是简单赋值还是成员赋值
                     match expr {
@@ -97,13 +97,13 @@ impl Parser {
                     }
                 } else {
                     // 表达式语句
-                    self.expect(Token::Semicolon)?;
+                    self.match_token(&Token::Semicolon);
                     Ok(Stmt::Expr(expr))
                 }
             }
             _ => {
                 let expr = self.parse_expression()?;
-                self.expect(Token::Semicolon)?;
+                self.match_token(&Token::Semicolon);
                 Ok(Stmt::Expr(expr))
             }
         }
@@ -124,7 +124,7 @@ impl Parser {
 
         self.expect(Token::Equal)?;
         let value = self.parse_expression()?;
-        self.expect(Token::Semicolon)?;
+        self.match_token(&Token::Semicolon);
 
         Ok(Stmt::VarDecl {
             name,
@@ -211,7 +211,7 @@ impl Parser {
             Ok(Stmt::Return(None))
         } else {
             let expr = self.parse_expression()?;
-            self.expect(Token::Semicolon)?;
+            self.match_token(&Token::Semicolon);
             Ok(Stmt::Return(Some(expr)))
         }
     }
