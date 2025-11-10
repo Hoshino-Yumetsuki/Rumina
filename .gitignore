@@ -10,3 +10,6 @@ node_modules/
 
 lib
 src/bindings.ts
+# Yarn PnP files
+.pnp.cjs
+.pnp.loader.mjs

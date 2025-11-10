@@ -1,4 +1,5 @@
 use crate::value::Value;
+use crate::ast::{Expr, Stmt, BinOp, UnaryOp};
 use mathcore::MathCore;
 use std::collections::HashMap;
 
@@ -9,10 +10,97 @@ lazy_static::lazy_static! {
     static ref CAS_STORAGE: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
 }
 
+// Helper function to convert Value to expression string
+fn value_to_expr_string(value: &Value) -> Result<String, String> {
+    match value {
+        Value::String(s) => Ok(s.clone()),
+        Value::Lambda { params, body, .. } | Value::Function { name: _, params, body } => {
+            // For lambda/function, we need to convert the body to an expression string
+            // This is a simplified conversion that handles common cases
+            if params.len() != 1 {
+                return Err("Function must have exactly one parameter for calculus operations".to_string());
+            }
+            
+            // Convert the body statement to an expression string
+            stmt_to_expr_string(body, &params[0])
+        }
+        _ => Err(format!("Cannot convert {} to expression string", value.type_name())),
+    }
+}
+
+// Helper function to convert Stmt to expression string
+fn stmt_to_expr_string(stmt: &Stmt, var: &str) -> Result<String, String> {
+    match stmt {
+        Stmt::Expr(expr) => expr_to_string(expr, var),
+        Stmt::Return(Some(expr)) => expr_to_string(expr, var),
+        Stmt::Return(None) => Err("Return statement has no expression".to_string()),
+        Stmt::Block(stmts) => {
+            // For blocks, try to find a return statement or the last expression
+            for stmt in stmts.iter().rev() {
+                match stmt {
+                    Stmt::Return(Some(expr)) => return expr_to_string(expr, var),
+                    Stmt::Expr(expr) => return expr_to_string(expr, var),
+                    _ => continue,
+                }
+            }
+            Err("No expression found in block".to_string())
+        }
+        _ => Err("Unsupported statement type for expression conversion".to_string()),
+    }
+}
+
+// Helper function to convert Expr to string
+fn expr_to_string(expr: &Expr, var: &str) -> Result<String, String> {
+    match expr {
+        Expr::Int(n) => Ok(n.to_string()),
+        Expr::Float(f) => Ok(f.to_string()),
+        Expr::Ident(name) => {
+            if name == var {
+                Ok(var.to_string())
+            } else {
+                Ok(name.to_string())
+            }
+        }
+        Expr::Binary { left, op, right } => {
+            let left_str = expr_to_string(left, var)?;
+            let right_str = expr_to_string(right, var)?;
+            let op_str = match op {
+                BinOp::Add => "+",
+                BinOp::Sub => "-",
+                BinOp::Mul => "*",
+                BinOp::Div => "/",
+                BinOp::Pow => "^",
+                BinOp::Mod => "%",
+                _ => return Err(format!("Unsupported binary operator: {:?}", op)),
+            };
+            Ok(format!("({} {} {})", left_str, op_str, right_str))
+        }
+        Expr::Unary { op, expr: inner } => {
+            let inner_str = expr_to_string(inner, var)?;
+            match op {
+                UnaryOp::Neg => Ok(format!("(-{})", inner_str)),
+                _ => Err(format!("Unsupported unary operator: {:?}", op)),
+            }
+        }
+        Expr::Call { func, args } => {
+            if let Expr::Ident(func_name) = func.as_ref() {
+                let arg_strs: Result<Vec<_>, _> = args.iter()
+                    .map(|arg| expr_to_string(arg, var))
+                    .collect();
+                let arg_strs = arg_strs?;
+                Ok(format!("{}({})", func_name, arg_strs.join(", ")))
+            } else {
+                Err("Complex function calls not supported in expression conversion".to_string())
+            }
+        }
+        _ => Err(format!("Unsupported expression type: {:?}", expr)),
+    }
+}
+
 // CAS内置函数接口
-pub fn cas_parse(args: &[Value]) -> Result<Value, String> {
+pub fn parse(args: &[Value]) -> Result<Value, String> {
     if args.len() != 1 {
-        return Err("cas_parse expects 1 argument".to_string());
+        return Err("parse expects 1 argument".to_string());
     }
 
     match &args[0] {
@@ -23,25 +111,21 @@ pub fn cas_parse(args: &[Value]) -> Result<Value, String> {
                 Err(e) => Err(format!("Parse error: {}", e)),
             }
         }
-        _ => Err("cas_parse expects string".to_string()),
+        _ => Err("parse expects string".to_string()),
     }
 }
 
-pub fn cas_differentiate(args: &[Value]) -> Result<Value, String> {
+pub fn differentiate(args: &[Value]) -> Result<Value, String> {
     if args.len() != 2 {
-        return Err("cas_differentiate expects 2 arguments (expr, var)".to_string());
+        return Err("differentiate expects 2 arguments (expr, var)".to_string());
     }
 
-    let expr_str = if let Value::String(s) = &args[0] {
-        s.clone()
-    } else {
-        return Err("cas_differentiate expects string expression".to_string());
-    };
+    let expr_str = value_to_expr_string(&args[0])?;
 
     let var = if let Value::String(v) = &args[1] {
         v.clone()
     } else {
-        return Err("cas_differentiate expects string variable".to_string());
+        return Err("differentiate expects string variable as second argument".to_string());
     };
 
     // 求导
@@ -51,21 +135,17 @@ pub fn cas_differentiate(args: &[Value]) -> Result<Value, String> {
     }
 }
 
-pub fn cas_solve_linear(args: &[Value]) -> Result<Value, String> {
+pub fn solve_linear(args: &[Value]) -> Result<Value, String> {
     if args.len() != 2 {
-        return Err("cas_solve_linear expects 2 arguments (expr, var)".to_string());
+        return Err("solve_linear expects 2 arguments (expr, var)".to_string());
     }
 
-    let expr_str = if let Value::String(s) = &args[0] {
-        s.clone()
-    } else {
-        return Err("cas_solve_linear expects string expression".to_string());
-    };
+    let expr_str = value_to_expr_string(&args[0])?;
 
     let var = if let Value::String(v) = &args[1] {
         v.clone()
     } else {
-        return Err("cas_solve_linear expects string variable".to_string());
+        return Err("solve_linear expects string variable as second argument".to_string());
     };
 
     // 求解方程
@@ -86,21 +166,17 @@ pub fn cas_solve_linear(args: &[Value]) -> Result<Value, String> {
     }
 }
 
-pub fn cas_evaluate_at(args: &[Value]) -> Result<Value, String> {
+pub fn evaluate_at(args: &[Value]) -> Result<Value, String> {
     if args.len() != 3 {
-        return Err("cas_evaluate_at expects 3 arguments (expr, var, value)".to_string());
+        return Err("evaluate_at expects 3 arguments (expr, var, value)".to_string());
     }
 
-    let expr_str = if let Value::String(s) = &args[0] {
-        s.clone()
-    } else {
-        return Err("cas_evaluate_at expects string expression".to_string());
-    };
+    let expr_str = value_to_expr_string(&args[0])?;
 
     let var = if let Value::String(v) = &args[1] {
         v.clone()
     } else {
-        return Err("cas_evaluate_at expects string variable".to_string());
+        return Err("evaluate_at expects string variable as second argument".to_string());
     };
 
     let value = args[2].to_float()?;
@@ -116,21 +192,21 @@ pub fn cas_evaluate_at(args: &[Value]) -> Result<Value, String> {
     }
 }
 
-pub fn cas_store(args: &[Value]) -> Result<Value, String> {
+pub fn store(args: &[Value]) -> Result<Value, String> {
     if args.len() != 2 {
-        return Err("cas_store expects 2 arguments (name, expr)".to_string());
+        return Err("store expects 2 arguments (name, expr)".to_string());
     }
 
     let name = if let Value::String(n) = &args[0] {
         n.clone()
     } else {
-        return Err("cas_store expects string name".to_string());
+        return Err("store expects string name".to_string());
     };
 
     let expr = if let Value::String(s) = &args[1] {
         s.clone()
     } else {
-        return Err("cas_store expects string expression".to_string());
+        return Err("store expects string expression".to_string());
     };
 
     // 验证表达式是否可以解析
@@ -140,15 +216,15 @@ pub fn cas_store(args: &[Value]) -> Result<Value, String> {
     Ok(Value::Null)
 }
 
-pub fn cas_load(args: &[Value]) -> Result<Value, String> {
+pub fn load(args: &[Value]) -> Result<Value, String> {
     if args.len() != 1 {
-        return Err("cas_load expects 1 argument (name)".to_string());
+        return Err("load expects 1 argument (name)".to_string());
     }
 
     let name = if let Value::String(n) = &args[0] {
         n.clone()
     } else {
-        return Err("cas_load expects string name".to_string());
+        return Err("load expects string name".to_string());
     };
 
     if let Some(expr) = CAS_STORAGE.lock().unwrap().get(&name) {
@@ -158,21 +234,17 @@ pub fn cas_load(args: &[Value]) -> Result<Value, String> {
     }
 }
 
-pub fn cas_numerical_derivative(args: &[Value]) -> Result<Value, String> {
+pub fn numerical_derivative(args: &[Value]) -> Result<Value, String> {
     if args.len() != 3 {
-        return Err("cas_numerical_derivative expects 3 arguments (expr, var, point)".to_string());
+        return Err("numerical_derivative expects 3 arguments (expr, var, point)".to_string());
     }
 
-    let expr_str = if let Value::String(s) = &args[0] {
-        s.clone()
-    } else {
-        return Err("cas_numerical_derivative expects string expression".to_string());
-    };
+    let expr_str = value_to_expr_string(&args[0])?;
 
     let var = if let Value::String(v) = &args[1] {
         v.clone()
     } else {
-        return Err("cas_numerical_derivative expects string variable".to_string());
+        return Err("numerical_derivative expects string variable as second argument".to_string());
     };
 
     let point = args[2].to_float()?;
@@ -198,21 +270,17 @@ pub fn cas_numerical_derivative(args: &[Value]) -> Result<Value, String> {
     Ok(Value::Float(derivative))
 }
 
-pub fn cas_integrate(args: &[Value]) -> Result<Value, String> {
+pub fn integrate(args: &[Value]) -> Result<Value, String> {
     if args.len() != 2 {
-        return Err("cas_integrate expects 2 arguments (expr, var)".to_string());
+        return Err("integrate expects 2 arguments (expr, var)".to_string());
     }
 
-    let expr_str = if let Value::String(s) = &args[0] {
-        s.clone()
-    } else {
-        return Err("cas_integrate expects string expression".to_string());
-    };
+    let expr_str = value_to_expr_string(&args[0])?;
 
     let var = if let Value::String(v) = &args[1] {
         v.clone()
     } else {
-        return Err("cas_integrate expects string variable".to_string());
+        return Err("integrate expects string variable as second argument".to_string());
     };
 
     // 积分
@@ -222,23 +290,19 @@ pub fn cas_integrate(args: &[Value]) -> Result<Value, String> {
     }
 }
 
-pub fn cas_definite_integral(args: &[Value]) -> Result<Value, String> {
+pub fn definite_integral(args: &[Value]) -> Result<Value, String> {
     if args.len() != 4 {
         return Err(
-            "cas_definite_integral expects 4 arguments (expr, var, lower, upper)".to_string(),
+            "definite_integral expects 4 arguments (expr, var, lower, upper)".to_string(),
         );
     }
 
-    let expr_str = if let Value::String(s) = &args[0] {
-        s.clone()
-    } else {
-        return Err("cas_definite_integral expects string expression".to_string());
-    };
+    let expr_str = value_to_expr_string(&args[0])?;
 
     let var = if let Value::String(v) = &args[1] {
         v.clone()
     } else {
-        return Err("cas_definite_integral expects string variable".to_string());
+        return Err("definite_integral expects string variable as second argument".to_string());
     };
 
     let lower = args[2].to_float()?;
