@@ -75,7 +75,7 @@ if (result4.startsWith("Error:")) {
 
 #### `tan(x)`
 
-计算 x 的正切值（x 为弧度）。使用 mathcore 进行计算。
+计算 x 的正切值（x 为弧度）。
 
 ```javascript
 const result = await rumina('tan(0);');
@@ -89,7 +89,7 @@ console.log(result2); // "0.9999999999999999" (约等于 1)
 
 #### `exp(x)`
 
-计算 e 的 x 次方，其中 e 是自然对数的底数。使用 mathcore 进行计算。
+计算 e 的 x 次方，其中 e 是自然对数的底数。
 
 ```javascript
 const result = await rumina('exp(0);');
