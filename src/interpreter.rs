@@ -194,6 +194,12 @@ impl Interpreter {
             }
 
             Stmt::Include(path) => {
+                // 首先检查是否是已注册的内置模块
+                if self.globals.borrow().contains_key(path) {
+                    // 内置模块已经存在，不需要加载
+                    return Ok(());
+                }
+
                 // 加载模块文件
                 let mut file_path = path.clone();
 
@@ -211,6 +217,10 @@ impl Interpreter {
                     fs::read_to_string(&examples_path)
                         .map_err(|e| format!("Cannot read module '{}': {}", file_path, e))?
                 } else {
+                    // 如果找不到文件，检查是否是内置模块
+                    if self.globals.borrow().contains_key(path) {
+                        return Ok(());
+                    }
                     return Err(format!("Cannot read module '{}'", file_path));
                 };
 
@@ -686,7 +696,13 @@ impl Interpreter {
                 Ok(result)
             }
 
-            Value::NativeFunction { func, .. } => func(&args),
+            Value::NativeFunction { name, func } => {
+                // 特殊处理 foreach 函数
+                if name == "foreach" {
+                    return self.handle_foreach(&args);
+                }
+                func(&args)
+            }
 
             _ => Err(format!("Cannot call {}", func.type_name())),
         }
@@ -766,6 +782,34 @@ impl Interpreter {
 
             _ => Err(format!("Cannot call method on {}", func.type_name())),
         }
+    }
+
+    fn handle_foreach(&mut self, args: &[Value]) -> Result<Value, String> {
+        if args.len() != 2 {
+            return Err("foreach expects 2 arguments (array, function)".to_string());
+        }
+
+        let array = match &args[0] {
+            Value::Array(arr) => arr.clone(),
+            _ => {
+                return Err(format!(
+                    "foreach expects array, got {}",
+                    args[0].type_name()
+                ))
+            }
+        };
+
+        let callback = args[1].clone();
+
+        // 遍历数组并调用回调函数
+        let arr = array.borrow();
+        for (index, element) in arr.iter().enumerate() {
+            // 调用回调函数，传入索引和元素
+            let callback_args = vec![Value::Int(index as i64), element.clone()];
+            self.call_function(callback.clone(), callback_args)?;
+        }
+
+        Ok(Value::Null)
     }
 
     fn set_variable(&mut self, name: String, value: Value) {
