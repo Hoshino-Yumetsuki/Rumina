@@ -58,69 +58,6 @@ pub fn register_builtins(globals: &mut HashMap<String, Value>) {
     register_fn(globals, "cross", array::cross);
     register_fn(globals, "det", array::det);
 
-    // 字符串命名空间
-    let mut string_ns = HashMap::new();
-    string_ns.insert(
-        "concat".to_string(),
-        Value::NativeFunction {
-            name: "string::concat".to_string(),
-            func: string::concat,
-        },
-    );
-    string_ns.insert(
-        "length".to_string(),
-        Value::NativeFunction {
-            name: "string::length".to_string(),
-            func: string::length,
-        },
-    );
-    string_ns.insert(
-        "char_at".to_string(),
-        Value::NativeFunction {
-            name: "string::char_at".to_string(),
-            func: string::char_at,
-        },
-    );
-    string_ns.insert(
-        "at".to_string(),
-        Value::NativeFunction {
-            name: "string::at".to_string(),
-            func: string::at,
-        },
-    );
-    string_ns.insert(
-        "find".to_string(),
-        Value::NativeFunction {
-            name: "string::find".to_string(),
-            func: string::find,
-        },
-    );
-    string_ns.insert(
-        "sub".to_string(),
-        Value::NativeFunction {
-            name: "string::sub".to_string(),
-            func: string::sub,
-        },
-    );
-    string_ns.insert(
-        "cat".to_string(),
-        Value::NativeFunction {
-            name: "string::cat".to_string(),
-            func: string::cat,
-        },
-    );
-    string_ns.insert(
-        "replace_by_index".to_string(),
-        Value::NativeFunction {
-            name: "string::replace_by_index".to_string(),
-            func: string::replace_by_index,
-        },
-    );
-    globals.insert(
-        "string".to_string(),
-        Value::Module(Rc::new(RefCell::new(string_ns))),
-    );
-
     // 随机命名空间
     let mut random_ns = HashMap::new();
     random_ns.insert(
