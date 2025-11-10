@@ -1,6 +1,6 @@
-use num_bigint::BigInt;
-use num_rational::BigRational;
-use num_traits::One;
+use num::BigInt;
+use num::BigRational;
+use num::One;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
