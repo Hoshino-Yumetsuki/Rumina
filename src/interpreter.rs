@@ -515,6 +515,17 @@ impl Interpreter {
                             Ok(Value::Rational(b / &a_rational))
                         }
                     }
+                    BinOp::Pow => {
+                        // Convert both to float for power operations
+                        let a_float = *a as f64;
+                        let b_float = b.numer().to_string().parse::<f64>().unwrap_or(0.0)
+                            / b.denom().to_string().parse::<f64>().unwrap_or(1.0);
+                        if matches!(left, Value::Int(_)) {
+                            Ok(Value::Float(a_float.powf(b_float)))
+                        } else {
+                            Ok(Value::Float(b_float.powf(a_float)))
+                        }
+                    }
                     _ => Err(format!(
                         "Unsupported operation: int/rational {} rational/int",
                         op
@@ -543,6 +554,13 @@ impl Interpreter {
                             Ok(Value::Float(b_float / a))
                         }
                     }
+                    BinOp::Pow => {
+                        if matches!(left, Value::Float(_)) {
+                            Ok(Value::Float(a.powf(b_float)))
+                        } else {
+                            Ok(Value::Float(b_float.powf(*a)))
+                        }
+                    }
                     _ => Err(format!(
                         "Unsupported operation: float/rational {} rational/float",
                         op
@@ -555,6 +573,14 @@ impl Interpreter {
                 BinOp::Sub => Ok(Value::Rational(a - b)),
                 BinOp::Mul => Ok(Value::Rational(a * b)),
                 BinOp::Div => Ok(Value::Rational(a / b)),
+                BinOp::Pow => {
+                    // Convert both rationals to float for power operations
+                    let a_float = a.numer().to_string().parse::<f64>().unwrap_or(0.0)
+                        / a.denom().to_string().parse::<f64>().unwrap_or(1.0);
+                    let b_float = b.numer().to_string().parse::<f64>().unwrap_or(0.0)
+                        / b.denom().to_string().parse::<f64>().unwrap_or(1.0);
+                    Ok(Value::Float(a_float.powf(b_float)))
+                }
                 BinOp::Equal => Ok(Value::Bool(a == b)),
                 BinOp::NotEqual => Ok(Value::Bool(a != b)),
                 _ => Err(format!("Unsupported operation: rational {} rational", op)),
@@ -986,6 +1012,82 @@ impl Interpreter {
             Value::Int(n) => Ok(Value::BigInt(BigInt::from(n))),
             Value::BigInt(_) => Ok(val),
             _ => Err(format!("Cannot convert {} to bigint", val.type_name())),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
+
+    fn eval_expr(code: &str) -> Result<Value, String> {
+        let mut lexer = Lexer::new(code.to_string());
+        let tokens = lexer.tokenize();
+        let mut parser = Parser::new(tokens);
+        let ast = parser.parse()?;
+        let mut interpreter = Interpreter::new();
+        interpreter.interpret(ast)?;
+        
+        // Get the last evaluated expression
+        // For simplicity, we'll evaluate the expression and return it
+        let mut lexer = Lexer::new(format!("{};", code));
+        let tokens = lexer.tokenize();
+        let mut parser = Parser::new(tokens);
+        let ast = parser.parse()?;
+        let mut interpreter = Interpreter::new();
+        match interpreter.interpret(ast)? {
+            Some(v) => Ok(v),
+            None => Err("No value returned".to_string()),
+        }
+    }
+
+    #[test]
+    fn test_power_int_rational() {
+        // Test 8^(1/3) = 2
+        let result = eval_expr("8^(1/3)").unwrap();
+        match result {
+            Value::Float(f) => assert!((f - 2.0).abs() < 0.001),
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_power_negative_int_rational() {
+        // Test (-8)^(1/3) - should return a float (NaN or negative value)
+        let result = eval_expr("(-8)^(1/3)");
+        assert!(result.is_ok(), "Should not error on (-8)^(1/3)");
+    }
+
+    #[test]
+    fn test_power_int_by_half() {
+        // Test 4^(1/2) = 2
+        let result = eval_expr("4^(1/2)").unwrap();
+        match result {
+            Value::Float(f) => assert!((f - 2.0).abs() < 0.001),
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_power_rational_rational() {
+        // Test (1/2)^(1/2)
+        let result = eval_expr("(1/2)^(1/2)");
+        assert!(result.is_ok(), "Should support rational^rational");
+        match result.unwrap() {
+            Value::Float(_) => {},
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_power_float_rational() {
+        // Test 2.0^(1/2)
+        let result = eval_expr("2.0^(1/2)").unwrap();
+        match result {
+            Value::Float(f) => assert!((f - 1.414).abs() < 0.01),
+            _ => panic!("Expected Float result"),
         }
     }
 }
