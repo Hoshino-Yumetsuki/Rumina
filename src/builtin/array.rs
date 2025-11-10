@@ -83,16 +83,21 @@ pub fn concat(args: &[Value]) -> Result<Value, String> {
     }
 
     let mut result = Vec::new();
-    
+
     for arg in args {
         match arg {
             Value::Array(arr) => {
                 result.extend(arr.borrow().iter().cloned());
             }
-            _ => return Err(format!("concat expects only arrays, got {}", arg.type_name())),
+            _ => {
+                return Err(format!(
+                    "concat expects only arrays, got {}",
+                    arg.type_name()
+                ));
+            }
         }
     }
-    
+
     Ok(Value::Array(Rc::new(RefCell::new(result))))
 }
 
