@@ -67,6 +67,10 @@ if (result4.startsWith("Error:")) {
 }
 ```
 
+## 文档
+
+[Lamina 官方文档](https://wiki.lm-lang.org/)
+
 ## 许可证
 
 LGPL-2.1
