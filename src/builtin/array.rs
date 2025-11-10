@@ -181,3 +181,77 @@ pub fn cross(args: &[Value]) -> Result<Value, String> {
         _ => Err("cross expects two arrays".to_string()),
     }
 }
+
+// Lamina-compliant: det() - matrix determinant
+pub fn det(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("det expects 1 argument (matrix)".to_string());
+    }
+
+    match &args[0] {
+        Value::Array(matrix) => {
+            let matrix = matrix.borrow();
+            
+            // Convert to 2D float matrix
+            let n = matrix.len();
+            if n == 0 {
+                return Err("Cannot compute determinant of empty matrix".to_string());
+            }
+
+            let mut mat: Vec<Vec<f64>> = Vec::new();
+            for row in matrix.iter() {
+                match row {
+                    Value::Array(row_arr) => {
+                        let row_arr = row_arr.borrow();
+                        if row_arr.len() != n {
+                            return Err("Matrix must be square".to_string());
+                        }
+                        let mut float_row = Vec::new();
+                        for val in row_arr.iter() {
+                            float_row.push(val.to_float()?);
+                        }
+                        mat.push(float_row);
+                    }
+                    _ => return Err("det expects a matrix (2D array)".to_string()),
+                }
+            }
+
+            // Calculate determinant using recursive Laplace expansion
+            let result = calculate_determinant(&mat);
+            Ok(Value::Float(result))
+        }
+        _ => Err(format!("det expects array, got {}", args[0].type_name())),
+    }
+}
+
+fn calculate_determinant(matrix: &Vec<Vec<f64>>) -> f64 {
+    let n = matrix.len();
+    
+    if n == 1 {
+        return matrix[0][0];
+    }
+    
+    if n == 2 {
+        return matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0];
+    }
+    
+    let mut det = 0.0;
+    for col in 0..n {
+        // Create submatrix
+        let mut submatrix = Vec::new();
+        for row in 1..n {
+            let mut subrow = Vec::new();
+            for c in 0..n {
+                if c != col {
+                    subrow.push(matrix[row][c]);
+                }
+            }
+            submatrix.push(subrow);
+        }
+        
+        let sign = if col % 2 == 0 { 1.0 } else { -1.0 };
+        det += sign * matrix[0][col] * calculate_determinant(&submatrix);
+    }
+    
+    det
+}

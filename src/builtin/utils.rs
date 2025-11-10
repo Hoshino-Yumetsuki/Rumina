@@ -202,3 +202,79 @@ pub fn update(args: &[Value]) -> Result<Value, String> {
         _ => Err("update expects two structs".to_string()),
     }
 }
+
+// Lamina-compliant: fraction() - convert float to rational
+pub fn fraction(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("fraction expects 1 argument".to_string());
+    }
+
+    match &args[0] {
+        Value::Float(f) => {
+            if !f.is_finite() {
+                return Err("Cannot convert infinite or NaN to fraction".to_string());
+            }
+
+            // Use continued fraction method to convert
+            let precision = 1e-10;
+            let mut h1 = 1i64;
+            let mut h2 = 0i64;
+            let mut k1 = 0i64;
+            let mut k2 = 1i64;
+            let mut b = *f;
+
+            for _ in 0..100 {
+                let a = b.floor() as i64;
+                let mut aux = h1;
+                h1 = a * h1 + h2;
+                h2 = aux;
+                aux = k1;
+                k1 = a * k1 + k2;
+                k2 = aux;
+
+                if (f - h1 as f64 / k1 as f64).abs() < precision {
+                    use num::BigInt;
+                    return Ok(Value::Rational(
+                        num::rational::Ratio::new(BigInt::from(h1), BigInt::from(k1))
+                    ));
+                }
+
+                b = 1.0 / (b - a as f64);
+                if !b.is_finite() {
+                    break;
+                }
+            }
+
+            // Fallback: return as rational approximation
+            use num::BigInt;
+            Ok(Value::Rational(
+                num::rational::Ratio::from_float(*f).unwrap_or(num::rational::Ratio::new(BigInt::from(0), BigInt::from(1)))
+            ))
+        }
+        Value::Int(i) => {
+            use num::BigInt;
+            Ok(Value::Rational(num::rational::Ratio::new(BigInt::from(*i), BigInt::from(1))))
+        }
+        Value::Rational(r) => Ok(Value::Rational(r.clone())),
+        _ => Err(format!("Cannot convert {} to fraction", args[0].type_name())),
+    }
+}
+
+// Lamina-compliant: decimal() - convert rational to float
+pub fn decimal(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("decimal expects 1 argument".to_string());
+    }
+
+    match &args[0] {
+        Value::Rational(r) => {
+            use num::ToPrimitive;
+            let numer = r.numer().to_f64().ok_or("Numerator too large to convert")?;
+            let denom = r.denom().to_f64().ok_or("Denominator too large to convert")?;
+            Ok(Value::Float(numer / denom))
+        }
+        Value::Int(i) => Ok(Value::Float(*i as f64)),
+        Value::Float(f) => Ok(Value::Float(*f)),
+        _ => Err(format!("Cannot convert {} to decimal", args[0].type_name())),
+    }
+}

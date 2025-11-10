@@ -35,6 +35,16 @@ pub fn register_builtins(globals: &mut HashMap<String, Value>) {
     register_fn(globals, "same", utils::same);
     register_fn(globals, "setattr", utils::setattr);
     register_fn(globals, "update", utils::update);
+    register_fn(globals, "fraction", utils::fraction);
+    register_fn(globals, "decimal", utils::decimal);
+
+    // Lamina-compliant string functions (with underscores)
+    register_fn(globals, "string_concat", string::concat);
+    register_fn(globals, "string_char_at", string::char_at);
+    register_fn(globals, "string_length", string::length);
+    register_fn(globals, "string_find", string::find);
+    register_fn(globals, "string_sub_string", string::sub);
+    register_fn(globals, "string_replace_by_index", string::replace_by_index);
 
     // 数组函数
     register_fn(globals, "foreach", array::foreach);
@@ -46,6 +56,7 @@ pub fn register_builtins(globals: &mut HashMap<String, Value>) {
     register_fn(globals, "dot", array::dot);
     register_fn(globals, "norm", array::norm);
     register_fn(globals, "cross", array::cross);
+    register_fn(globals, "det", array::det);
 
     // 字符串命名空间
     let mut string_ns = HashMap::new();
@@ -96,6 +107,13 @@ pub fn register_builtins(globals: &mut HashMap<String, Value>) {
         Value::NativeFunction {
             name: "string::cat".to_string(),
             func: string::cat,
+        },
+    );
+    string_ns.insert(
+        "replace_by_index".to_string(),
+        Value::NativeFunction {
+            name: "string::replace_by_index".to_string(),
+            func: string::replace_by_index,
         },
     );
     globals.insert(
