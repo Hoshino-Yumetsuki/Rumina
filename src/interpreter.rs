@@ -807,6 +807,134 @@ impl Interpreter {
                 _ => Err(format!("Unsupported operation: array {} array", op)),
             },
 
+            // Complex 与 Complex 的运算
+            (Value::Complex(a), Value::Complex(b)) => match op {
+                BinOp::Add => Ok(Value::Complex(a + b)),
+                BinOp::Sub => Ok(Value::Complex(a - b)),
+                BinOp::Mul => Ok(Value::Complex(a * b)),
+                BinOp::Div => {
+                    if b.re == 0.0 && b.im == 0.0 {
+                        return Err("Division by zero".to_string());
+                    }
+                    Ok(Value::Complex(a / b))
+                }
+                BinOp::Equal => Ok(Value::Bool(a == b)),
+                BinOp::NotEqual => Ok(Value::Bool(a != b)),
+                _ => Err(format!("Unsupported operation: complex {} complex", op)),
+            },
+
+            // Complex 与 Int 的运算
+            (Value::Complex(c), Value::Int(i)) | (Value::Int(i), Value::Complex(c)) => {
+                let i_complex = Complex64::new(*i as f64, 0.0);
+                match op {
+                    BinOp::Add => Ok(Value::Complex(if matches!(left, Value::Complex(_)) { c + i_complex } else { i_complex + c })),
+                    BinOp::Sub => Ok(Value::Complex(if matches!(left, Value::Complex(_)) { c - i_complex } else { i_complex - c })),
+                    BinOp::Mul => Ok(Value::Complex(c * i_complex)),
+                    BinOp::Div => {
+                        if matches!(left, Value::Complex(_)) {
+                            if *i == 0 {
+                                return Err("Division by zero".to_string());
+                            }
+                            Ok(Value::Complex(c / i_complex))
+                        } else {
+                            if c.re == 0.0 && c.im == 0.0 {
+                                return Err("Division by zero".to_string());
+                            }
+                            Ok(Value::Complex(i_complex / c))
+                        }
+                    }
+                    _ => Err(format!("Unsupported operation: complex {} int", op)),
+                }
+            },
+
+            // Complex 与 Float 的运算
+            (Value::Complex(c), Value::Float(f)) | (Value::Float(f), Value::Complex(c)) => {
+                let f_complex = Complex64::new(*f, 0.0);
+                match op {
+                    BinOp::Add => Ok(Value::Complex(if matches!(left, Value::Complex(_)) { c + f_complex } else { f_complex + c })),
+                    BinOp::Sub => Ok(Value::Complex(if matches!(left, Value::Complex(_)) { c - f_complex } else { f_complex - c })),
+                    BinOp::Mul => Ok(Value::Complex(c * f_complex)),
+                    BinOp::Div => {
+                        if matches!(left, Value::Complex(_)) {
+                            if *f == 0.0 {
+                                return Err("Division by zero".to_string());
+                            }
+                            Ok(Value::Complex(c / f_complex))
+                        } else {
+                            if c.re == 0.0 && c.im == 0.0 {
+                                return Err("Division by zero".to_string());
+                            }
+                            Ok(Value::Complex(f_complex / c))
+                        }
+                    }
+                    _ => Err(format!("Unsupported operation: complex {} float", op)),
+                }
+            },
+
+            // Complex 与 Rational 的运算
+            (Value::Complex(c), Value::Rational(r)) | (Value::Rational(r), Value::Complex(c)) => {
+                let r_float = r.numer().to_string().parse::<f64>().unwrap_or(0.0)
+                    / r.denom().to_string().parse::<f64>().unwrap_or(1.0);
+                let r_complex = Complex64::new(r_float, 0.0);
+                match op {
+                    BinOp::Add => Ok(Value::Complex(if matches!(left, Value::Complex(_)) { c + r_complex } else { r_complex + c })),
+                    BinOp::Sub => Ok(Value::Complex(if matches!(left, Value::Complex(_)) { c - r_complex } else { r_complex - c })),
+                    BinOp::Mul => Ok(Value::Complex(c * r_complex)),
+                    BinOp::Div => {
+                        if matches!(left, Value::Complex(_)) {
+                            if r_float == 0.0 {
+                                return Err("Division by zero".to_string());
+                            }
+                            Ok(Value::Complex(c / r_complex))
+                        } else {
+                            if c.re == 0.0 && c.im == 0.0 {
+                                return Err("Division by zero".to_string());
+                            }
+                            Ok(Value::Complex(r_complex / c))
+                        }
+                    }
+                    _ => Err(format!("Unsupported operation: complex {} rational", op)),
+                }
+            },
+
+            // Complex 与 Irrational 的运算
+            (Value::Complex(c), Value::Irrational(irr)) | (Value::Irrational(irr), Value::Complex(c)) => {
+                // 将无理数转换为浮点数来进行复数运算
+                let irr_val = match irr {
+                    IrrationalValue::Pi => std::f64::consts::PI,
+                    IrrationalValue::E => std::f64::consts::E,
+                    IrrationalValue::Sqrt(n) => {
+                        let n_float = match n.as_ref() {
+                            Value::Int(i) => *i as f64,
+                            Value::Float(f) => *f,
+                            _ => return Err("Cannot convert irrational to float for complex operation".to_string()),
+                        };
+                        n_float.sqrt()
+                    }
+                    _ => return Err("Complex arithmetic with composite irrationals not yet supported".to_string()),
+                };
+                let irr_complex = Complex64::new(irr_val, 0.0);
+                match op {
+                    BinOp::Add => Ok(Value::Complex(if matches!(left, Value::Complex(_)) { c + irr_complex } else { irr_complex + c })),
+                    BinOp::Sub => Ok(Value::Complex(if matches!(left, Value::Complex(_)) { c - irr_complex } else { irr_complex - c })),
+                    BinOp::Mul => Ok(Value::Complex(c * irr_complex)),
+                    BinOp::Div => {
+                        if matches!(left, Value::Complex(_)) {
+                            if irr_val == 0.0 {
+                                return Err("Division by zero".to_string());
+                            }
+                            Ok(Value::Complex(c / irr_complex))
+                        } else {
+                            if c.re == 0.0 && c.im == 0.0 {
+                                return Err("Division by zero".to_string());
+                            }
+                            Ok(Value::Complex(irr_complex / c))
+                        }
+                    }
+                    _ => Err(format!("Unsupported operation: complex {} irrational", op)),
+                }
+            },
+
             _ => Err(format!(
                 "Unsupported operation: {} {} {}",
                 left.type_name(),
@@ -821,6 +949,12 @@ impl Interpreter {
             UnaryOp::Neg => match val {
                 Value::Int(n) => Ok(Value::Int(-n)),
                 Value::Float(f) => Ok(Value::Float(-f)),
+                Value::Complex(c) => Ok(Value::Complex(-c)),
+                Value::Rational(r) => Ok(Value::Rational(-r)),
+                Value::Irrational(irr) => Ok(Value::Irrational(IrrationalValue::Product(
+                    Box::new(Value::Int(-1)),
+                    Box::new(irr.clone()),
+                ))),
                 _ => Err(format!("Cannot negate {}", val.type_name())),
             },
             UnaryOp::Not => Ok(Value::Bool(!val.is_truthy())),
@@ -862,9 +996,21 @@ impl Interpreter {
                 Box::new(Pi),
             ))),
 
-            // √a * √b = √(a*b)
+            // √a * √b = √(a*b), with simplification
             (Sqrt(x), Sqrt(y)) => {
                 let product = self.eval_binary_op(x, BinOp::Mul, y)?;
+                // Check if the product is a perfect square
+                match &product {
+                    Value::Int(n) if *n >= 0 => {
+                        let sqrt = (*n as f64).sqrt();
+                        if sqrt.fract() == 0.0 {
+                            // Perfect square, return as Int
+                            return Ok(Value::Int(sqrt as i64));
+                        }
+                    }
+                    _ => {}
+                }
+                // Not a perfect square, return as Irrational with simplification
                 Ok(Value::Irrational(Sqrt(Box::new(product))))
             }
 
@@ -1126,15 +1272,6 @@ mod tests {
         let mut parser = Parser::new(tokens);
         let ast = parser.parse()?;
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(ast)?;
-
-        // Get the last evaluated expression
-        // For simplicity, we'll evaluate the expression and return it
-        let mut lexer = Lexer::new(format!("{};", code));
-        let tokens = lexer.tokenize();
-        let mut parser = Parser::new(tokens);
-        let ast = parser.parse()?;
-        let mut interpreter = Interpreter::new();
         match interpreter.interpret(ast)? {
             Some(v) => Ok(v),
             None => Err("No value returned".to_string()),
@@ -1277,6 +1414,226 @@ mod tests {
                 // May also return Int if simplified, which is fine
                 println!("Got non-symbolic result: {:?}", other);
             }
+        }
+    }
+
+    // Tests for Complex number arithmetic
+    #[test]
+    fn test_complex_addition() {
+        // Test Complex + Complex
+        let code = r#"
+            var c1 = (-4)^(1/2);
+            var c2 = (-9)^(1/2);
+            c1 + c2;
+        "#;
+        let result = eval_expr(code);
+        assert!(result.is_ok(), "Complex addition should work");
+        match result.unwrap() {
+            Value::Complex(c) => {
+                assert!(c.re.abs() < 0.001, "Real part should be ~0");
+                assert!((c.im.abs() - 5.0).abs() < 0.001, "Imaginary part should be ~5");
+            }
+            other => panic!("Expected Complex result, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_complex_multiplication() {
+        // Test Complex * Complex
+        let code = r#"
+            var c1 = (-1)^(1/2);
+            var c2 = (-1)^(1/2);
+            c1 * c2;
+        "#;
+        let result = eval_expr(code);
+        assert!(result.is_ok(), "Complex multiplication should work");
+        match result.unwrap() {
+            Value::Complex(c) => {
+                assert!((c.re + 1.0).abs() < 0.001, "Real part should be ~-1, got {}", c.re);
+                assert!(c.im.abs() < 0.001, "Imaginary part should be ~0");
+            }
+            other => panic!("Expected Complex result, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_complex_with_int() {
+        // Test Complex + Int
+        let code = r#"
+            var c = (-4)^(1/2);
+            c + 3;
+        "#;
+        let result = eval_expr(code);
+        assert!(result.is_ok(), "Complex + Int should work");
+        match result.unwrap() {
+            Value::Complex(c) => {
+                assert!((c.re - 3.0).abs() < 0.001, "Real part should be ~3");
+                assert!((c.im.abs() - 2.0).abs() < 0.001, "Imaginary part should be ~2");
+            }
+            other => panic!("Expected Complex result, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_complex_division() {
+        // Test Complex / Complex
+        let code = r#"
+            var c1 = (-4)^(1/2);
+            var c2 = (-1)^(1/2);
+            c1 / c2;
+        "#;
+        let result = eval_expr(code);
+        assert!(result.is_ok(), "Complex division should work");
+        match result.unwrap() {
+            Value::Complex(c) => {
+                // (-4)^(1/2) = 2i, (-1)^(1/2) = i, so 2i / i = 2
+                eprintln!("Result: re={}, im={}", c.re, c.im);
+                assert!((c.re - 2.0).abs() < 0.001, "Real part should be ~2, got {}", c.re);
+                assert!(c.im.abs() < 0.001, "Imaginary part should be ~0, got {}", c.im);
+            }
+            other => panic!("Expected Complex result, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_complex_with_rational() {
+        // Test Complex * Rational
+        let code = r#"
+            var c = (-1)^(1/2);
+            var r = 1/2;
+            c * r;
+        "#;
+        let result = eval_expr(code);
+        assert!(result.is_ok(), "Complex * Rational should work");
+        match result.unwrap() {
+            Value::Complex(c) => {
+                assert!(c.re.abs() < 0.001, "Real part should be ~0");
+                assert!((c.im.abs() - 0.5).abs() < 0.001, "Imaginary part should be ~0.5");
+            }
+            other => panic!("Expected Complex result, got {:?}", other),
+        }
+    }
+
+    // Tests for enhanced Irrational simplification
+    #[test]
+    fn test_sqrt_multiplication_simplification() {
+        // Test √2 × √2 → 2
+        let code = r#"
+            var s = sqrt(2);
+            s * s;
+        "#;
+        let result = eval_expr(code);
+        assert!(result.is_ok(), "√2 × √2 should work");
+        match result.unwrap() {
+            Value::Int(n) => assert_eq!(n, 2, "√2 × √2 should equal 2"),
+            other => panic!("Expected Int(2), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_sqrt_multiplication_non_perfect() {
+        // Test √2 × √3 → √6
+        let code = r#"
+            var s2 = sqrt(2);
+            var s3 = sqrt(3);
+            s2 * s3;
+        "#;
+        let result = eval_expr(code);
+        assert!(result.is_ok(), "√2 × √3 should work");
+        match result.unwrap() {
+            Value::Irrational(IrrationalValue::Sqrt(n)) => {
+                match n.as_ref() {
+                    Value::Int(6) => {}, // Expected √6
+                    other => panic!("Expected √6, got √{:?}", other),
+                }
+            }
+            other => panic!("Expected Irrational(Sqrt(6)), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_sqrt_eight_simplification() {
+        // Test √8 → 2√2 (via display formatting)
+        let code = "sqrt(8);";
+        let result = eval_expr(code);
+        assert!(result.is_ok(), "sqrt(8) should work");
+        // The result should be Irrational(Sqrt(8)), which displays as "2√2"
+        match result.unwrap() {
+            Value::Irrational(IrrationalValue::Sqrt(n)) => {
+                match n.as_ref() {
+                    Value::Int(8) => {
+                        // Display formatting will simplify to 2√2
+                    }
+                    other => panic!("Expected √8, got √{:?}", other),
+                }
+            }
+            other => panic!("Expected Irrational(Sqrt(8)), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_complex_negation() {
+        // Test negation of complex numbers
+        let code = r#"
+            var c = (-1)^(1/2);
+            -c;
+        "#;
+        let result = eval_expr(code);
+        assert!(result.is_ok(), "Complex negation should work");
+        match result.unwrap() {
+            Value::Complex(c) => {
+                assert!(c.re.abs() < 0.001, "Real part should be ~0");
+                assert!((c.im + 1.0).abs() < 0.001, "Imaginary part should be ~-1");
+            }
+            other => panic!("Expected Complex result, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_rational_negation() {
+        // Test negation of rational numbers
+        let code = r#"
+            var r = 3/4;
+            -r;
+        "#;
+        let result = eval_expr(code);
+        assert!(result.is_ok(), "Rational negation should work");
+        match result.unwrap() {
+            Value::Rational(r) => {
+                assert_eq!(r.numer().to_string(), "-3");
+                assert_eq!(r.denom().to_string(), "4");
+            }
+            other => panic!("Expected Rational result, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_irrational_negation() {
+        // Test negation of irrational numbers
+        let code = r#"
+            var s = sqrt(2);
+            -s;
+        "#;
+        let result = eval_expr(code);
+        assert!(result.is_ok(), "Irrational negation should work");
+        match result.unwrap() {
+            Value::Irrational(IrrationalValue::Product(coef, irr)) => {
+                match coef.as_ref() {
+                    Value::Int(-1) => {
+                        match irr.as_ref() {
+                            IrrationalValue::Sqrt(n) => {
+                                match n.as_ref() {
+                                    Value::Int(2) => {}, // Expected -√2
+                                    other => panic!("Expected -√2, got -√{:?}", other),
+                                }
+                            }
+                            other => panic!("Expected Sqrt, got {:?}", other),
+                        }
+                    }
+                    other => panic!("Expected coefficient -1, got {:?}", other),
+                }
+            }
+            other => panic!("Expected Irrational(Product(-1, Sqrt(2))), got {:?}", other),
         }
     }
 }
