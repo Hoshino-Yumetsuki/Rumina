@@ -42,6 +42,7 @@ pub fn register_builtins(globals: &mut HashMap<String, Value>) {
     register_fn(globals, "push", array::push);
     register_fn(globals, "pop", array::pop);
     register_fn(globals, "range", array::range);
+    register_fn(globals, "concat", array::concat);
     register_fn(globals, "dot", array::dot);
     register_fn(globals, "norm", array::norm);
     register_fn(globals, "cross", array::cross);
