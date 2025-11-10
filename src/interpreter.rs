@@ -794,6 +794,28 @@ impl Interpreter {
                             )))
                         }
                     }
+                    BinOp::Div => {
+                        if matches!(left, Value::Irrational(_)) {
+                            // irr / int = (1/int) * irr
+                            if *a == 0 {
+                                Err("Division by zero".to_string())
+                            } else if *a == 1 {
+                                Ok(Value::Irrational(irr.clone()))
+                            } else {
+                                Ok(Value::Irrational(IrrationalValue::Product(
+                                    Box::new(Value::Rational(BigRational::new(
+                                        BigInt::from(1),
+                                        BigInt::from(*a),
+                                    ))),
+                                    Box::new(irr.clone()),
+                                )))
+                            }
+                        } else {
+                            // int / irr - convert to float
+                            let irr_float = irrational_to_float(irr);
+                            Ok(Value::Float((*a as f64) / irr_float))
+                        }
+                    }
                     BinOp::Add => {
                         if matches!(left, Value::Irrational(_)) {
                             Ok(Value::Irrational(IrrationalValue::Sum(
