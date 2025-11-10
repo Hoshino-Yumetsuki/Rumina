@@ -1,6 +1,6 @@
 {
   "name": "rumina",
-  "description": "Lamina language compatible compiler written in rust",
+  "description": "Lamina language compatible interpreter written in rust",
   "version": "1.0.0",
   "main": "lib/index.cjs",
   "module": "lib/index.mjs",
