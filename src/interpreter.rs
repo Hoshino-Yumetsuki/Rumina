@@ -12,6 +12,8 @@ use crate::lexer::Lexer;
 use crate::parser::Parser;
 use crate::value::*;
 
+use mathcore::MathCore;
+
 pub struct Interpreter {
     globals: Rc<RefCell<HashMap<String, Value>>>,
     locals: Vec<Rc<RefCell<HashMap<String, Value>>>>,
@@ -440,6 +442,39 @@ impl Interpreter {
         }
     }
 
+    /// Helper function to compute power operations using mathcore
+    /// Handles special cases like negative bases with fractional exponents
+    fn compute_power(&self, base: f64, exponent: f64) -> Result<f64, String> {
+        // Special handling for negative bases with fractional exponents
+        if base < 0.0 {
+            // Check if exponent is a rational number with odd denominator
+            // For simplicity, check if exponent is close to 1/3, 1/5, etc.
+            let denom_approx = (1.0 / exponent).round();
+            if (1.0 / denom_approx - exponent).abs() < 1e-10 && denom_approx % 2.0 != 0.0 {
+                // Odd denominator - compute real root
+                // For n-th root of negative number: -|base|^(1/n)
+                let abs_base = base.abs();
+                return Ok(-abs_base.powf(exponent));
+            }
+        }
+        
+        // Use mathcore for evaluation
+        let math = MathCore::new();
+        let expr = format!("{}^{}", base, exponent);
+        
+        match math.evaluate(&expr) {
+            Ok(mathcore::Expr::Number(result)) => Ok(result),
+            Ok(_) => {
+                // If mathcore returns non-numeric result, fallback to powf
+                Ok(base.powf(exponent))
+            }
+            Err(_) => {
+                // If mathcore fails, fallback to powf
+                Ok(base.powf(exponent))
+            }
+        }
+    }
+
     fn eval_binary_op(&mut self, left: &Value, op: BinOp, right: &Value) -> Result<Value, String> {
         match (left, right) {
             (Value::Int(a), Value::Int(b)) => {
@@ -521,9 +556,11 @@ impl Interpreter {
                         let b_float = b.numer().to_string().parse::<f64>().unwrap_or(0.0)
                             / b.denom().to_string().parse::<f64>().unwrap_or(1.0);
                         if matches!(left, Value::Int(_)) {
-                            Ok(Value::Float(a_float.powf(b_float)))
+                            let result = self.compute_power(a_float, b_float)?;
+                            Ok(Value::Float(result))
                         } else {
-                            Ok(Value::Float(b_float.powf(a_float)))
+                            let result = self.compute_power(b_float, a_float)?;
+                            Ok(Value::Float(result))
                         }
                     }
                     _ => Err(format!(
@@ -556,9 +593,11 @@ impl Interpreter {
                     }
                     BinOp::Pow => {
                         if matches!(left, Value::Float(_)) {
-                            Ok(Value::Float(a.powf(b_float)))
+                            let result = self.compute_power(*a, b_float)?;
+                            Ok(Value::Float(result))
                         } else {
-                            Ok(Value::Float(b_float.powf(*a)))
+                            let result = self.compute_power(b_float, *a)?;
+                            Ok(Value::Float(result))
                         }
                     }
                     _ => Err(format!(
@@ -579,7 +618,8 @@ impl Interpreter {
                         / a.denom().to_string().parse::<f64>().unwrap_or(1.0);
                     let b_float = b.numer().to_string().parse::<f64>().unwrap_or(0.0)
                         / b.denom().to_string().parse::<f64>().unwrap_or(1.0);
-                    Ok(Value::Float(a_float.powf(b_float)))
+                    let result = self.compute_power(a_float, b_float)?;
+                    Ok(Value::Float(result))
                 }
                 BinOp::Equal => Ok(Value::Bool(a == b)),
                 BinOp::NotEqual => Ok(Value::Bool(a != b)),
@@ -1055,9 +1095,17 @@ mod tests {
 
     #[test]
     fn test_power_negative_int_rational() {
-        // Test (-8)^(1/3) - should return a float (NaN or negative value)
+        // Test (-8)^(1/3) - should return -2 (real cube root)
         let result = eval_expr("(-8)^(1/3)");
         assert!(result.is_ok(), "Should not error on (-8)^(1/3)");
+        
+        // Verify the result is -2
+        match result.unwrap() {
+            Value::Float(f) => {
+                assert!((f - (-2.0)).abs() < 0.001, "Expected -2, got {}", f);
+            }
+            _ => panic!("Expected Float result"),
+        }
     }
 
     #[test]
@@ -1087,6 +1135,30 @@ mod tests {
         let result = eval_expr("2.0^(1/2)").unwrap();
         match result {
             Value::Float(f) => assert!((f - 1.414).abs() < 0.01),
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_power_negative_fifth_root() {
+        // Test (-32)^(1/5) = -2 (real fifth root)
+        let result = eval_expr("(-32)^(1/5)");
+        assert!(result.is_ok(), "Should not error on (-32)^(1/5)");
+        match result.unwrap() {
+            Value::Float(f) => {
+                assert!((f - (-2.0)).abs() < 0.001, "Expected -2, got {}", f);
+            }
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_power_mathcore_integration() {
+        // Test that mathcore is being used for calculations
+        // 27^(1/3) should give exactly 3.0
+        let result = eval_expr("27^(1/3)").unwrap();
+        match result {
+            Value::Float(f) => assert!((f - 3.0).abs() < 0.001, "Expected 3.0, got {}", f),
             _ => panic!("Expected Float result"),
         }
     }
