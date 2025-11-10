@@ -434,11 +434,7 @@ pub fn parse_simple_expr(s: &str) -> Result<SymExpr, String> {
                 }
             }
         }
-        if is_outer {
-            &s[1..s.len() - 1]
-        } else {
-            s
-        }
+        if is_outer { &s[1..s.len() - 1] } else { s }
     } else {
         s
     };

@@ -34,14 +34,21 @@ impl Interpreter {
         }
     }
 
-    pub fn interpret(&mut self, statements: Vec<Stmt>) -> Result<(), String> {
+    pub fn interpret(&mut self, statements: Vec<Stmt>) -> Result<Option<Value>, String> {
+        let mut last_value = None;
         for stmt in statements {
-            self.execute_stmt(&stmt)?;
+            // 如果是表达式语句,保存其值
+            if let Stmt::Expr(expr) = stmt {
+                last_value = Some(self.eval_expr(&expr)?);
+            } else {
+                self.execute_stmt(&stmt)?;
+            }
+
             if self.return_value.is_some() || self.break_flag || self.continue_flag {
                 break;
             }
         }
-        Ok(())
+        Ok(last_value)
     }
 
     fn execute_stmt(&mut self, stmt: &Stmt) -> Result<(), String> {
@@ -795,7 +802,7 @@ impl Interpreter {
                 return Err(format!(
                     "foreach expects array, got {}",
                     args[0].type_name()
-                ))
+                ));
             }
         };
 

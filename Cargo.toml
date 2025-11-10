@@ -1,7 +1,14 @@
 [package]
 name = "rumina"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "rumina-cli"
+path = "src/main.rs"
 
 [dependencies]
 num-bigint = "^0.4"
@@ -10,6 +17,10 @@ num-traits = "^0.2"
 rand = "^0.9"
 chrono = "^0.4"
 lazy_static = "^1.4"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+getrandom = { version = "^0.3", features = ["wasm_js"] }
 
 [dev-dependencies]
 criterion = "^0.7"

@@ -271,7 +271,7 @@ impl Parser {
                 return Err(format!(
                     "Expected string or identifier, found {:?}",
                     self.current_token()
-                ))
+                ));
             }
         };
         self.advance();
