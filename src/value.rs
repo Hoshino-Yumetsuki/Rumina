@@ -1,5 +1,5 @@
-use num_bigint::BigInt;
-use num_rational::BigRational;
+use num::BigInt;
+use num::BigRational;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
@@ -206,11 +206,11 @@ fn format_irrational(irr: &IrrationalValue) -> String {
                     return format_product(&combined, inner_irr);
                 }
                 (Value::Int(a), Value::Rational(b)) => {
-                    let combined = Value::Rational(num_rational::BigRational::from_integer(num_bigint::BigInt::from(*a)) * b);
+                    let combined = Value::Rational(BigRational::from_integer(BigInt::from(*a)) * b);
                     return format_product(&combined, inner_irr);
                 }
                 (Value::Rational(a), Value::Int(b)) => {
-                    let combined = Value::Rational(a * num_rational::BigRational::from_integer(num_bigint::BigInt::from(*b)));
+                    let combined = Value::Rational(a * BigRational::from_integer(BigInt::from(*b)));
                     return format_product(&combined, inner_irr);
                 }
                 // If outer coef is Int/Rational but inner is Irrational, format as outer*inner*innerirr
@@ -245,8 +245,8 @@ fn format_irrational(irr: &IrrationalValue) -> String {
         let coef_str = match coef {
             Value::Int(1) => return format_irrational(irr),
             Value::Int(n) => n.to_string(),
-            Value::Rational(r) if r.numer() == &num_bigint::BigInt::from(1) 
-                && r.denom() == &num_bigint::BigInt::from(1) => return format_irrational(irr),
+            Value::Rational(r) if r.numer() == &BigInt::from(1) 
+                && r.denom() == &BigInt::from(1) => return format_irrational(irr),
             Value::Irrational(i) => format_irrational(i),
             other => other.to_string(),
         };
