@@ -35,6 +35,16 @@ pub fn register_builtins(globals: &mut HashMap<String, Value>) {
     register_fn(globals, "same", utils::same);
     register_fn(globals, "setattr", utils::setattr);
     register_fn(globals, "update", utils::update);
+    register_fn(globals, "fraction", utils::fraction);
+    register_fn(globals, "decimal", utils::decimal);
+
+    // Lamina-compliant string functions (with underscores)
+    register_fn(globals, "string_concat", string::concat);
+    register_fn(globals, "string_char_at", string::char_at);
+    register_fn(globals, "string_length", string::length);
+    register_fn(globals, "string_find", string::find);
+    register_fn(globals, "string_sub_string", string::sub);
+    register_fn(globals, "string_replace_by_index", string::replace_by_index);
 
     // 数组函数
     register_fn(globals, "foreach", array::foreach);
@@ -46,62 +56,7 @@ pub fn register_builtins(globals: &mut HashMap<String, Value>) {
     register_fn(globals, "dot", array::dot);
     register_fn(globals, "norm", array::norm);
     register_fn(globals, "cross", array::cross);
-
-    // 字符串命名空间
-    let mut string_ns = HashMap::new();
-    string_ns.insert(
-        "concat".to_string(),
-        Value::NativeFunction {
-            name: "string::concat".to_string(),
-            func: string::concat,
-        },
-    );
-    string_ns.insert(
-        "length".to_string(),
-        Value::NativeFunction {
-            name: "string::length".to_string(),
-            func: string::length,
-        },
-    );
-    string_ns.insert(
-        "char_at".to_string(),
-        Value::NativeFunction {
-            name: "string::char_at".to_string(),
-            func: string::char_at,
-        },
-    );
-    string_ns.insert(
-        "at".to_string(),
-        Value::NativeFunction {
-            name: "string::at".to_string(),
-            func: string::at,
-        },
-    );
-    string_ns.insert(
-        "find".to_string(),
-        Value::NativeFunction {
-            name: "string::find".to_string(),
-            func: string::find,
-        },
-    );
-    string_ns.insert(
-        "sub".to_string(),
-        Value::NativeFunction {
-            name: "string::sub".to_string(),
-            func: string::sub,
-        },
-    );
-    string_ns.insert(
-        "cat".to_string(),
-        Value::NativeFunction {
-            name: "string::cat".to_string(),
-            func: string::cat,
-        },
-    );
-    globals.insert(
-        "string".to_string(),
-        Value::Module(Rc::new(RefCell::new(string_ns))),
-    );
+    register_fn(globals, "det", array::det);
 
     // 随机命名空间
     let mut random_ns = HashMap::new();

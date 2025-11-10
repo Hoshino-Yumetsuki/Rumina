@@ -1,5 +1,6 @@
 use num::BigInt;
 use num::BigRational;
+use num::complex::Complex64;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
@@ -15,6 +16,7 @@ pub enum Value {
     BigInt(BigInt),
     Rational(BigRational),
     Irrational(IrrationalValue),
+    Complex(Complex64),
     Bool(bool),
     String(String),
     Null,
@@ -40,7 +42,8 @@ pub enum Value {
 /// 无理数表示（符号形式）
 #[derive(Debug, Clone)]
 pub enum IrrationalValue {
-    Sqrt(Box<Value>),                          // √n
+    Sqrt(Box<Value>),                          // √n (square root)
+    Root(u32, Box<Value>),                     // n-th root: ⁿ√value
     Pi,                                        // π
     E,                                         // e
     Product(Box<Value>, Box<IrrationalValue>), // a * irr
@@ -55,6 +58,7 @@ impl Value {
             Value::BigInt(_) => "bigint",
             Value::Rational(_) => "rational",
             Value::Irrational(_) => "irrational",
+            Value::Complex(_) => "complex",
             Value::Bool(_) => "bool",
             Value::String(_) => "string",
             Value::Null => "null",
@@ -73,6 +77,7 @@ impl Value {
             Value::Null => false,
             Value::Int(0) => false,
             Value::Float(f) if *f == 0.0 => false,
+            Value::Complex(c) if c.re == 0.0 && c.im == 0.0 => false,
             _ => true,
         }
     }
@@ -86,6 +91,7 @@ impl Value {
                 let den = r.denom().to_string().parse::<f64>().unwrap_or(1.0);
                 Ok(num / den)
             }
+            Value::Complex(c) if c.im == 0.0 => Ok(c.re),
             _ => Err(format!("Cannot convert {} to float", self.type_name())),
         }
     }
@@ -108,6 +114,13 @@ impl fmt::Display for Value {
             Value::BigInt(n) => write!(f, "{}", n),
             Value::Rational(r) => write!(f, "{}/{}", r.numer(), r.denom()),
             Value::Irrational(irr) => write!(f, "{}", format_irrational(irr)),
+            Value::Complex(c) => {
+                if c.im >= 0.0 {
+                    write!(f, "{}+{}i", c.re, c.im)
+                } else {
+                    write!(f, "{}{}i", c.re, c.im)
+                }
+            }
             Value::Bool(b) => write!(f, "{}", b),
             Value::String(s) => write!(f, "{}", s),
             Value::Null => write!(f, "null"),
@@ -279,6 +292,13 @@ fn format_irrational(irr: &IrrationalValue) -> String {
 
     match irr {
         IrrationalValue::Sqrt(n) => format_sqrt(n),
+        IrrationalValue::Root(degree, n) => {
+            // Format n-th root
+            match degree {
+                2 => format_sqrt(n),  // Use sqrt notation for square roots
+                _ => format!("{}√{}", degree, n),
+            }
+        }
         IrrationalValue::Pi => "π".to_string(),
         IrrationalValue::E => "e".to_string(),
         IrrationalValue::Product(coef, inner_irr) => format_product(coef, inner_irr),
@@ -295,6 +315,7 @@ impl PartialEq for Value {
         match (self, other) {
             (Value::Int(a), Value::Int(b)) => a == b,
             (Value::Float(a), Value::Float(b)) => a == b,
+            (Value::Complex(a), Value::Complex(b)) => a == b,
             (Value::Bool(a), Value::Bool(b)) => a == b,
             (Value::String(a), Value::String(b)) => a == b,
             (Value::Null, Value::Null) => true,

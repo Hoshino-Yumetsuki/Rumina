@@ -117,3 +117,31 @@ pub fn sub(args: &[Value]) -> Result<Value, String> {
 pub fn cat(args: &[Value]) -> Result<Value, String> {
     concat(args)
 }
+
+pub fn replace_by_index(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 3 {
+        return Err("string::replace_by_index expects 3 arguments (string, start, replacement)".to_string());
+    }
+
+    match (&args[0], &args[1], &args[2]) {
+        (Value::String(s), Value::Int(start), Value::String(replacement)) => {
+            let chars: Vec<char> = s.chars().collect();
+            let start = *start as usize;
+
+            if start >= chars.len() {
+                return Ok(Value::String(s.clone()));
+            }
+
+            let replacement_len = replacement.chars().count();
+            let end = (start + replacement_len).min(chars.len());
+            
+            let mut result = String::new();
+            result.extend(chars[..start].iter());
+            result.push_str(replacement);
+            result.extend(chars[end..].iter());
+            
+            Ok(Value::String(result))
+        }
+        _ => Err("string::replace_by_index expects (string, int, string)".to_string()),
+    }
+}

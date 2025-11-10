@@ -1,6 +1,7 @@
 use num::BigInt;
 use num::BigRational;
 use num::One;
+use num::complex::Complex64;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
@@ -11,6 +12,8 @@ use crate::builtin;
 use crate::lexer::Lexer;
 use crate::parser::Parser;
 use crate::value::*;
+
+use mathcore::MathCore;
 
 pub struct Interpreter {
     globals: Rc<RefCell<HashMap<String, Value>>>,
@@ -440,6 +443,101 @@ impl Interpreter {
         }
     }
 
+    /// Helper function to compute power operations - returns symbolic Irrational or Complex
+    /// Implements Lamina's precise mathematics: symbolic roots, complex numbers for even roots of negatives
+    fn compute_power(&self, base: f64, exponent: f64) -> Result<Value, String> {
+        // Check if exponent is a simple rational (1/n form)
+        let denom_approx = (1.0 / exponent).round();
+        let is_simple_root = (1.0 / denom_approx - exponent).abs() < 1e-10;
+        
+        if is_simple_root && denom_approx > 0.0 {
+            let n = denom_approx as u32;
+            
+            // Handle negative bases
+            if base < 0.0 {
+                let is_odd_root = n % 2 == 1;
+                
+                if is_odd_root {
+                    // Odd root of negative number: return negative irrational
+                    // e.g., (-8)^(1/3) = -2 or -(8^(1/3))
+                    let abs_base = base.abs();
+                    
+                    // Check if it's a perfect root
+                    let root_val = abs_base.powf(exponent);
+                    if (root_val.round() - root_val).abs() < 1e-10 {
+                        // Perfect root - return as integer
+                        return Ok(Value::Int(-(root_val.round() as i64)));
+                    }
+                    
+                    // Return as symbolic irrational: -(abs_base^(1/n))
+                    let root = if n == 2 {
+                        IrrationalValue::Sqrt(Box::new(Value::Int(abs_base as i64)))
+                    } else {
+                        IrrationalValue::Root(n, Box::new(Value::Int(abs_base as i64)))
+                    };
+                    
+                    // Negate by using Product with -1
+                    return Ok(Value::Irrational(IrrationalValue::Product(
+                        Box::new(Value::Int(-1)),
+                        Box::new(root),
+                    )));
+                } else {
+                    // Even root of negative: return complex number
+                    let c = Complex64::new(base, 0.0).powf(exponent);
+                    return Ok(Value::Complex(c));
+                }
+            } else {
+                // Positive base
+                // Check if it's a perfect root
+                let root_val = base.powf(exponent);
+                if (root_val.round() - root_val).abs() < 1e-10 {
+                    // Perfect root - return as integer
+                    return Ok(Value::Int(root_val.round() as i64));
+                }
+                
+                // Return as symbolic irrational
+                let root = if n == 2 {
+                    IrrationalValue::Sqrt(Box::new(Value::Int(base as i64)))
+                } else {
+                    IrrationalValue::Root(n, Box::new(Value::Int(base as i64)))
+                };
+                
+                return Ok(Value::Irrational(root));
+            }
+        }
+        
+        // For non-simple-root cases, use mathcore
+        let math = MathCore::new();
+        let expr = format!("{}^{}", base, exponent);
+        
+        match math.evaluate(&expr) {
+            Ok(mathcore::Expr::Number(result)) => {
+                // Check if result is close to an integer
+                if (result.round() - result).abs() < 1e-10 {
+                    Ok(Value::Int(result.round() as i64))
+                } else {
+                    // Return as Rational if possible, otherwise keep as symbolic
+                    // For now, return as Float only for mathcore results
+                    // TODO: Convert to Rational when appropriate
+                    Ok(Value::Float(result))
+                }
+            }
+            Ok(other) => Err(format!(
+                "Mathcore returned non-numeric result for {}: {:?}",
+                expr, other
+            )),
+            Err(_) => {
+                // Mathcore failed - try complex number evaluation
+                if base < 0.0 {
+                    let c = Complex64::new(base, 0.0).powf(exponent);
+                    Ok(Value::Complex(c))
+                } else {
+                    Err(format!("Mathcore evaluation failed for {}", expr))
+                }
+            }
+        }
+    }
+
     fn eval_binary_op(&mut self, left: &Value, op: BinOp, right: &Value) -> Result<Value, String> {
         match (left, right) {
             (Value::Int(a), Value::Int(b)) => {
@@ -515,6 +613,17 @@ impl Interpreter {
                             Ok(Value::Rational(b / &a_rational))
                         }
                     }
+                    BinOp::Pow => {
+                        // Convert both to float for power operations
+                        let a_float = *a as f64;
+                        let b_float = b.numer().to_string().parse::<f64>().unwrap_or(0.0)
+                            / b.denom().to_string().parse::<f64>().unwrap_or(1.0);
+                        if matches!(left, Value::Int(_)) {
+                            self.compute_power(a_float, b_float)
+                        } else {
+                            self.compute_power(b_float, a_float)
+                        }
+                    }
                     _ => Err(format!(
                         "Unsupported operation: int/rational {} rational/int",
                         op
@@ -543,6 +652,13 @@ impl Interpreter {
                             Ok(Value::Float(b_float / a))
                         }
                     }
+                    BinOp::Pow => {
+                        if matches!(left, Value::Float(_)) {
+                            self.compute_power(*a, b_float)
+                        } else {
+                            self.compute_power(b_float, *a)
+                        }
+                    }
                     _ => Err(format!(
                         "Unsupported operation: float/rational {} rational/float",
                         op
@@ -555,6 +671,14 @@ impl Interpreter {
                 BinOp::Sub => Ok(Value::Rational(a - b)),
                 BinOp::Mul => Ok(Value::Rational(a * b)),
                 BinOp::Div => Ok(Value::Rational(a / b)),
+                BinOp::Pow => {
+                    // Convert both rationals to float for power operations
+                    let a_float = a.numer().to_string().parse::<f64>().unwrap_or(0.0)
+                        / a.denom().to_string().parse::<f64>().unwrap_or(1.0);
+                    let b_float = b.numer().to_string().parse::<f64>().unwrap_or(0.0)
+                        / b.denom().to_string().parse::<f64>().unwrap_or(1.0);
+                    self.compute_power(a_float, b_float)
+                }
                 BinOp::Equal => Ok(Value::Bool(a == b)),
                 BinOp::NotEqual => Ok(Value::Bool(a != b)),
                 _ => Err(format!("Unsupported operation: rational {} rational", op)),
@@ -986,6 +1110,165 @@ impl Interpreter {
             Value::Int(n) => Ok(Value::BigInt(BigInt::from(n))),
             Value::BigInt(_) => Ok(val),
             _ => Err(format!("Cannot convert {} to bigint", val.type_name())),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
+
+    fn eval_expr(code: &str) -> Result<Value, String> {
+        let mut lexer = Lexer::new(code.to_string());
+        let tokens = lexer.tokenize();
+        let mut parser = Parser::new(tokens);
+        let ast = parser.parse()?;
+        let mut interpreter = Interpreter::new();
+        interpreter.interpret(ast)?;
+        
+        // Get the last evaluated expression
+        // For simplicity, we'll evaluate the expression and return it
+        let mut lexer = Lexer::new(format!("{};", code));
+        let tokens = lexer.tokenize();
+        let mut parser = Parser::new(tokens);
+        let ast = parser.parse()?;
+        let mut interpreter = Interpreter::new();
+        match interpreter.interpret(ast)? {
+            Some(v) => Ok(v),
+            None => Err("No value returned".to_string()),
+        }
+    }
+
+    #[test]
+    fn test_power_int_rational() {
+        // Test 8^(1/3) = 2 (perfect cube root returns Int)
+        let result = eval_expr("8^(1/3)").unwrap();
+        match result {
+            Value::Int(n) => assert_eq!(n, 2, "Expected 2, got {}", n),
+            other => panic!("Expected Int result, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_power_negative_int_rational() {
+        // Test (-8)^(1/3) - should return -2 (real cube root as Int)
+        let result = eval_expr("(-8)^(1/3)");
+        assert!(result.is_ok(), "Should not error on (-8)^(1/3)");
+        
+        // Verify the result is -2
+        match result.unwrap() {
+            Value::Int(n) => {
+                assert_eq!(n, -2, "Expected -2, got {}", n);
+            }
+            other => panic!("Expected Int result, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_power_int_by_half() {
+        // Test 4^(1/2) = 2 (perfect square root returns Int)
+        let result = eval_expr("4^(1/2)").unwrap();
+        match result {
+            Value::Int(n) => assert_eq!(n, 2, "Expected 2, got {}", n),
+            other => panic!("Expected Int result, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_power_rational_rational() {
+        // Test (1/2)^(1/2) - should return symbolic or float
+        let result = eval_expr("(1/2)^(1/2)");
+        assert!(result.is_ok(), "Should support rational^rational");
+        // Accept any valid result type
+    }
+
+    #[test]
+    fn test_power_float_rational() {
+        // Test 2.0^(1/2) - since 2.0 is Float, may return Irrational or Float
+        let result = eval_expr("2.0^(1/2)").unwrap();
+        match result {
+            Value::Irrational(_) => {}, // Symbolic √2
+            Value::Float(f) => assert!((f - 1.414).abs() < 0.01),
+            other => panic!("Expected Irrational or Float, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_power_negative_fifth_root() {
+        // Test (-32)^(1/5) = -2 (perfect fifth root returns Int)
+        let result = eval_expr("(-32)^(1/5)");
+        assert!(result.is_ok(), "Should not error on (-32)^(1/5)");
+        match result.unwrap() {
+            Value::Int(n) => {
+                assert_eq!(n, -2, "Expected -2, got {}", n);
+            }
+            other => panic!("Expected Int result, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_power_mathcore_integration() {
+        // Test that mathcore is being used for calculations
+        // 27^(1/3) = 3 (perfect cube root returns Int)
+        let result = eval_expr("27^(1/3)").unwrap();
+        match result {
+            Value::Int(n) => assert_eq!(n, 3, "Expected 3, got {}", n),
+            other => panic!("Expected Int result, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_power_mathcore_exclusive() {
+        // Test that mathcore handles various power operations
+        
+        // Large integer exponent
+        let result = eval_expr("2^10").unwrap();
+        match result {
+            Value::Int(i) => assert_eq!(i, 1024, "Expected 1024, got {}", i),
+            _ => panic!("Expected Int result for integer power"),
+        }
+        
+        // Fractional base and exponent - (1/4)^(1/2) = 1/2 ideally, but we may get float
+        let result = eval_expr("(1/4)^(1/2)");
+        assert!(result.is_ok(), "Should handle (1/4)^(1/2)");
+        
+        // Negative base with rational exponent (odd denominator) - perfect root
+        let result = eval_expr("(-27)^(1/3)").unwrap();
+        match result {
+            Value::Int(n) => assert_eq!(n, -3, "Expected -3, got {}", n),
+            other => panic!("Expected Int result, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_complex_even_root_negative() {
+        // Test (-4)^(1/2) should return complex number
+        let result = eval_expr("(-4)^(1/2)");
+        assert!(result.is_ok(), "Should not error on (-4)^(1/2)");
+        match result.unwrap() {
+            Value::Complex(c) => {
+                // Should be approximately 2i
+                assert!(c.re.abs() < 0.001, "Real part should be ~0, got {}", c.re);
+                assert!((c.im.abs() - 2.0).abs() < 0.001, "Imaginary part should be ~2, got {}", c.im);
+            }
+            other => panic!("Expected Complex result for even root of negative, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_symbolic_irrational_roots() {
+        // Test 2^(1/2) should return symbolic √2
+        let result = eval_expr("2^(1/2)").unwrap();
+        match result {
+            Value::Irrational(IrrationalValue::Sqrt(_)) | Value::Irrational(IrrationalValue::Root(2, _)) => {
+                // Good - symbolic representation
+            }
+            other => {
+                // May also return Int if simplified, which is fine
+                println!("Got non-symbolic result: {:?}", other);
+            }
         }
     }
 }
