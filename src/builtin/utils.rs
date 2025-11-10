@@ -234,9 +234,10 @@ pub fn fraction(args: &[Value]) -> Result<Value, String> {
 
                 if (f - h1 as f64 / k1 as f64).abs() < precision {
                     use num::BigInt;
-                    return Ok(Value::Rational(
-                        num::rational::Ratio::new(BigInt::from(h1), BigInt::from(k1))
-                    ));
+                    return Ok(Value::Rational(num::rational::Ratio::new(
+                        BigInt::from(h1),
+                        BigInt::from(k1),
+                    )));
                 }
 
                 b = 1.0 / (b - a as f64);
@@ -248,15 +249,22 @@ pub fn fraction(args: &[Value]) -> Result<Value, String> {
             // Fallback: return as rational approximation
             use num::BigInt;
             Ok(Value::Rational(
-                num::rational::Ratio::from_float(*f).unwrap_or(num::rational::Ratio::new(BigInt::from(0), BigInt::from(1)))
+                num::rational::Ratio::from_float(*f)
+                    .unwrap_or(num::rational::Ratio::new(BigInt::from(0), BigInt::from(1))),
             ))
         }
         Value::Int(i) => {
             use num::BigInt;
-            Ok(Value::Rational(num::rational::Ratio::new(BigInt::from(*i), BigInt::from(1))))
+            Ok(Value::Rational(num::rational::Ratio::new(
+                BigInt::from(*i),
+                BigInt::from(1),
+            )))
         }
         Value::Rational(r) => Ok(Value::Rational(r.clone())),
-        _ => Err(format!("Cannot convert {} to fraction", args[0].type_name())),
+        _ => Err(format!(
+            "Cannot convert {} to fraction",
+            args[0].type_name()
+        )),
     }
 }
 
@@ -270,7 +278,10 @@ pub fn decimal(args: &[Value]) -> Result<Value, String> {
         Value::Rational(r) => {
             use num::ToPrimitive;
             let numer = r.numer().to_f64().ok_or("Numerator too large to convert")?;
-            let denom = r.denom().to_f64().ok_or("Denominator too large to convert")?;
+            let denom = r
+                .denom()
+                .to_f64()
+                .ok_or("Denominator too large to convert")?;
             Ok(Value::Float(numer / denom))
         }
         Value::Int(i) => Ok(Value::Float(*i as f64)),

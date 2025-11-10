@@ -191,7 +191,7 @@ pub fn det(args: &[Value]) -> Result<Value, String> {
     match &args[0] {
         Value::Array(matrix) => {
             let matrix = matrix.borrow();
-            
+
             // Convert to 2D float matrix
             let n = matrix.len();
             if n == 0 {
@@ -226,15 +226,15 @@ pub fn det(args: &[Value]) -> Result<Value, String> {
 
 fn calculate_determinant(matrix: &Vec<Vec<f64>>) -> f64 {
     let n = matrix.len();
-    
+
     if n == 1 {
         return matrix[0][0];
     }
-    
+
     if n == 2 {
         return matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0];
     }
-    
+
     let mut det = 0.0;
     for col in 0..n {
         // Create submatrix
@@ -248,10 +248,10 @@ fn calculate_determinant(matrix: &Vec<Vec<f64>>) -> f64 {
             }
             submatrix.push(subrow);
         }
-        
+
         let sign = if col % 2 == 0 { 1.0 } else { -1.0 };
         det += sign * matrix[0][col] * calculate_determinant(&submatrix);
     }
-    
+
     det
 }

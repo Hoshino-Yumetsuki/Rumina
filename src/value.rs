@@ -295,7 +295,7 @@ fn format_irrational(irr: &IrrationalValue) -> String {
         IrrationalValue::Root(degree, n) => {
             // Format n-th root
             match degree {
-                2 => format_sqrt(n),  // Use sqrt notation for square roots
+                2 => format_sqrt(n), // Use sqrt notation for square roots
                 _ => format!("{}√{}", degree, n),
             }
         }

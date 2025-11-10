@@ -449,33 +449,33 @@ impl Interpreter {
         // Check if exponent is a simple rational (1/n form)
         let denom_approx = (1.0 / exponent).round();
         let is_simple_root = (1.0 / denom_approx - exponent).abs() < 1e-10;
-        
+
         if is_simple_root && denom_approx > 0.0 {
             let n = denom_approx as u32;
-            
+
             // Handle negative bases
             if base < 0.0 {
                 let is_odd_root = n % 2 == 1;
-                
+
                 if is_odd_root {
                     // Odd root of negative number: return negative irrational
                     // e.g., (-8)^(1/3) = -2 or -(8^(1/3))
                     let abs_base = base.abs();
-                    
+
                     // Check if it's a perfect root
                     let root_val = abs_base.powf(exponent);
                     if (root_val.round() - root_val).abs() < 1e-10 {
                         // Perfect root - return as integer
                         return Ok(Value::Int(-(root_val.round() as i64)));
                     }
-                    
+
                     // Return as symbolic irrational: -(abs_base^(1/n))
                     let root = if n == 2 {
                         IrrationalValue::Sqrt(Box::new(Value::Int(abs_base as i64)))
                     } else {
                         IrrationalValue::Root(n, Box::new(Value::Int(abs_base as i64)))
                     };
-                    
+
                     // Negate by using Product with -1
                     return Ok(Value::Irrational(IrrationalValue::Product(
                         Box::new(Value::Int(-1)),
@@ -494,22 +494,22 @@ impl Interpreter {
                     // Perfect root - return as integer
                     return Ok(Value::Int(root_val.round() as i64));
                 }
-                
+
                 // Return as symbolic irrational
                 let root = if n == 2 {
                     IrrationalValue::Sqrt(Box::new(Value::Int(base as i64)))
                 } else {
                     IrrationalValue::Root(n, Box::new(Value::Int(base as i64)))
                 };
-                
+
                 return Ok(Value::Irrational(root));
             }
         }
-        
+
         // For non-simple-root cases, use mathcore
         let math = MathCore::new();
         let expr = format!("{}^{}", base, exponent);
-        
+
         match math.evaluate(&expr) {
             Ok(mathcore::Expr::Number(result)) => {
                 // Check if result is close to an integer
@@ -1127,7 +1127,7 @@ mod tests {
         let ast = parser.parse()?;
         let mut interpreter = Interpreter::new();
         interpreter.interpret(ast)?;
-        
+
         // Get the last evaluated expression
         // For simplicity, we'll evaluate the expression and return it
         let mut lexer = Lexer::new(format!("{};", code));
@@ -1156,7 +1156,7 @@ mod tests {
         // Test (-8)^(1/3) - should return -2 (real cube root as Int)
         let result = eval_expr("(-8)^(1/3)");
         assert!(result.is_ok(), "Should not error on (-8)^(1/3)");
-        
+
         // Verify the result is -2
         match result.unwrap() {
             Value::Int(n) => {
@@ -1189,7 +1189,7 @@ mod tests {
         // Test 2.0^(1/2) - since 2.0 is Float, may return Irrational or Float
         let result = eval_expr("2.0^(1/2)").unwrap();
         match result {
-            Value::Irrational(_) => {}, // Symbolic √2
+            Value::Irrational(_) => {} // Symbolic √2
             Value::Float(f) => assert!((f - 1.414).abs() < 0.01),
             other => panic!("Expected Irrational or Float, got {:?}", other),
         }
@@ -1222,18 +1222,18 @@ mod tests {
     #[test]
     fn test_power_mathcore_exclusive() {
         // Test that mathcore handles various power operations
-        
+
         // Large integer exponent
         let result = eval_expr("2^10").unwrap();
         match result {
             Value::Int(i) => assert_eq!(i, 1024, "Expected 1024, got {}", i),
             _ => panic!("Expected Int result for integer power"),
         }
-        
+
         // Fractional base and exponent - (1/4)^(1/2) = 1/2 ideally, but we may get float
         let result = eval_expr("(1/4)^(1/2)");
         assert!(result.is_ok(), "Should handle (1/4)^(1/2)");
-        
+
         // Negative base with rational exponent (odd denominator) - perfect root
         let result = eval_expr("(-27)^(1/3)").unwrap();
         match result {
@@ -1251,9 +1251,16 @@ mod tests {
             Value::Complex(c) => {
                 // Should be approximately 2i
                 assert!(c.re.abs() < 0.001, "Real part should be ~0, got {}", c.re);
-                assert!((c.im.abs() - 2.0).abs() < 0.001, "Imaginary part should be ~2, got {}", c.im);
+                assert!(
+                    (c.im.abs() - 2.0).abs() < 0.001,
+                    "Imaginary part should be ~2, got {}",
+                    c.im
+                );
             }
-            other => panic!("Expected Complex result for even root of negative, got {:?}", other),
+            other => panic!(
+                "Expected Complex result for even root of negative, got {:?}",
+                other
+            ),
         }
     }
 
@@ -1262,7 +1269,8 @@ mod tests {
         // Test 2^(1/2) should return symbolic √2
         let result = eval_expr("2^(1/2)").unwrap();
         match result {
-            Value::Irrational(IrrationalValue::Sqrt(_)) | Value::Irrational(IrrationalValue::Root(2, _)) => {
+            Value::Irrational(IrrationalValue::Sqrt(_))
+            | Value::Irrational(IrrationalValue::Root(2, _)) => {
                 // Good - symbolic representation
             }
             other => {
