@@ -42,7 +42,7 @@
   ],
   "scripts": {
     "build": "wasm-pack build --out-dir lib && yarn postbuild && node scripts/sync-wasm-bindings.js && rolldown -c rolldown.config.js",
-    "postbuild": "rimraf lib/.gitignore lib/README.md lib/package.json",
+    "postbuild": "rimraf lib/.gitignore lib/README.md lib/package.json lib/LICENSE",
     "lint": "biome check && biome lint",
     "lint-fix": "biome format --write && biome lint --write"
   },
