@@ -93,6 +93,10 @@ impl Value {
                 let den = r.denom().to_string().parse::<f64>().unwrap_or(1.0);
                 Ok(num / den)
             }
+            Value::Irrational(irr) => {
+                // Convert irrational values to their float approximations
+                Ok(irrational_to_float(irr))
+            }
             Value::Complex(re, im) => {
                 // For complex numbers, only return real part if imaginary is zero
                 let im_float = im.to_float()?;
@@ -224,6 +228,57 @@ impl fmt::Display for Value {
             Value::Module(_) => write!(f, "<module>"),
             Value::NativeFunction { name, .. } => write!(f, "<native function {}>", name),
         }
+    }
+}
+
+// Helper function to convert irrational values to float approximations
+pub fn irrational_to_float(irr: &IrrationalValue) -> f64 {
+    match irr {
+        IrrationalValue::Pi => std::f64::consts::PI,
+        IrrationalValue::E => std::f64::consts::E,
+        IrrationalValue::Sqrt(n) => {
+            // Convert the inner value to float and take square root
+            if let Ok(val) = value_to_float_helper(n) {
+                val.sqrt()
+            } else {
+                f64::NAN
+            }
+        }
+        IrrationalValue::Root(degree, n) => {
+            // Convert to float and take n-th root
+            if let Ok(val) = value_to_float_helper(n) {
+                val.powf(1.0 / (*degree as f64))
+            } else {
+                f64::NAN
+            }
+        }
+        IrrationalValue::Product(coef, inner_irr) => {
+            // Multiply coefficient by the inner irrational
+            if let Ok(coef_val) = value_to_float_helper(coef) {
+                coef_val * irrational_to_float(inner_irr)
+            } else {
+                f64::NAN
+            }
+        }
+        IrrationalValue::Sum(left, right) => {
+            // Add two irrational values
+            irrational_to_float(left) + irrational_to_float(right)
+        }
+    }
+}
+
+// Helper function to convert Value to float (used internally)
+fn value_to_float_helper(val: &Value) -> Result<f64, ()> {
+    match val {
+        Value::Int(i) => Ok(*i as f64),
+        Value::Float(f) => Ok(*f),
+        Value::Rational(r) => {
+            let num = r.numer().to_string().parse::<f64>().unwrap_or(0.0);
+            let den = r.denom().to_string().parse::<f64>().unwrap_or(1.0);
+            Ok(num / den)
+        }
+        Value::Irrational(irr) => Ok(irrational_to_float(irr)),
+        _ => Err(()),
     }
 }
 
