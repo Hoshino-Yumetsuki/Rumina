@@ -3,6 +3,11 @@ use std::env;
 use std::fs;
 use std::io::{self, Write};
 
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -60,8 +65,15 @@ fn check_semicolons(contents: &str, filename: &str) {
             continue;
         }
 
+        // 移除行末注释后再检查分号
+        let code_part = if let Some(comment_pos) = trimmed.find("//") {
+            &trimmed[..comment_pos].trim_end()
+        } else {
+            trimmed
+        };
+
         // 检查是否以分号结尾
-        if !trimmed.ends_with(';') && !trimmed.ends_with('{') {
+        if !code_part.ends_with(';') && !code_part.ends_with('{') {
             eprintln!(
                 "Warning: {}:{}: Statement should end with ';'",
                 filename,
@@ -76,15 +88,41 @@ fn run_repl() {
     println!("Type 'exit' to quit, or enter Lamina code to execute.");
     println!();
 
+    let interrupted = Arc::new(AtomicBool::new(false));
+    {
+        let interrupted = interrupted.clone();
+        ctrlc::set_handler(move || {
+            interrupted.store(true, Ordering::SeqCst);
+            std::process::exit(0);
+        })
+        .expect("failed to set Ctrl-C handler");
+    }
+
     let mut interpreter = Interpreter::new();
     let mut line_number = 1;
 
     loop {
+        if interrupted.load(Ordering::SeqCst) {
+            println!();
+            break;
+        }
         print!("rumina [{}]> ", line_number);
         io::stdout().flush().unwrap();
 
         let mut input = String::new();
-        io::stdin().read_line(&mut input).unwrap();
+        match io::stdin().read_line(&mut input) {
+            Ok(0) => {
+                // EOF reached (Ctrl+D on Unix or stdin closed)
+                println!();
+                break;
+            }
+            Ok(_) => {}
+            Err(_) => {
+                // Handle Ctrl+C or other input errors gracefully
+                println!();
+                break;
+            }
+        }
 
         let input = input.trim();
         if input == "exit" || input == "quit" {

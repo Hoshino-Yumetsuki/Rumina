@@ -220,15 +220,28 @@ impl Parser {
         self.advance(); // 跳过 if
 
         let condition = self.parse_expression()?;
-        self.expect(Token::LBrace)?;
-        let then_branch = self.parse_block_statements()?;
-        self.expect(Token::RBrace)?;
+        
+        // 支持单行if语句（无大括号）或块if语句（有大括号）
+        let then_branch = if self.current_token() == &Token::LBrace {
+            self.advance(); // 跳过 {
+            let stmts = self.parse_block_statements()?;
+            self.expect(Token::RBrace)?;
+            stmts
+        } else {
+            // 单行if语句
+            vec![self.parse_statement()?]
+        };
 
         let else_branch = if self.match_token(&Token::Else) {
-            self.expect(Token::LBrace)?;
-            let else_stmts = self.parse_block_statements()?;
-            self.expect(Token::RBrace)?;
-            Some(else_stmts)
+            if self.current_token() == &Token::LBrace {
+                self.advance(); // 跳过 {
+                let else_stmts = self.parse_block_statements()?;
+                self.expect(Token::RBrace)?;
+                Some(else_stmts)
+            } else {
+                // 单行else语句
+                Some(vec![self.parse_statement()?])
+            }
         } else {
             None
         };
@@ -244,9 +257,17 @@ impl Parser {
         self.advance(); // 跳过 while
 
         let condition = self.parse_expression()?;
-        self.expect(Token::LBrace)?;
-        let body = self.parse_block_statements()?;
-        self.expect(Token::RBrace)?;
+        
+        // 支持单行while语句（无大括号）或块while语句（有大括号）
+        let body = if self.current_token() == &Token::LBrace {
+            self.advance(); // 跳过 {
+            let stmts = self.parse_block_statements()?;
+            self.expect(Token::RBrace)?;
+            stmts
+        } else {
+            // 单行while语句
+            vec![self.parse_statement()?]
+        };
 
         Ok(Stmt::While { condition, body })
     }
@@ -254,9 +275,16 @@ impl Parser {
     fn parse_loop(&mut self) -> Result<Stmt, String> {
         self.advance(); // 跳过 loop
 
-        self.expect(Token::LBrace)?;
-        let body = self.parse_block_statements()?;
-        self.expect(Token::RBrace)?;
+        // 支持单行loop语句（无大括号）或块loop语句（有大括号）
+        let body = if self.current_token() == &Token::LBrace {
+            self.advance(); // 跳过 {
+            let stmts = self.parse_block_statements()?;
+            self.expect(Token::RBrace)?;
+            stmts
+        } else {
+            // 单行loop语句
+            vec![self.parse_statement()?]
+        };
 
         Ok(Stmt::Loop { body })
     }

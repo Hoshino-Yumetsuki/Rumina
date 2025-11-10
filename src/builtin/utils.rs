@@ -202,3 +202,156 @@ pub fn update(args: &[Value]) -> Result<Value, String> {
         _ => Err("update expects two structs".to_string()),
     }
 }
+
+// Lamina-compliant: fraction() - convert float to rational
+pub fn fraction(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("fraction expects 1 argument".to_string());
+    }
+
+    match &args[0] {
+        Value::Float(f) => {
+            if !f.is_finite() {
+                return Err("Cannot convert infinite or NaN to fraction".to_string());
+            }
+
+            // Use continued fraction method to convert
+            let precision = 1e-10;
+            let mut h1 = 1i64;
+            let mut h2 = 0i64;
+            let mut k1 = 0i64;
+            let mut k2 = 1i64;
+            let mut b = *f;
+
+            for _ in 0..100 {
+                let a = b.floor() as i64;
+                let mut aux = h1;
+                h1 = a * h1 + h2;
+                h2 = aux;
+                aux = k1;
+                k1 = a * k1 + k2;
+                k2 = aux;
+
+                if (f - h1 as f64 / k1 as f64).abs() < precision {
+                    use num::BigInt;
+                    return Ok(Value::Rational(num::rational::Ratio::new(
+                        BigInt::from(h1),
+                        BigInt::from(k1),
+                    )));
+                }
+
+                b = 1.0 / (b - a as f64);
+                if !b.is_finite() {
+                    break;
+                }
+            }
+
+            // Fallback: return as rational approximation
+            use num::BigInt;
+            Ok(Value::Rational(
+                num::rational::Ratio::from_float(*f)
+                    .unwrap_or(num::rational::Ratio::new(BigInt::from(0), BigInt::from(1))),
+            ))
+        }
+        Value::Int(i) => {
+            use num::BigInt;
+            Ok(Value::Rational(num::rational::Ratio::new(
+                BigInt::from(*i),
+                BigInt::from(1),
+            )))
+        }
+        Value::Rational(r) => Ok(Value::Rational(r.clone())),
+        _ => Err(format!(
+            "Cannot convert {} to fraction",
+            args[0].type_name()
+        )),
+    }
+}
+
+// Lamina-compliant: decimal() - convert rational to float
+pub fn decimal(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("decimal expects 1 argument".to_string());
+    }
+
+    match &args[0] {
+        Value::Rational(r) => {
+            use num::ToPrimitive;
+            let numer = r.numer().to_f64().ok_or("Numerator too large to convert")?;
+            let denom = r
+                .denom()
+                .to_f64()
+                .ok_or("Denominator too large to convert")?;
+            Ok(Value::Float(numer / denom))
+        }
+        Value::Int(i) => Ok(Value::Float(*i as f64)),
+        Value::Float(f) => Ok(Value::Float(*f)),
+        Value::Complex(re, im) => {
+            // Convert symbolic complex to float-based representation
+            let re_float = match re.as_ref() {
+                Value::Int(i) => *i as f64,
+                Value::Float(f) => *f,
+                Value::Rational(r) => {
+                    use num::ToPrimitive;
+                    let numer = r.numer().to_f64().ok_or("Numerator too large")?;
+                    let denom = r.denom().to_f64().ok_or("Denominator too large")?;
+                    numer / denom
+                }
+                Value::Irrational(irr) => {
+                    // Simple conversions for basic irrationals
+                    match irr {
+                        crate::value::IrrationalValue::Pi => std::f64::consts::PI,
+                        crate::value::IrrationalValue::E => std::f64::consts::E,
+                        crate::value::IrrationalValue::Sqrt(n) => {
+                            let n_val = match n.as_ref() {
+                                Value::Int(i) => *i as f64,
+                                Value::Float(f) => *f,
+                                _ => return Err("Cannot convert complex irrational to decimal".to_string()),
+                            };
+                            n_val.sqrt()
+                        }
+                        _ => return Err("Cannot convert composite irrational to decimal".to_string()),
+                    }
+                }
+                _ => return Err("Cannot convert complex real part to decimal".to_string()),
+            };
+
+            let im_float = match im.as_ref() {
+                Value::Int(i) => *i as f64,
+                Value::Float(f) => *f,
+                Value::Rational(r) => {
+                    use num::ToPrimitive;
+                    let numer = r.numer().to_f64().ok_or("Numerator too large")?;
+                    let denom = r.denom().to_f64().ok_or("Denominator too large")?;
+                    numer / denom
+                }
+                Value::Irrational(irr) => {
+                    match irr {
+                        crate::value::IrrationalValue::Pi => std::f64::consts::PI,
+                        crate::value::IrrationalValue::E => std::f64::consts::E,
+                        crate::value::IrrationalValue::Sqrt(n) => {
+                            let n_val = match n.as_ref() {
+                                Value::Int(i) => *i as f64,
+                                Value::Float(f) => *f,
+                                _ => return Err("Cannot convert complex irrational to decimal".to_string()),
+                            };
+                            n_val.sqrt()
+                        }
+                        _ => return Err("Cannot convert composite irrational to decimal".to_string()),
+                    }
+                }
+                _ => return Err("Cannot convert complex imaginary part to decimal".to_string()),
+            };
+
+            // Return as a string representation of complex number in float form
+            use num::complex::Complex64;
+            let c = Complex64::new(re_float, im_float);
+            if c.im >= 0.0 {
+                Ok(Value::String(format!("{}+{}i", c.re, c.im)))
+            } else {
+                Ok(Value::String(format!("{}{}i", c.re, c.im)))
+            }
+        }
+        _ => Err(format!("Cannot convert {} to decimal", args[0].type_name())),
+    }
+}

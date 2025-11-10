@@ -15,6 +15,7 @@ pub enum Value {
     BigInt(BigInt),
     Rational(BigRational),
     Irrational(IrrationalValue),
+    Complex(Box<Value>, Box<Value>), // (real, imaginary) - symbolic representation
     Bool(bool),
     String(String),
     Null,
@@ -40,7 +41,8 @@ pub enum Value {
 /// 无理数表示（符号形式）
 #[derive(Debug, Clone)]
 pub enum IrrationalValue {
-    Sqrt(Box<Value>),                          // √n
+    Sqrt(Box<Value>),                          // √n (square root)
+    Root(u32, Box<Value>),                     // n-th root: ⁿ√value
     Pi,                                        // π
     E,                                         // e
     Product(Box<Value>, Box<IrrationalValue>), // a * irr
@@ -55,6 +57,7 @@ impl Value {
             Value::BigInt(_) => "bigint",
             Value::Rational(_) => "rational",
             Value::Irrational(_) => "irrational",
+            Value::Complex(_, _) => "complex",
             Value::Bool(_) => "bool",
             Value::String(_) => "string",
             Value::Null => "null",
@@ -73,6 +76,10 @@ impl Value {
             Value::Null => false,
             Value::Int(0) => false,
             Value::Float(f) if *f == 0.0 => false,
+            Value::Complex(re, im) => {
+                // Complex is truthy if either real or imaginary part is non-zero
+                re.is_truthy() || im.is_truthy()
+            }
             _ => true,
         }
     }
@@ -85,6 +92,15 @@ impl Value {
                 let num = r.numer().to_string().parse::<f64>().unwrap_or(0.0);
                 let den = r.denom().to_string().parse::<f64>().unwrap_or(1.0);
                 Ok(num / den)
+            }
+            Value::Complex(re, im) => {
+                // For complex numbers, only return real part if imaginary is zero
+                let im_float = im.to_float()?;
+                if im_float == 0.0 {
+                    re.to_float()
+                } else {
+                    Err("Cannot convert non-real complex number to float".to_string())
+                }
             }
             _ => Err(format!("Cannot convert {} to float", self.type_name())),
         }
@@ -108,6 +124,72 @@ impl fmt::Display for Value {
             Value::BigInt(n) => write!(f, "{}", n),
             Value::Rational(r) => write!(f, "{}/{}", r.numer(), r.denom()),
             Value::Irrational(irr) => write!(f, "{}", format_irrational(irr)),
+            Value::Complex(re, im) => {
+                // Format complex numbers symbolically
+                let re_str = format!("{}", re);
+                let im_str = format!("{}", im);
+                
+                // Check if real part is zero
+                let re_is_zero = match re.as_ref() {
+                    Value::Int(0) => true,
+                    Value::Rational(r) => r.numer().to_string() == "0",
+                    _ => false,
+                };
+                
+                // Check if imaginary part is zero
+                let im_is_zero = match im.as_ref() {
+                    Value::Int(0) => true,
+                    Value::Rational(r) => r.numer().to_string() == "0",
+                    _ => false,
+                };
+                
+                // Check if imaginary coefficient is 1 or -1
+                let im_is_one = match im.as_ref() {
+                    Value::Int(1) => true,
+                    Value::Rational(r) => r.numer().to_string() == "1" && r.denom().to_string() == "1",
+                    _ => false,
+                };
+                
+                let im_is_neg_one = match im.as_ref() {
+                    Value::Int(-1) => true,
+                    Value::Rational(r) => r.numer().to_string() == "-1" && r.denom().to_string() == "1",
+                    _ => false,
+                };
+                
+                if im_is_zero {
+                    // Pure real number
+                    write!(f, "{}", re_str)
+                } else if re_is_zero {
+                    // Pure imaginary number
+                    if im_is_one {
+                        write!(f, "i")
+                    } else if im_is_neg_one {
+                        write!(f, "-i")
+                    } else {
+                        write!(f, "{}i", im_str)
+                    }
+                } else {
+                    // Both real and imaginary parts
+                    if im_is_one {
+                        write!(f, "{}+i", re_str)
+                    } else if im_is_neg_one {
+                        write!(f, "{}-i", re_str)
+                    } else {
+                        // Check if imaginary part is negative
+                        let im_is_negative = match im.as_ref() {
+                            Value::Int(n) if *n < 0 => true,
+                            Value::Rational(r) if r.numer().to_string().starts_with('-') => true,
+                            _ => false,
+                        };
+                        
+                        if im_is_negative {
+                            write!(f, "{}{}i", re_str, im_str)
+                        } else {
+                            write!(f, "{}+{}i", re_str, im_str)
+                        }
+                    }
+                }
+            }
             Value::Bool(b) => write!(f, "{}", b),
             Value::String(s) => write!(f, "{}", s),
             Value::Null => write!(f, "null"),
@@ -279,6 +361,13 @@ fn format_irrational(irr: &IrrationalValue) -> String {
 
     match irr {
         IrrationalValue::Sqrt(n) => format_sqrt(n),
+        IrrationalValue::Root(degree, n) => {
+            // Format n-th root
+            match degree {
+                2 => format_sqrt(n), // Use sqrt notation for square roots
+                _ => format!("{}√{}", degree, n),
+            }
+        }
         IrrationalValue::Pi => "π".to_string(),
         IrrationalValue::E => "e".to_string(),
         IrrationalValue::Product(coef, inner_irr) => format_product(coef, inner_irr),
@@ -295,6 +384,9 @@ impl PartialEq for Value {
         match (self, other) {
             (Value::Int(a), Value::Int(b)) => a == b,
             (Value::Float(a), Value::Float(b)) => a == b,
+            (Value::Complex(a_re, a_im), Value::Complex(b_re, b_im)) => {
+                a_re == b_re && a_im == b_im
+            }
             (Value::Bool(a), Value::Bool(b)) => a == b,
             (Value::String(a), Value::String(b)) => a == b,
             (Value::Null, Value::Null) => true,
