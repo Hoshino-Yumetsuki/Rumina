@@ -286,6 +286,72 @@ pub fn decimal(args: &[Value]) -> Result<Value, String> {
         }
         Value::Int(i) => Ok(Value::Float(*i as f64)),
         Value::Float(f) => Ok(Value::Float(*f)),
+        Value::Complex(re, im) => {
+            // Convert symbolic complex to float-based representation
+            let re_float = match re.as_ref() {
+                Value::Int(i) => *i as f64,
+                Value::Float(f) => *f,
+                Value::Rational(r) => {
+                    use num::ToPrimitive;
+                    let numer = r.numer().to_f64().ok_or("Numerator too large")?;
+                    let denom = r.denom().to_f64().ok_or("Denominator too large")?;
+                    numer / denom
+                }
+                Value::Irrational(irr) => {
+                    // Simple conversions for basic irrationals
+                    match irr {
+                        crate::value::IrrationalValue::Pi => std::f64::consts::PI,
+                        crate::value::IrrationalValue::E => std::f64::consts::E,
+                        crate::value::IrrationalValue::Sqrt(n) => {
+                            let n_val = match n.as_ref() {
+                                Value::Int(i) => *i as f64,
+                                Value::Float(f) => *f,
+                                _ => return Err("Cannot convert complex irrational to decimal".to_string()),
+                            };
+                            n_val.sqrt()
+                        }
+                        _ => return Err("Cannot convert composite irrational to decimal".to_string()),
+                    }
+                }
+                _ => return Err("Cannot convert complex real part to decimal".to_string()),
+            };
+
+            let im_float = match im.as_ref() {
+                Value::Int(i) => *i as f64,
+                Value::Float(f) => *f,
+                Value::Rational(r) => {
+                    use num::ToPrimitive;
+                    let numer = r.numer().to_f64().ok_or("Numerator too large")?;
+                    let denom = r.denom().to_f64().ok_or("Denominator too large")?;
+                    numer / denom
+                }
+                Value::Irrational(irr) => {
+                    match irr {
+                        crate::value::IrrationalValue::Pi => std::f64::consts::PI,
+                        crate::value::IrrationalValue::E => std::f64::consts::E,
+                        crate::value::IrrationalValue::Sqrt(n) => {
+                            let n_val = match n.as_ref() {
+                                Value::Int(i) => *i as f64,
+                                Value::Float(f) => *f,
+                                _ => return Err("Cannot convert complex irrational to decimal".to_string()),
+                            };
+                            n_val.sqrt()
+                        }
+                        _ => return Err("Cannot convert composite irrational to decimal".to_string()),
+                    }
+                }
+                _ => return Err("Cannot convert complex imaginary part to decimal".to_string()),
+            };
+
+            // Return as a string representation of complex number in float form
+            use num::complex::Complex64;
+            let c = Complex64::new(re_float, im_float);
+            if c.im >= 0.0 {
+                Ok(Value::String(format!("{}+{}i", c.re, c.im)))
+            } else {
+                Ok(Value::String(format!("{}{}i", c.re, c.im)))
+            }
+        }
         _ => Err(format!("Cannot convert {} to decimal", args[0].type_name())),
     }
 }
