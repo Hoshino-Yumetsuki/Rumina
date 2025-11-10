@@ -2,7 +2,7 @@
 name = "rumina"
 version = "0.1.0"
 edition = "2024"
-description = "Lamina language compatible compiler written in rust"
+description = "Lamina language compatible interpreter written in rust"
 license = "LGPL-2.1"
 
 [lib]
