@@ -31,9 +31,42 @@ fn run_file(filename: &str) {
         std::process::exit(1);
     });
 
+    // 检查每一行是否缺少分号
+    check_semicolons(&contents, filename);
+
     if let Err(err) = rumina::run(&contents) {
         eprintln!("Runtime error: {}", err);
         std::process::exit(1);
+    }
+}
+
+fn check_semicolons(contents: &str, filename: &str) {
+    for (line_num, line) in contents.lines().enumerate() {
+        let trimmed = line.trim();
+
+        // 跳过空行、注释和控制流语句
+        if trimmed.is_empty()
+            || trimmed.starts_with("//")
+            || trimmed.starts_with("/*")
+            || trimmed.starts_with("if ")
+            || trimmed.starts_with("while ")
+            || trimmed.starts_with("loop ")
+            || trimmed.starts_with("func ")
+            || trimmed.starts_with("include ")
+            || trimmed.ends_with('{')
+            || trimmed.ends_with('}')
+            || trimmed == "}" {
+            continue;
+        }
+
+        // 检查是否以分号结尾
+        if !trimmed.ends_with(';') && !trimmed.ends_with('{') {
+            eprintln!(
+                "Warning: {}:{}: Statement should end with ';'",
+                filename,
+                line_num + 1
+            );
+        }
     }
 }
 
@@ -63,7 +96,10 @@ fn run_repl() {
 
         // 尝试执行输入
         match execute_input(&mut interpreter, input) {
-            Ok(_) => {}
+            Ok(Some(value)) => {
+                println!("{}", value);
+            }
+            Ok(None) => {}
             Err(err) => eprintln!("Error: {}", err),
         }
 
@@ -73,15 +109,21 @@ fn run_repl() {
     println!("Goodbye!");
 }
 
-fn execute_input(interpreter: &mut Interpreter, input: &str) -> Result<(), String> {
-    // 如果输入不以分号结尾且不是控制流语句，自动添加分号
-    let input = if !input.ends_with(';')
+fn execute_input(interpreter: &mut Interpreter, input: &str) -> Result<Option<rumina::Value>, String> {
+    let needs_semicolon = !input.ends_with(';')
         && !input.starts_with("if ")
         && !input.starts_with("while ")
         && !input.starts_with("loop ")
         && !input.starts_with("func ")
-        && !input.ends_with('}')
-    {
+        && !input.ends_with('}');
+
+    // 如果缺少分号，显示警告
+    if needs_semicolon {
+        eprintln!("Warning: Statement should end with ';'");
+    }
+
+    // 自动添加分号以便执行
+    let input = if needs_semicolon {
         format!("{};", input)
     } else {
         input.to_string()
@@ -93,7 +135,7 @@ fn execute_input(interpreter: &mut Interpreter, input: &str) -> Result<(), Strin
     let mut parser = Parser::new(tokens);
     let ast = parser.parse()?;
 
-    interpreter.interpret(ast)?;
+    let result = interpreter.interpret(ast)?;
 
-    Ok(())
+    Ok(result)
 }

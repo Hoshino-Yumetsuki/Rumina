@@ -13,6 +13,7 @@ pub mod wasm;
 pub use interpreter::Interpreter;
 pub use lexer::Lexer;
 pub use parser::Parser;
+pub use value::Value;
 
 pub fn run(source: &str) -> Result<(), String> {
     let mut lexer = Lexer::new(source.to_string());
