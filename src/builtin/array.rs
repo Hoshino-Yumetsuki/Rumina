@@ -77,6 +77,25 @@ pub fn range(args: &[Value]) -> Result<Value, String> {
     }
 }
 
+pub fn concat(args: &[Value]) -> Result<Value, String> {
+    if args.is_empty() {
+        return Ok(Value::Array(Rc::new(RefCell::new(Vec::new()))));
+    }
+
+    let mut result = Vec::new();
+    
+    for arg in args {
+        match arg {
+            Value::Array(arr) => {
+                result.extend(arr.borrow().iter().cloned());
+            }
+            _ => return Err(format!("concat expects only arrays, got {}", arg.type_name())),
+        }
+    }
+    
+    Ok(Value::Array(Rc::new(RefCell::new(result))))
+}
+
 pub fn dot(args: &[Value]) -> Result<Value, String> {
     if args.len() != 2 {
         return Err("dot expects 2 arguments (vector1, vector2)".to_string());
