@@ -15,6 +15,26 @@ use crate::value::*;
 
 use mathcore::MathCore;
 
+/// Lamina Float Usage Policy:
+/// 
+/// Float values in Lamina are used in the following cases:
+/// 1. Float literals from source code (e.g., 3.14) - for compatibility
+/// 2. Explicit conversion via decimal() function - primary use case
+/// 3. Mathematical transcendental functions (sin, cos, log, etc.) - cannot be exact
+/// 4. Vector/matrix operations (dot, norm, cross, det) - numerical computation
+/// 5. User input parsed as float
+/// 6. Mixed operations with other types when Float is involved
+/// 7. Complex number arithmetic (Complex64 uses f64 internally)
+/// 
+/// Lamina prioritizes exact computation using:
+/// - Int for integers
+/// - Rational for fractions (division of integers)
+/// - Irrational for symbolic roots, π, e
+/// - BigInt for large integers (factorial results)
+/// - Complex for complex numbers
+/// 
+/// Float should NOT be used where exact computation is possible.
+
 pub struct Interpreter {
     globals: Rc<RefCell<HashMap<String, Value>>>,
     locals: Vec<Rc<RefCell<HashMap<String, Value>>>>,
