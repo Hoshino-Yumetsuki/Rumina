@@ -593,6 +593,76 @@ impl Interpreter {
                 )),
             },
 
+            // 无理数运算
+            (Value::Irrational(a), Value::Irrational(b)) => match op {
+                BinOp::Add => Ok(Value::Irrational(IrrationalValue::Sum(
+                    Box::new(a.clone()),
+                    Box::new(b.clone()),
+                ))),
+                BinOp::Mul => {
+                    // 展开无理数乘法
+                    self.multiply_irrationals(a, b)
+                }
+                _ => Err(format!("Unsupported operation: irrational {} irrational", op)),
+            },
+
+            // 有理数/整数 与 无理数的运算
+            (Value::Int(a), Value::Irrational(irr)) | (Value::Irrational(irr), Value::Int(a)) => {
+                match op {
+                    BinOp::Mul => {
+                        if *a == 0 {
+                            Ok(Value::Int(0))
+                        } else if *a == 1 {
+                            Ok(Value::Irrational(irr.clone()))
+                        } else {
+                            Ok(Value::Irrational(IrrationalValue::Product(
+                                Box::new(Value::Int(*a)),
+                                Box::new(irr.clone()),
+                            )))
+                        }
+                    }
+                    BinOp::Add => {
+                        if matches!(left, Value::Irrational(_)) {
+                            Ok(Value::Irrational(IrrationalValue::Sum(
+                                Box::new(irr.clone()),
+                                Box::new(IrrationalValue::Product(
+                                    Box::new(Value::Int(*a)),
+                                    Box::new(IrrationalValue::Sqrt(Box::new(Value::Int(1)))),
+                                )),
+                            )))
+                        } else {
+                            Ok(Value::Irrational(IrrationalValue::Sum(
+                                Box::new(IrrationalValue::Product(
+                                    Box::new(Value::Int(*a)),
+                                    Box::new(IrrationalValue::Sqrt(Box::new(Value::Int(1)))),
+                                )),
+                                Box::new(irr.clone()),
+                            )))
+                        }
+                    }
+                    _ => Err(format!(
+                        "Unsupported operation: {} {} {}",
+                        left.type_name(),
+                        op,
+                        right.type_name()
+                    )),
+                }
+            }
+
+            (Value::Rational(r), Value::Irrational(irr))
+            | (Value::Irrational(irr), Value::Rational(r)) => match op {
+                BinOp::Mul => Ok(Value::Irrational(IrrationalValue::Product(
+                    Box::new(Value::Rational(r.clone())),
+                    Box::new(irr.clone()),
+                ))),
+                _ => Err(format!(
+                    "Unsupported operation: {} {} {}",
+                    left.type_name(),
+                    op,
+                    right.type_name()
+                )),
+            },
+
             // 数组运算
             (Value::Array(a), Value::Array(b)) => match op {
                 BinOp::Add => {
@@ -640,6 +710,62 @@ impl Interpreter {
                 }
                 _ => Err(format!("Cannot compute factorial of {}", val.type_name())),
             },
+        }
+    }
+
+    fn multiply_irrationals(
+        &mut self,
+        a: &IrrationalValue,
+        b: &IrrationalValue,
+    ) -> Result<Value, String> {
+        use IrrationalValue::*;
+
+        match (a, b) {
+            // 简单情况：基础无理数相乘
+            (Pi, Pi) => Ok(Value::Irrational(Product(
+                Box::new(Value::Irrational(Pi)),
+                Box::new(Pi),
+            ))),
+            (E, E) => Ok(Value::Irrational(Product(
+                Box::new(Value::Irrational(E)),
+                Box::new(E),
+            ))),
+            (Pi, E) | (E, Pi) => Ok(Value::Irrational(Product(
+                Box::new(Value::Irrational(E)),
+                Box::new(Pi),
+            ))),
+
+            // √a * √b = √(a*b)
+            (Sqrt(x), Sqrt(y)) => {
+                let product = self.eval_binary_op(x, BinOp::Mul, y)?;
+                Ok(Value::Irrational(Sqrt(Box::new(product))))
+            }
+
+            // Product 展开: (c1 * irr1) * (c2 * irr2) = (c1*c2) * (irr1*irr2)
+            (Product(coef1, irr1), Product(coef2, irr2)) => {
+                let combined_coef = self.eval_binary_op(coef1, BinOp::Mul, coef2)?;
+                let inner_product = self.multiply_irrationals(irr1, irr2)?;
+                self.eval_binary_op(&combined_coef, BinOp::Mul, &inner_product)
+            }
+
+            // Product 展开: (c * irr1) * irr2 = c * (irr1 * irr2)
+            (Product(coef, irr), other) | (other, Product(coef, irr)) => {
+                let inner_product = self.multiply_irrationals(irr, other)?;
+                self.eval_binary_op(coef, BinOp::Mul, &inner_product)
+            }
+
+            // Sum 展开: (a + b) * c = a*c + b*c
+            (Sum(x, y), other) | (other, Sum(x, y)) => {
+                let term1 = self.multiply_irrationals(x, other)?;
+                let term2 = self.multiply_irrationals(y, other)?;
+                self.eval_binary_op(&term1, BinOp::Add, &term2)
+            }
+
+            // 其他情况
+            _ => Ok(Value::Irrational(Product(
+                Box::new(Value::Irrational(a.clone())),
+                Box::new(b.clone()),
+            ))),
         }
     }
 
