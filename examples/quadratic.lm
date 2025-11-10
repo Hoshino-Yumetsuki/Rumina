@@ -1,0 +1,16 @@
+func quadratic(a, b, c) {
+    var discriminant = b^2 - 4*a*c;
+    if (discriminant < 0) {
+        print("Complex roots");
+        var real = -b/(2*a);
+        var imag = sqrt(-discriminant)/(2*a);
+        return [real + " + " + imag + "i", real + " - " + imag + "i"];
+    } else {
+        var root1 = (-b + sqrt(discriminant))/(2*a);
+        var root2 = (-b - sqrt(discriminant))/(2*a);
+        return [root1, root2];
+    }
+}
+
+var roots = quadratic(1, -3, 2);
+print("Roots: " + roots);

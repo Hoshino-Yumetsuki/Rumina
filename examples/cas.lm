@@ -1,0 +1,117 @@
+// Lamina CAS 功能总结演示
+// 方程求解、表达式存储、复合运算、求导数、特定点求值
+
+print("=== Lamina CAS 功能总结 ===");
+print();
+
+// 1. 方程求解演示
+print("📐 方程求解");
+var eq1 = cas_parse("3*x + 9");  // 3x + 9 = 0
+var eq2 = cas_parse("5*x - 15"); // 5x - 15 = 0
+var eq3 = cas_parse("x + 7");    // x + 7 = 0
+
+print("方程 3x + 9 = 0 的解:", cas_solve_linear(eq1, "x"));
+print("方程 5x - 15 = 0 的解:", cas_solve_linear(eq2, "x"));
+print("方程 x + 7 = 0 的解:", cas_solve_linear(eq3, "x"));
+
+// 验证解
+print("验证: 3*(-3) + 9 =", cas_evaluate_at(eq1, "x", -3));
+print("验证: 5*(3) - 15 =", cas_evaluate_at(eq2, "x", 3));
+print();
+
+// 2. 表达式存储系统
+print("💾 表达式存储系统");
+var complex_expr = cas_parse("x^3 + 2*x^2 + 3*x + 4");
+cas_store("cubic", complex_expr);
+cas_store("derivative", cas_differentiate(complex_expr, "x"));
+
+print("存储的三次函数:", cas_load("cubic"));
+print("存储的导数:", cas_load("derivative"));
+print();
+
+// 3. 复合运算实例
+print("🔗 复合运算实例");
+var base_func = cas_parse("x^2 + 1");
+var composite = cas_parse("x^2 * x + x");  // 复合表达式
+
+print("基础函数: f(x) = x^2 + 1");
+print("复合函数: g(x) = x^3 + x");
+
+var f_deriv = cas_differentiate(base_func, "x");
+var g_deriv = cas_differentiate(composite, "x");
+
+print("f'(x) =", f_deriv);
+print("g'(x) =", g_deriv);
+print();
+
+// 4. 求导数功能展示
+print("📊 求导数功能");
+var test_functions = [
+    "x^2",
+    "x^3 + 2*x",
+    "x^4 + x^2 + 1"
+];
+
+print("函数 x^2 的导数:", cas_differentiate(cas_parse("x^2"), "x"));
+print("函数 x^3 + 2*x 的导数:", cas_differentiate(cas_parse("x^3 + 2*x"), "x"));
+print("函数 x^4 + x^2 + 1 的导数:", cas_differentiate(cas_parse("x^4 + x^2 + 1"), "x"));
+print();
+
+// 5. 在特定点求值
+print("🎯 特定点求值");
+var polynomial = cas_parse("x^3 + x^2 + x + 1");
+var poly_deriv = cas_differentiate(polynomial, "x");
+
+print("多项式: f(x) = x^3 + x^2 + x + 1");
+print("导数: f'(x) =", poly_deriv);
+
+print("在关键点的值:");
+print("x = 0: f(0) =", cas_evaluate_at(polynomial, "x", 0), ", f'(0) =", cas_evaluate_at(poly_deriv, "x", 0));
+print("x = 1: f(1) =", cas_evaluate_at(polynomial, "x", 1), ", f'(1) =", cas_evaluate_at(poly_deriv, "x", 1));
+print("x = -1: f(-1) =", cas_evaluate_at(polynomial, "x", -1), ", f'(-1) =", cas_evaluate_at(poly_deriv, "x", -1));
+print("x = 2: f(2) =", cas_evaluate_at(polynomial, "x", 2), ", f'(2) =", cas_evaluate_at(poly_deriv, "x", 2));
+print();
+
+// 6. 数值导数验证
+print("🔬 数值导数验证");
+var test_expr = cas_parse("x^3 + 2*x^2");
+var symbolic = cas_differentiate(test_expr, "x");
+
+print("函数: x^3 + 2*x^2");
+print("符号导数:", symbolic);
+
+var point = 1.5;
+var symbolic_value = cas_evaluate_at(symbolic, "x", point);
+var numerical_value = cas_numerical_derivative(test_expr, "x", point);
+
+print("在 x =", point, "处:");
+print("符号导数值:", symbolic_value);
+print("数值导数值:", numerical_value);
+print("误差:", abs(symbolic_value - numerical_value));
+print();
+
+// 7. 综合应用实例
+print("🚀 综合应用实例");
+print("物理学中的运动方程: s(t) = t^3 + 2*t^2 + t");
+
+var position = cas_parse("t^3 + 2*t^2 + t");
+var velocity = cas_differentiate(position, "t");
+var acceleration = cas_differentiate(velocity, "t");
+
+cas_store("position", position);
+cas_store("velocity", velocity);
+cas_store("acceleration", acceleration);
+
+print("位置: s(t) =", cas_load("position"));
+print("速度: v(t) =", cas_load("velocity"));
+print("加速度: a(t) =", cas_load("acceleration"));
+
+print("在 t = 2 秒时:");
+print("位置 =", cas_evaluate_at(position, "t", 2), "米");
+print("速度 =", cas_evaluate_at(velocity, "t", 2), "米/秒");
+print("加速度 =", cas_evaluate_at(acceleration, "t", 2), "米/秒²");
+
+print();
+print("=== Lamina CAS 系统功能展示完成 ===");
+print("✅ 方程求解   ✅ 表达式存储   ✅ 复合运算");
+print("✅ 求导数     ✅ 特定点求值   ✅ 数值验证");

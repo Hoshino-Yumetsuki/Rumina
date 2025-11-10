@@ -1,0 +1,49 @@
+// Interactive Lamina Calculator
+print("=== LAMINA INTERACTIVE CALCULATOR ===");
+print("This calculator demonstrates Lamina's input/output capabilities\n");
+
+// Get user name
+var name = input("What's your name? ");
+print("Nice to meet you,", name, "!\n");
+
+// Simple calculator
+print("Let's do some math!");
+var num1 = input("Enter the first number: ");
+var num2 = input("Enter the second number: ");
+
+print("\nResults:");
+print(num1, "+", num2, "=", num1 + num2);
+print(num1, "-", num2, "=", num1 - num2);
+print(num1, "*", num2, "=", num1 * num2);
+if (num2 != 0) {
+    print(num1, "/", num2, "=", num1 / num2);
+} else {
+    print("Cannot divide by zero!");
+}
+
+// Vector calculator
+print("\nVector Calculator:");
+print("Let's create some vectors!");
+
+var x1 = input("Enter x component of first vector: ");
+var y1 = input("Enter y component of first vector: ");
+var z1 = input("Enter z component of first vector: ");
+
+var x2 = input("Enter x component of second vector: ");
+var y2 = input("Enter y component of second vector: ");
+var z2 = input("Enter z component of second vector: ");
+
+var v1 = [x1, y1, z1];
+var v2 = [x2, y2, z2];
+
+print("\nVector Operations:");
+print("v1 =", v1);
+print("v2 =", v2);
+print("v1 + v2 =", v1 + v2);
+print("dot(v1, v2) =", dot(v1, v2));
+print("cross(v1, v2) =", cross(v1, v2));
+print("norm(v1) =", norm(v1));
+print("norm(v2) =", norm(v2));
+
+print("\nThanks for using Lamina Calculator,", name, "!");
+print("=== SESSION COMPLETE ===");

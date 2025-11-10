@@ -1,0 +1,7 @@
+// Module: test_be_included
+print("Loading test_be_included module");
+var the_pi = 3.14159;
+
+func add(a, b) {
+    return a + b;
+}

@@ -1,0 +1,7 @@
+print(string::cat("abc", "abc", "abc"));
+
+print(string::at("abc", 1));
+
+print(string::find("abcAAA123", 0, "AAA"));
+
+print(string::sub("abcAAA123", 3, 3));
