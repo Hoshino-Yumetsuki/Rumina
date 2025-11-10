@@ -1,7 +1,7 @@
 // 数学函数模块
 use crate::value::{IrrationalValue, Value};
-use num_bigint::BigInt;
-use num_traits::{One, Zero};
+use num::BigInt;
+use num::{One, Zero};
 
 pub fn sqrt(args: &[Value]) -> Result<Value, String> {
     if args.len() != 1 {
