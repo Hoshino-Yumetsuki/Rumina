@@ -84,7 +84,19 @@ fn run_repl() {
         io::stdout().flush().unwrap();
 
         let mut input = String::new();
-        io::stdin().read_line(&mut input).unwrap();
+        match io::stdin().read_line(&mut input) {
+            Ok(0) => {
+                // EOF reached (Ctrl+D on Unix or stdin closed)
+                println!();
+                break;
+            }
+            Ok(_) => {},
+            Err(_) => {
+                // Handle Ctrl+C or other input errors gracefully
+                println!();
+                break;
+            }
+        }
 
         let input = input.trim();
         if input == "exit" || input == "quit" {
