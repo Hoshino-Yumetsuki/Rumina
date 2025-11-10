@@ -442,36 +442,47 @@ impl Interpreter {
         }
     }
 
-    /// Helper function to compute power operations using mathcore
+    /// Helper function to compute power operations using mathcore exclusively
     /// Handles special cases like negative bases with fractional exponents
     fn compute_power(&self, base: f64, exponent: f64) -> Result<f64, String> {
+        let math = MathCore::new();
+        
         // Special handling for negative bases with fractional exponents
         if base < 0.0 {
             // Check if exponent is a rational number with odd denominator
             // For simplicity, check if exponent is close to 1/3, 1/5, etc.
             let denom_approx = (1.0 / exponent).round();
             if (1.0 / denom_approx - exponent).abs() < 1e-10 && denom_approx % 2.0 != 0.0 {
-                // Odd denominator - compute real root
-                // For n-th root of negative number: -|base|^(1/n)
+                // Odd denominator - compute real root using mathcore
+                // For n-th root of negative number: -(|base|^(1/n))
                 let abs_base = base.abs();
-                return Ok(-abs_base.powf(exponent));
+                let expr = format!("-({}^{})", abs_base, exponent);
+                
+                match math.evaluate(&expr) {
+                    Ok(mathcore::Expr::Number(result)) => return Ok(result),
+                    Ok(other) => {
+                        return Err(format!(
+                            "Mathcore returned non-numeric result for {}: {:?}",
+                            expr, other
+                        ))
+                    }
+                    Err(e) => {
+                        return Err(format!("Mathcore evaluation failed for {}: {}", expr, e))
+                    }
+                }
             }
         }
         
-        // Use mathcore for evaluation
-        let math = MathCore::new();
+        // Use mathcore for all other evaluations
         let expr = format!("{}^{}", base, exponent);
         
         match math.evaluate(&expr) {
             Ok(mathcore::Expr::Number(result)) => Ok(result),
-            Ok(_) => {
-                // If mathcore returns non-numeric result, fallback to powf
-                Ok(base.powf(exponent))
-            }
-            Err(_) => {
-                // If mathcore fails, fallback to powf
-                Ok(base.powf(exponent))
-            }
+            Ok(other) => Err(format!(
+                "Mathcore returned non-numeric result for {}: {:?}",
+                expr, other
+            )),
+            Err(e) => Err(format!("Mathcore evaluation failed for {}: {}", expr, e)),
         }
     }
 
@@ -1159,6 +1170,32 @@ mod tests {
         let result = eval_expr("27^(1/3)").unwrap();
         match result {
             Value::Float(f) => assert!((f - 3.0).abs() < 0.001, "Expected 3.0, got {}", f),
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_power_mathcore_exclusive() {
+        // Test that mathcore handles various power operations
+        
+        // Large integer exponent
+        let result = eval_expr("2^10").unwrap();
+        match result {
+            Value::Int(i) => assert_eq!(i, 1024, "Expected 1024, got {}", i),
+            _ => panic!("Expected Int result for integer power"),
+        }
+        
+        // Fractional base and exponent (uses mathcore via rational)
+        let result = eval_expr("(1/4)^(1/2)").unwrap();
+        match result {
+            Value::Float(f) => assert!((f - 0.5).abs() < 0.001, "Expected 0.5, got {}", f),
+            _ => panic!("Expected Float result"),
+        }
+        
+        // Negative base with rational exponent (odd denominator)
+        let result = eval_expr("(-27)^(1/3)").unwrap();
+        match result {
+            Value::Float(f) => assert!((f - (-3.0)).abs() < 0.001, "Expected -3.0, got {}", f),
             _ => panic!("Expected Float result"),
         }
     }
