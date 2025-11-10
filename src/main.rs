@@ -3,6 +3,11 @@ use std::env;
 use std::fs;
 use std::io::{self, Write};
 
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -76,10 +81,24 @@ fn run_repl() {
     println!("Type 'exit' to quit, or enter Lamina code to execute.");
     println!();
 
+    let interrupted = Arc::new(AtomicBool::new(false));
+    {
+        let interrupted = interrupted.clone();
+        ctrlc::set_handler(move || {
+            interrupted.store(true, Ordering::SeqCst);
+            std::process::exit(0);
+        })
+        .expect("failed to set Ctrl-C handler");
+    }
+
     let mut interpreter = Interpreter::new();
     let mut line_number = 1;
 
     loop {
+        if interrupted.load(Ordering::SeqCst) {
+            println!();
+            break;
+        }
         print!("rumina [{}]> ", line_number);
         io::stdout().flush().unwrap();
 
@@ -90,7 +109,7 @@ fn run_repl() {
                 println!();
                 break;
             }
-            Ok(_) => {},
+            Ok(_) => {}
             Err(_) => {
                 // Handle Ctrl+C or other input errors gracefully
                 println!();
