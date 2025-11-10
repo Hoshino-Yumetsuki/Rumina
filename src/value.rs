@@ -154,7 +154,7 @@ fn format_irrational(irr: &IrrationalValue) -> String {
             }
             let mut n = *num;
             let mut coef = 1i64;
-            
+
             // Extract perfect squares
             let mut i = 2i64;
             while i * i <= n {
@@ -165,13 +165,13 @@ fn format_irrational(irr: &IrrationalValue) -> String {
                 }
                 i += 1;
             }
-            
+
             (coef, n)
         } else {
             (1, 0)
         }
     }
-    
+
     fn format_sqrt(n: &Value) -> String {
         let (coef, remaining) = simplify_sqrt(n);
         if remaining == 1 {
@@ -182,7 +182,7 @@ fn format_irrational(irr: &IrrationalValue) -> String {
             format!("{}√{}", coef, remaining)
         }
     }
-    
+
     fn format_product(coef: &Value, irr: &IrrationalValue) -> String {
         // Check if this is a square (e.g., π*π or e*e)
         if let Value::Irrational(coef_irr) = coef {
@@ -192,7 +192,7 @@ fn format_irrational(irr: &IrrationalValue) -> String {
                 _ => {}
             }
         }
-        
+
         // Flatten nested products: (a * (b * irr)) => format as a*b*irr
         if let IrrationalValue::Product(inner_coef, inner_irr) = irr {
             // If outer coef is Int/Rational and inner coef is Int/Rational, multiply them
@@ -241,18 +241,21 @@ fn format_irrational(irr: &IrrationalValue) -> String {
                 }
             }
         }
-        
+
         let coef_str = match coef {
             Value::Int(1) => return format_irrational(irr),
             Value::Int(n) => n.to_string(),
-            Value::Rational(r) if r.numer() == &BigInt::from(1) 
-                && r.denom() == &BigInt::from(1) => return format_irrational(irr),
+            Value::Rational(r)
+                if r.numer() == &BigInt::from(1) && r.denom() == &BigInt::from(1) =>
+            {
+                return format_irrational(irr);
+            }
             Value::Irrational(i) => format_irrational(i),
             other => other.to_string(),
         };
-        
+
         let irr_str = format_irrational(irr);
-        
+
         // Special formatting for cleaner output
         match irr {
             IrrationalValue::Pi | IrrationalValue::E | IrrationalValue::Sqrt(_) => {
@@ -261,7 +264,7 @@ fn format_irrational(irr: &IrrationalValue) -> String {
             _ => format!("{}*{}", coef_str, irr_str),
         }
     }
-    
+
     fn format_sum_flat(irr: &IrrationalValue, terms: &mut Vec<String>) {
         match irr {
             IrrationalValue::Sum(a, b) => {
@@ -273,7 +276,7 @@ fn format_irrational(irr: &IrrationalValue) -> String {
             }
         }
     }
-    
+
     match irr {
         IrrationalValue::Sqrt(n) => format_sqrt(n),
         IrrationalValue::Pi => "π".to_string(),
@@ -286,7 +289,6 @@ fn format_irrational(irr: &IrrationalValue) -> String {
         }
     }
 }
-
 
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {

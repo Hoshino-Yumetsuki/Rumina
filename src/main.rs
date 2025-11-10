@@ -55,7 +55,8 @@ fn check_semicolons(contents: &str, filename: &str) {
             || trimmed.starts_with("include ")
             || trimmed.ends_with('{')
             || trimmed.ends_with('}')
-            || trimmed == "}" {
+            || trimmed == "}"
+        {
             continue;
         }
 
@@ -109,7 +110,10 @@ fn run_repl() {
     println!("Goodbye!");
 }
 
-fn execute_input(interpreter: &mut Interpreter, input: &str) -> Result<Option<rumina::Value>, String> {
+fn execute_input(
+    interpreter: &mut Interpreter,
+    input: &str,
+) -> Result<Option<rumina::Value>, String> {
     let needs_semicolon = !input.ends_with(';')
         && !input.starts_with("if ")
         && !input.starts_with("while ")
