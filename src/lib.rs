@@ -6,6 +6,10 @@ pub mod parser;
 pub mod token;
 pub mod value;
 
+// WASM 接口模块
+#[cfg(target_arch = "wasm32")]
+pub mod wasm;
+
 pub use interpreter::Interpreter;
 pub use lexer::Lexer;
 pub use parser::Parser;
