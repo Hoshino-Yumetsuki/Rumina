@@ -1127,6 +1127,72 @@ impl Interpreter {
                 )),
             },
 
+            // BigInt 与 Irrational 的运算
+            (Value::BigInt(b), Value::Irrational(irr)) | (Value::Irrational(irr), Value::BigInt(b)) => {
+                match op {
+                    BinOp::Mul => {
+                        if b == &BigInt::from(0) {
+                            Ok(Value::Int(0))
+                        } else if b == &BigInt::from(1) {
+                            Ok(Value::Irrational(irr.clone()))
+                        } else {
+                            Ok(Value::Irrational(IrrationalValue::Product(
+                                Box::new(Value::BigInt(b.clone())),
+                                Box::new(irr.clone()),
+                            )))
+                        }
+                    }
+                    BinOp::Div => {
+                        if matches!(left, Value::Irrational(_)) {
+                            // irr / bigint = (1/bigint) * irr
+                            if b == &BigInt::from(0) {
+                                Err("Division by zero".to_string())
+                            } else if b == &BigInt::from(1) {
+                                Ok(Value::Irrational(irr.clone()))
+                            } else {
+                                Ok(Value::Irrational(IrrationalValue::Product(
+                                    Box::new(Value::Rational(BigRational::new(
+                                        BigInt::from(1),
+                                        b.clone(),
+                                    ))),
+                                    Box::new(irr.clone()),
+                                )))
+                            }
+                        } else {
+                            // bigint / irr - convert to float
+                            let irr_float = irrational_to_float(irr);
+                            let b_float = b.to_string().parse::<f64>().unwrap_or(0.0);
+                            Ok(Value::Float(b_float / irr_float))
+                        }
+                    }
+                    BinOp::Add => {
+                        if matches!(left, Value::Irrational(_)) {
+                            Ok(Value::Irrational(IrrationalValue::Sum(
+                                Box::new(irr.clone()),
+                                Box::new(IrrationalValue::Product(
+                                    Box::new(Value::BigInt(b.clone())),
+                                    Box::new(IrrationalValue::Sqrt(Box::new(Value::Int(1)))),
+                                )),
+                            )))
+                        } else {
+                            Ok(Value::Irrational(IrrationalValue::Sum(
+                                Box::new(IrrationalValue::Product(
+                                    Box::new(Value::BigInt(b.clone())),
+                                    Box::new(IrrationalValue::Sqrt(Box::new(Value::Int(1)))),
+                                )),
+                                Box::new(irr.clone()),
+                            )))
+                        }
+                    }
+                    _ => Err(format!(
+                        "Unsupported operation: {} {} {}",
+                        left.type_name(),
+                        op,
+                        right.type_name()
+                    )),
+                }
+            }
+
             // 数组运算
             (Value::Array(a), Value::Array(b)) => match op {
                 BinOp::Add => {
@@ -1418,6 +1484,81 @@ impl Interpreter {
                         }
                     }
                     _ => Err(format!("Unsupported operation: complex {} rational", op)),
+                }
+            }
+
+            // Complex 与 BigInt 的运算
+            (Value::Complex(c_re, c_im), Value::BigInt(b))
+            | (Value::BigInt(b), Value::Complex(c_re, c_im)) => {
+                let b_val = Value::BigInt(b.clone());
+                match op {
+                    BinOp::Add => {
+                        if matches!(left, Value::Complex(_, _)) {
+                            let re = self.eval_binary_op(c_re, BinOp::Add, &b_val)?;
+                            Ok(Value::Complex(
+                                Box::new(re),
+                                Box::new(c_im.as_ref().clone()),
+                            ))
+                        } else {
+                            let re = self.eval_binary_op(&b_val, BinOp::Add, c_re)?;
+                            Ok(Value::Complex(
+                                Box::new(re),
+                                Box::new(c_im.as_ref().clone()),
+                            ))
+                        }
+                    }
+                    BinOp::Sub => {
+                        if matches!(left, Value::Complex(_, _)) {
+                            let re = self.eval_binary_op(c_re, BinOp::Sub, &b_val)?;
+                            Ok(Value::Complex(
+                                Box::new(re),
+                                Box::new(c_im.as_ref().clone()),
+                            ))
+                        } else {
+                            let re = self.eval_binary_op(&b_val, BinOp::Sub, c_re)?;
+                            let im = self.eval_unary_op(UnaryOp::Neg, c_im)?;
+                            Ok(Value::Complex(Box::new(re), Box::new(im)))
+                        }
+                    }
+                    BinOp::Mul => {
+                        let re = self.eval_binary_op(c_re, BinOp::Mul, &b_val)?;
+                        let im = self.eval_binary_op(c_im, BinOp::Mul, &b_val)?;
+                        Ok(Value::Complex(Box::new(re), Box::new(im)))
+                    }
+                    BinOp::Div => {
+                        if matches!(left, Value::Complex(_, _)) {
+                            if b == &BigInt::from(0) {
+                                return Err("Division by zero".to_string());
+                            }
+                            let re = self.eval_binary_op(c_re, BinOp::Div, &b_val)?;
+                            let im = self.eval_binary_op(c_im, BinOp::Div, &b_val)?;
+                            Ok(Value::Complex(Box::new(re), Box::new(im)))
+                        } else {
+                            // b / (a + bi) = b(a - bi) / (a² + b²)
+                            let a_sq = self.eval_binary_op(c_re, BinOp::Mul, c_re)?;
+                            let b_sq = self.eval_binary_op(c_im, BinOp::Mul, c_im)?;
+                            let denom = self.eval_binary_op(&a_sq, BinOp::Add, &b_sq)?;
+
+                            let denom_is_zero = match &denom {
+                                Value::Int(0) => true,
+                                Value::BigInt(n) => n == &BigInt::from(0),
+                                Value::Rational(r) => r.numer().to_string() == "0",
+                                _ => false,
+                            };
+                            if denom_is_zero {
+                                return Err("Division by zero".to_string());
+                            }
+
+                            let b_a = self.eval_binary_op(&b_val, BinOp::Mul, c_re)?;
+                            let b_b = self.eval_binary_op(&b_val, BinOp::Mul, c_im)?;
+                            let neg_b_b = self.eval_unary_op(UnaryOp::Neg, &b_b)?;
+
+                            let re = self.eval_binary_op(&b_a, BinOp::Div, &denom)?;
+                            let im = self.eval_binary_op(&neg_b_b, BinOp::Div, &denom)?;
+                            Ok(Value::Complex(Box::new(re), Box::new(im)))
+                        }
+                    }
+                    _ => Err(format!("Unsupported operation: complex {} bigint", op)),
                 }
             }
 
