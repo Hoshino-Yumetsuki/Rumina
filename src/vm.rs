@@ -568,19 +568,96 @@ impl VM {
                 // Mark loop end - will be set by compiler
             }
             
+            OpCode::DefineFunc { name, params, body_start, body_end, decorators } => {
+                // Store function in globals
+                let func_value = Value::Function {
+                    name: name.clone(),
+                    params: params.clone(),
+                    body: Box::new(crate::ast::Stmt::Block(vec![])), // Placeholder
+                    decorators: decorators.clone(),
+                };
+                self.globals.borrow_mut().insert(name, func_value);
+                
+                // Store bytecode addresses for this function
+                // In a full implementation, we'd maintain a function table
+                // For now, just store the function value
+            }
+            
+            OpCode::CallVar(func_name, arg_count) => {
+                // Get the function
+                let func = self.get_variable(&func_name)?;
+                
+                // Pop arguments from stack
+                let mut args = Vec::new();
+                for _ in 0..arg_count {
+                    let arg = self.stack.pop()
+                        .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    args.push(arg);
+                }
+                args.reverse(); // Restore original order
+                
+                // Call the function
+                match func {
+                    Value::NativeFunction { func: native_fn, .. } => {
+                        // Call native function
+                        let result = native_fn(&args)
+                            .map_err(|e| RuminaError::runtime(e))?;
+                        self.stack.push(result);
+                    }
+                    Value::Function { .. } => {
+                        // For user-defined functions, we'd need to:
+                        // 1. Create a call frame
+                        // 2. Set up parameters as local variables
+                        // 3. Jump to function body
+                        // 4. Return and restore state
+                        // For now, return an error
+                        return Err(RuminaError::runtime(
+                            "User-defined function calls not yet fully implemented in VM".to_string()
+                        ));
+                    }
+                    _ => {
+                        return Err(RuminaError::runtime(format!(
+                            "Cannot call type {}",
+                            func.type_name()
+                        )));
+                    }
+                }
+            }
+            
+            OpCode::MakeStruct(field_count) => {
+                let mut fields = HashMap::new();
+                for _ in 0..field_count {
+                    // Pop value
+                    let value = self.stack.pop()
+                        .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    // Pop key (should be a string)
+                    let key = self.stack.pop()
+                        .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    
+                    if let Value::String(key_str) = key {
+                        fields.insert(key_str, value);
+                    } else {
+                        return Err(RuminaError::runtime("Struct key must be a string".to_string()));
+                    }
+                }
+                self.stack.push(Value::Struct(Rc::new(RefCell::new(fields))));
+            }
+            
+            OpCode::MemberAssign(_) | 
+            OpCode::IndexAssign |
+            OpCode::MakeLambda { .. } |
+            OpCode::Call(_) => {
+                return Err(RuminaError::runtime(
+                    "Opcode not yet implemented".to_string()
+                ));
+            }
+            
             OpCode::Halt => {
                 self.halted = true;
             }
             
             OpCode::Nop => {
                 // Do nothing
-            }
-            
-            _ => {
-                return Err(RuminaError::runtime(format!(
-                    "Unimplemented opcode: {:?}",
-                    op
-                )));
             }
         }
         
@@ -738,6 +815,49 @@ mod tests {
                 assert_eq!(arr_ref.len(), 3);
             }
             _ => panic!("Expected Array"),
+        }
+    }
+    
+    #[test]
+    fn test_vm_native_function_call() {
+        // Create a simple native function
+        fn test_add(args: &[Value]) -> Result<Value, String> {
+            if args.len() != 2 {
+                return Err("Expected 2 arguments".to_string());
+            }
+            
+            match (&args[0], &args[1]) {
+                (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a + b)),
+                _ => Err("Expected integers".to_string()),
+            }
+        }
+        
+        let mut globals_map = HashMap::new();
+        globals_map.insert(
+            "test_add".to_string(),
+            Value::NativeFunction {
+                name: "test_add".to_string(),
+                func: test_add,
+            }
+        );
+        
+        let globals = Rc::new(RefCell::new(globals_map));
+        let mut vm = VM::new(globals);
+        
+        let mut bytecode = ByteCode::new();
+        // Push arguments in order: 10, 20
+        bytecode.emit(OpCode::PushConst(Value::Int(10)), None);
+        bytecode.emit(OpCode::PushConst(Value::Int(20)), None);
+        // Call test_add with 2 arguments
+        bytecode.emit(OpCode::CallVar("test_add".to_string(), 2), None);
+        bytecode.emit(OpCode::Halt, None);
+        
+        vm.load(bytecode);
+        let result = vm.run().unwrap();
+        
+        match result {
+            Some(Value::Int(n)) => assert_eq!(n, 30),
+            other => panic!("Expected Int(30), got {:?}", other),
         }
     }
 }

@@ -535,4 +535,35 @@ mod tests {
             _ => panic!("Expected Int(30), got {:?}", result),
         }
     }
+    
+    #[test]
+    fn test_compile_and_run_with_builtins() {
+        use crate::vm::VM;
+        use crate::interpreter::Interpreter;
+        
+        let mut compiler = Compiler::new();
+        
+        // Compile: abs(-10)
+        let stmts = vec![
+            Stmt::Expr(Expr::Call {
+                func: Box::new(Expr::Ident("abs".to_string())),
+                args: vec![Expr::Int(-10)],
+            })
+        ];
+        
+        let bytecode = compiler.compile(stmts).unwrap();
+        
+        // Use interpreter's globals to get built-in functions
+        let interpreter = Interpreter::new();
+        let globals = interpreter.get_globals();
+        
+        let mut vm = VM::new(globals);
+        vm.load(bytecode);
+        
+        let result = vm.run().unwrap();
+        match result {
+            Some(Value::Int(n)) => assert_eq!(n, 10),
+            _ => panic!("Expected Int(10), got {:?}", result),
+        }
+    }
 }
