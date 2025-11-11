@@ -151,6 +151,15 @@ impl Lexer {
             "true" => Token::True,
             "false" => Token::False,
             "null" => Token::Null,
+            // LSR-005: Type keywords
+            "int" => Token::TypeInt,
+            "float" => Token::TypeFloat,
+            "bool" => Token::TypeBool,
+            "string" => Token::TypeString,
+            "rational" => Token::TypeRational,
+            "irrational" => Token::TypeIrrational,
+            "complex" => Token::TypeComplex,
+            "array" => Token::TypeArray,
             _ => Token::Ident(ident),
         }
     }
@@ -167,11 +176,19 @@ impl Lexer {
                 continue;
             }
 
-            // 跳过续行符
-            if self.current_char == Some('\\') && self.peek() == Some('\n') {
-                self.advance(); // 跳过 \
-                self.advance(); // 跳过 \n
-                continue;
+            // 跳过续行符（支持 \n 和 \r\n）
+            if self.current_char == Some('\\') {
+                let next = self.peek();
+                if next == Some('\n') || next == Some('\r') {
+                    self.advance(); // 跳过 \
+                    if self.current_char == Some('\r') {
+                        self.advance(); // 跳过 \r
+                    }
+                    if self.current_char == Some('\n') {
+                        self.advance(); // 跳过 \n
+                    }
+                    continue; // 继续处理，会再次跳过空格
+                }
             }
 
             break;

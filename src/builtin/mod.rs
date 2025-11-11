@@ -25,6 +25,12 @@ pub fn register_builtins(globals: &mut HashMap<String, Value>) {
     register_fn(globals, "log", math::log);
     register_fn(globals, "factorial", math::factorial);
 
+    // LSR-010: 复数函数
+    register_fn(globals, "arg", math::arg);
+    register_fn(globals, "conj", math::conj);
+    register_fn(globals, "re", math::re);
+    register_fn(globals, "im", math::im);
+
     // 工具函数
     register_fn(globals, "print", utils::print);
     register_fn(globals, "input", utils::input);
@@ -52,6 +58,8 @@ pub fn register_builtins(globals: &mut HashMap<String, Value>) {
     // 数组函数
     register_fn(globals, "foreach", array::foreach);
     register_fn(globals, "map", array::map);
+    register_fn(globals, "filter", array::filter);
+    register_fn(globals, "reduce", array::reduce);
     register_fn(globals, "push", array::push);
     register_fn(globals, "pop", array::pop);
     register_fn(globals, "range", array::range);

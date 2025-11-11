@@ -29,6 +29,22 @@ pub fn map(args: &[Value]) -> Result<Value, String> {
     Err("map not yet implemented".to_string())
 }
 
+pub fn filter(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err("filter expects 2 arguments (array, function)".to_string());
+    }
+
+    Err("filter implemented in interpreter".to_string())
+}
+
+pub fn reduce(args: &[Value]) -> Result<Value, String> {
+    if args.len() < 2 || args.len() > 3 {
+        return Err("reduce expects 2 or 3 arguments (array, function, [initial])".to_string());
+    }
+
+    Err("reduce implemented in interpreter".to_string())
+}
+
 pub fn push(args: &[Value]) -> Result<Value, String> {
     if args.len() != 2 {
         return Err("push expects 2 arguments (array, value)".to_string());

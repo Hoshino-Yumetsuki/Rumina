@@ -7,8 +7,10 @@ use std::collections::HashMap;
 use std::fs;
 use std::rc::Rc;
 
+use crate::ast::DeclaredType;
 use crate::ast::*;
 use crate::builtin;
+use crate::error::{RuminaError, StackFrame};
 use crate::lexer::Lexer;
 use crate::parser::Parser;
 use crate::value::*;
@@ -41,6 +43,9 @@ pub struct Interpreter {
     return_value: Option<Value>,
     break_flag: bool,
     continue_flag: bool,
+    // Error tracking fields
+    current_file: String,
+    call_stack: Vec<String>, // Stack of function names
 }
 
 impl Interpreter {
@@ -48,23 +53,60 @@ impl Interpreter {
         let mut globals = HashMap::new();
         builtin::register_builtins(&mut globals);
 
+        // LSR-010: Register imaginary unit 'i' as sqrt(-1)
+        // This allows complex literal syntax like: 3 + 4*i
+        globals.insert(
+            "i".to_string(),
+            Value::Complex(Box::new(Value::Int(0)), Box::new(Value::Int(1))),
+        );
+
         Interpreter {
             globals: Rc::new(RefCell::new(globals)),
             locals: Vec::new(),
             return_value: None,
             break_flag: false,
             continue_flag: false,
+            current_file: "<unknown>".to_string(),
+            call_stack: Vec::new(),
         }
     }
 
-    pub fn interpret(&mut self, statements: Vec<Stmt>) -> Result<Option<Value>, String> {
+    /// Set the current file being executed (for error reporting)
+    pub fn set_file(&mut self, filename: String) {
+        self.current_file = filename;
+    }
+
+    /// Helper method to wrap errors with stack trace
+    fn wrap_error(&self, message: String) -> RuminaError {
+        let mut error = RuminaError::runtime(message);
+
+        // Add current call stack
+        for func_name in self.call_stack.iter().rev() {
+            error.add_frame(StackFrame {
+                function_name: func_name.clone(),
+                file_name: self.current_file.clone(),
+                line_number: None, // TODO: Add line tracking
+            });
+        }
+
+        error
+    }
+
+    /// Helper to convert Result<T, String> to Result<T, RuminaError>
+    fn convert_result<T>(&self, result: Result<T, String>) -> Result<T, RuminaError> {
+        result.map_err(|e| self.wrap_error(e))
+    }
+
+    pub fn interpret(&mut self, statements: Vec<Stmt>) -> Result<Option<Value>, RuminaError> {
         let mut last_value = None;
         for stmt in statements {
             // 如果是表达式语句,保存其值
             if let Stmt::Expr(expr) = stmt {
-                last_value = Some(self.eval_expr(&expr)?);
+                let result = self.eval_expr(&expr);
+                last_value = Some(self.convert_result(result)?);
             } else {
-                self.execute_stmt(&stmt)?;
+                let result = self.execute_stmt(&stmt);
+                self.convert_result(result)?;
             }
 
             if self.return_value.is_some() || self.break_flag || self.continue_flag {
@@ -79,14 +121,21 @@ impl Interpreter {
             Stmt::VarDecl {
                 name,
                 is_bigint,
+                declared_type,
                 value,
             } => {
                 let val = self.eval_expr(value)?;
-                let val = if *is_bigint {
+
+                // LSR-005: Apply type conversion if declared_type is specified
+                let val = if let Some(dtype) = declared_type {
+                    self.convert_to_declared_type(val, dtype)?
+                } else if *is_bigint {
+                    // Backward compatibility
                     self.convert_to_bigint(val)?
                 } else {
                     val
                 };
+
                 self.set_variable(name.clone(), val);
                 Ok(())
             }
@@ -1785,7 +1834,7 @@ impl Interpreter {
 
     fn call_function(&mut self, func: Value, args: Vec<Value>) -> Result<Value, String> {
         match func {
-            Value::Function { params, body, .. } => {
+            Value::Function { name, params, body } => {
                 if params.len() != args.len() {
                     return Err(format!(
                         "Expected {} arguments, got {}",
@@ -1793,6 +1842,9 @@ impl Interpreter {
                         args.len()
                     ));
                 }
+
+                // Push function name onto call stack
+                self.call_stack.push(name.clone());
 
                 // 创建新的局部作用域
                 let mut local_scope = HashMap::new();
@@ -1802,10 +1854,16 @@ impl Interpreter {
                 self.locals.push(Rc::new(RefCell::new(local_scope)));
 
                 // 执行函数体
-                self.execute_stmt(&body)?;
+                let exec_result = self.execute_stmt(&body);
 
                 // 弹出局部作用域
                 self.locals.pop();
+
+                // Pop function name from call stack
+                self.call_stack.pop();
+
+                // Check execution result
+                exec_result?;
 
                 // 获取返回值
                 let result = self.return_value.take().unwrap_or(Value::Null);
@@ -1825,6 +1883,9 @@ impl Interpreter {
                     ));
                 }
 
+                // Push lambda marker onto call stack
+                self.call_stack.push("<lambda>".to_string());
+
                 // 使用闭包作为基础作用域
                 let mut local_scope = closure.borrow().clone();
                 for (param, arg) in params.iter().zip(args.iter()) {
@@ -1833,10 +1894,16 @@ impl Interpreter {
                 self.locals.push(Rc::new(RefCell::new(local_scope)));
 
                 // 执行函数体
-                self.execute_stmt(&body)?;
+                let exec_result = self.execute_stmt(&body);
 
                 // 弹出局部作用域
                 self.locals.pop();
+
+                // Pop lambda from call stack
+                self.call_stack.pop();
+
+                // Check execution result
+                exec_result?;
 
                 // 获取返回值
                 let result = self.return_value.take().unwrap_or(Value::Null);
@@ -1844,9 +1911,13 @@ impl Interpreter {
             }
 
             Value::NativeFunction { name, func } => {
-                // 特殊处理 foreach 函数
-                if name == "foreach" {
-                    return self.handle_foreach(&args);
+                // 特殊处理需要调用lambda的高阶函数
+                match name.as_str() {
+                    "foreach" => return self.handle_foreach(&args),
+                    "map" => return self.handle_map(&args),
+                    "filter" => return self.handle_filter(&args),
+                    "reduce" => return self.handle_reduce(&args),
+                    _ => {}
                 }
                 func(&args)
             }
@@ -1959,6 +2030,103 @@ impl Interpreter {
         Ok(Value::Null)
     }
 
+    fn handle_map(&mut self, args: &[Value]) -> Result<Value, String> {
+        if args.len() != 2 {
+            return Err("map expects 2 arguments (array, function)".to_string());
+        }
+
+        let array = match &args[0] {
+            Value::Array(arr) => arr.clone(),
+            _ => {
+                return Err(format!("map expects array, got {}", args[0].type_name()));
+            }
+        };
+
+        let callback = args[1].clone();
+
+        // 映射数组元素
+        let arr = array.borrow();
+        let mut result = Vec::new();
+        for element in arr.iter() {
+            let callback_args = vec![element.clone()];
+            let mapped_value = self.call_function(callback.clone(), callback_args)?;
+            result.push(mapped_value);
+        }
+
+        Ok(Value::Array(Rc::new(RefCell::new(result))))
+    }
+
+    fn handle_filter(&mut self, args: &[Value]) -> Result<Value, String> {
+        if args.len() != 2 {
+            return Err("filter expects 2 arguments (array, function)".to_string());
+        }
+
+        let array = match &args[0] {
+            Value::Array(arr) => arr.clone(),
+            _ => {
+                return Err(format!("filter expects array, got {}", args[0].type_name()));
+            }
+        };
+
+        let callback = args[1].clone();
+
+        // 过滤数组元素
+        let arr = array.borrow();
+        let mut result = Vec::new();
+        for element in arr.iter() {
+            let callback_args = vec![element.clone()];
+            let filter_result = self.call_function(callback.clone(), callback_args)?;
+            if filter_result.is_truthy() {
+                result.push(element.clone());
+            }
+        }
+
+        Ok(Value::Array(Rc::new(RefCell::new(result))))
+    }
+
+    fn handle_reduce(&mut self, args: &[Value]) -> Result<Value, String> {
+        if args.len() < 2 || args.len() > 3 {
+            return Err("reduce expects 2 or 3 arguments (array, function, [initial])".to_string());
+        }
+
+        let array = match &args[0] {
+            Value::Array(arr) => arr.clone(),
+            _ => {
+                return Err(format!("reduce expects array, got {}", args[0].type_name()));
+            }
+        };
+
+        let callback = args[1].clone();
+
+        let arr = array.borrow();
+
+        // 检查数组是否为空
+        if arr.is_empty() {
+            if args.len() == 3 {
+                return Ok(args[2].clone());
+            } else {
+                return Err("reduce of empty array with no initial value".to_string());
+            }
+        }
+
+        // 初始化累加器
+        let (mut accumulator, start_index) = if args.len() == 3 {
+            // 提供了初始值
+            (args[2].clone(), 0)
+        } else {
+            // 使用第一个元素作为初始值
+            (arr[0].clone(), 1)
+        };
+
+        // 执行reduce操作
+        for i in start_index..arr.len() {
+            let callback_args = vec![accumulator.clone(), arr[i].clone()];
+            accumulator = self.call_function(callback.clone(), callback_args)?;
+        }
+
+        Ok(accumulator)
+    }
+
     fn set_variable(&mut self, name: String, value: Value) {
         if let Some(local) = self.locals.last() {
             local.borrow_mut().insert(name, value);
@@ -1992,6 +2160,138 @@ impl Interpreter {
         self.globals.borrow().contains_key(name)
     }
 
+    /// LSR-005: Convert value to declared type
+    fn convert_to_declared_type(&self, val: Value, dtype: &DeclaredType) -> Result<Value, String> {
+        match dtype {
+            DeclaredType::Int => self.convert_to_int(val),
+            DeclaredType::Float => self.convert_to_float(val),
+            DeclaredType::Bool => self.convert_to_bool(val),
+            DeclaredType::String => self.convert_to_string(val),
+            DeclaredType::Rational => self.convert_to_rational(val),
+            DeclaredType::Irrational => self.convert_to_irrational(val),
+            DeclaredType::Complex => self.convert_to_complex(val),
+            DeclaredType::Array => self.convert_to_array(val),
+            DeclaredType::BigInt => self.convert_to_bigint(val),
+        }
+    }
+
+    fn convert_to_int(&self, val: Value) -> Result<Value, String> {
+        match val {
+            Value::Int(_) => Ok(val),
+            Value::BigInt(n) => {
+                use num::ToPrimitive;
+                n.to_i64()
+                    .map(Value::Int)
+                    .ok_or_else(|| "BigInt too large to convert to int".to_string())
+            }
+            Value::Float(f) => Ok(Value::Int(f as i64)),
+            Value::Bool(b) => Ok(Value::Int(if b { 1 } else { 0 })),
+            Value::String(s) => s
+                .parse::<i64>()
+                .map(Value::Int)
+                .map_err(|_| format!("Cannot convert string '{}' to int", s)),
+            Value::Rational(r) => {
+                use num::ToPrimitive;
+                let n = r.to_f64().ok_or("Cannot convert rational to float")? as i64;
+                Ok(Value::Int(n))
+            }
+            _ => Err(format!("Cannot convert {} to int", val.type_name())),
+        }
+    }
+
+    fn convert_to_float(&self, val: Value) -> Result<Value, String> {
+        match val {
+            Value::Float(_) => Ok(val),
+            Value::Int(n) => Ok(Value::Float(n as f64)),
+            Value::BigInt(n) => {
+                use num::ToPrimitive;
+                n.to_f64()
+                    .map(Value::Float)
+                    .ok_or_else(|| "BigInt too large to convert to float".to_string())
+            }
+            Value::Bool(b) => Ok(Value::Float(if b { 1.0 } else { 0.0 })),
+            Value::String(s) => s
+                .parse::<f64>()
+                .map(Value::Float)
+                .map_err(|_| format!("Cannot convert string '{}' to float", s)),
+            Value::Rational(r) => {
+                use num::ToPrimitive;
+                let n = r.to_f64().ok_or("Cannot convert rational to float")?;
+                Ok(Value::Float(n))
+            }
+            _ => Err(format!("Cannot convert {} to float", val.type_name())),
+        }
+    }
+
+    fn convert_to_bool(&self, val: Value) -> Result<Value, String> {
+        Ok(Value::Bool(val.is_truthy()))
+    }
+
+    fn convert_to_string(&self, val: Value) -> Result<Value, String> {
+        Ok(Value::String(format!("{}", val)))
+    }
+
+    fn convert_to_rational(&self, val: Value) -> Result<Value, String> {
+        match val {
+            Value::Rational(_) => Ok(val),
+            Value::Int(n) => {
+                use num::BigInt;
+                Ok(Value::Rational(num::rational::Ratio::new(
+                    BigInt::from(n),
+                    BigInt::from(1),
+                )))
+            }
+            Value::Float(f) => {
+                use num::BigInt;
+                Ok(Value::Rational(
+                    num::rational::Ratio::from_float(f)
+                        .unwrap_or(num::rational::Ratio::new(BigInt::from(0), BigInt::from(1))),
+                ))
+            }
+            Value::Bool(b) => {
+                use num::BigInt;
+                let n = if b { 1 } else { 0 };
+                Ok(Value::Rational(num::rational::Ratio::new(
+                    BigInt::from(n),
+                    BigInt::from(1),
+                )))
+            }
+            _ => Err(format!("Cannot convert {} to rational", val.type_name())),
+        }
+    }
+
+    fn convert_to_irrational(&self, val: Value) -> Result<Value, String> {
+        match val {
+            Value::Irrational(_) => Ok(val),
+            Value::Int(n) => Ok(Value::Irrational(IrrationalValue::Sqrt(Box::new(
+                Value::Int(n * n),
+            )))),
+            _ => Err(format!("Cannot convert {} to irrational", val.type_name())),
+        }
+    }
+
+    fn convert_to_complex(&self, val: Value) -> Result<Value, String> {
+        match val {
+            Value::Complex(_, _) => Ok(val),
+            Value::Int(n) => Ok(Value::Complex(
+                Box::new(Value::Int(n)),
+                Box::new(Value::Int(0)),
+            )),
+            Value::Float(f) => Ok(Value::Complex(
+                Box::new(Value::Float(f)),
+                Box::new(Value::Int(0)),
+            )),
+            _ => Err(format!("Cannot convert {} to complex", val.type_name())),
+        }
+    }
+
+    fn convert_to_array(&self, val: Value) -> Result<Value, String> {
+        match val {
+            Value::Array(_) => Ok(val),
+            _ => Err(format!("Cannot convert {} to array", val.type_name())),
+        }
+    }
+
     fn convert_to_bigint(&self, val: Value) -> Result<Value, String> {
         match val {
             Value::Int(n) => Ok(Value::BigInt(BigInt::from(n))),
@@ -2007,7 +2307,7 @@ mod tests {
     use crate::lexer::Lexer;
     use crate::parser::Parser;
 
-    fn eval_expr(code: &str) -> Result<Value, String> {
+    fn eval_expr(code: &str) -> Result<Value, crate::error::RuminaError> {
         let mut lexer = Lexer::new(code.to_string());
         let tokens = lexer.tokenize();
         let mut parser = Parser::new(tokens);
@@ -2015,7 +2315,7 @@ mod tests {
         let mut interpreter = Interpreter::new();
         match interpreter.interpret(ast)? {
             Some(v) => Ok(v),
-            None => Err("No value returned".to_string()),
+            None => Err("No value returned".into()),
         }
     }
 

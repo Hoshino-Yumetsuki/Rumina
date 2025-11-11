@@ -1,13 +1,28 @@
 /// AST节点定义
 use std::fmt;
 
+/// LSR-005: Declared types for type annotations
+#[derive(Debug, Clone, PartialEq)]
+pub enum DeclaredType {
+    Int,
+    Float,
+    Bool,
+    String,
+    Rational,
+    Irrational,
+    Complex,
+    Array,
+    BigInt,
+}
+
 /// 语句
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     // 变量声明
     VarDecl {
         name: String,
-        is_bigint: bool,
+        is_bigint: bool,                     // Deprecated: Use declared_type instead
+        declared_type: Option<DeclaredType>, // LSR-005: Optional type annotation
         value: Expr,
     },
 

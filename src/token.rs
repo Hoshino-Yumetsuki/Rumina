@@ -28,6 +28,16 @@ pub enum Token {
     Include,
     Do,
 
+    // LSR-005: Type keywords for type declarations
+    TypeInt,
+    TypeFloat,
+    TypeBool,
+    TypeString,
+    TypeRational,
+    TypeIrrational,
+    TypeComplex,
+    TypeArray,
+
     // 运算符
     Plus,    // +
     Minus,   // -

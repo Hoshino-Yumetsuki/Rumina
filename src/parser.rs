@@ -55,8 +55,17 @@ impl Parser {
 
     fn parse_statement(&mut self) -> Result<Stmt, String> {
         match self.current_token() {
-            Token::Var => self.parse_var_decl(false),
-            Token::BigInt => self.parse_var_decl(true),
+            Token::Var => self.parse_var_decl_with_type(None),
+            Token::BigInt => self.parse_var_decl_with_type(Some(DeclaredType::BigInt)),
+            // LSR-005: Type declaration support
+            Token::TypeInt => self.parse_var_decl_with_type(Some(DeclaredType::Int)),
+            Token::TypeFloat => self.parse_var_decl_with_type(Some(DeclaredType::Float)),
+            Token::TypeBool => self.parse_var_decl_with_type(Some(DeclaredType::Bool)),
+            Token::TypeString => self.parse_var_decl_with_type(Some(DeclaredType::String)),
+            Token::TypeRational => self.parse_var_decl_with_type(Some(DeclaredType::Rational)),
+            Token::TypeIrrational => self.parse_var_decl_with_type(Some(DeclaredType::Irrational)),
+            Token::TypeComplex => self.parse_var_decl_with_type(Some(DeclaredType::Complex)),
+            Token::TypeArray => self.parse_var_decl_with_type(Some(DeclaredType::Array)),
             Token::Struct => self.parse_struct_decl(),
             Token::Func => self.parse_func_def(),
             Token::Return => self.parse_return(),
@@ -110,8 +119,11 @@ impl Parser {
         }
     }
 
-    fn parse_var_decl(&mut self, is_bigint: bool) -> Result<Stmt, String> {
-        self.advance(); // 跳过 var 或 bigint
+    fn parse_var_decl_with_type(
+        &mut self,
+        declared_type: Option<DeclaredType>,
+    ) -> Result<Stmt, String> {
+        self.advance(); // 跳过类型关键字或var
 
         let name = if let Token::Ident(n) = self.current_token() {
             n.clone()
@@ -127,9 +139,12 @@ impl Parser {
         let value = self.parse_expression()?;
         self.match_token(&Token::Semicolon);
 
+        let is_bigint = matches!(declared_type, Some(DeclaredType::BigInt));
+
         Ok(Stmt::VarDecl {
             name,
             is_bigint,
+            declared_type,
             value,
         })
     }
@@ -154,6 +169,7 @@ impl Parser {
         Ok(Stmt::VarDecl {
             name,
             is_bigint: false,
+            declared_type: None,
             value,
         })
     }

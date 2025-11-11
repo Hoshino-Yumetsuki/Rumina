@@ -1,4 +1,4 @@
-use rumina::{Interpreter, Lexer, Parser};
+use rumina::{Interpreter, Lexer, Parser, RuminaError};
 use std::env;
 use std::fs;
 use std::io::{self, Write};
@@ -40,7 +40,8 @@ fn run_file(filename: &str) {
     check_semicolons(&contents, filename);
 
     if let Err(err) = rumina::run(&contents) {
-        eprintln!("Runtime error: {}", err);
+        // Use formatted error output with stack trace
+        eprint!("{}", err.format_error());
         std::process::exit(1);
     }
 }
@@ -155,7 +156,7 @@ fn run_repl() {
                 println!("{}", value);
             }
             Ok(None) => {}
-            Err(err) => eprintln!("Error: {}", err),
+            Err(err) => eprint!("{}", err.format_error()),
         }
 
         line_number += 1;
@@ -167,7 +168,7 @@ fn run_repl() {
 fn execute_input(
     interpreter: &mut Interpreter,
     input: &str,
-) -> Result<Option<rumina::Value>, String> {
+) -> Result<Option<rumina::Value>, RuminaError> {
     let needs_semicolon = !input.ends_with(';')
         && !input.starts_with("if ")
         && !input.starts_with("while ")
@@ -191,7 +192,7 @@ fn execute_input(
     let tokens = lexer.tokenize();
 
     let mut parser = Parser::new(tokens);
-    let ast = parser.parse()?;
+    let ast = parser.parse().map_err(|e| RuminaError::runtime(e))?;
 
     let result = interpreter.interpret(ast)?;
 
