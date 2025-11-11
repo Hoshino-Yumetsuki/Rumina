@@ -197,10 +197,11 @@ Built-in functions are integrated through the interpreter's globals:
 - Array and struct operations
 - Native function calls
 - Built-in function integration
-- Comprehensive test suite (38 tests)
+- **User-defined function calls with proper call frames**
+- **Recursive function support with depth tracking**
+- Comprehensive test suite (49 tests)
 
 ### In Progress 🔄
-- User-defined function calls with proper call frames
 - Lambda/closure support
 - For loop compilation
 - Enhanced scope management
