@@ -21,6 +21,7 @@ pub enum Token {
     If,
     Else,
     While,
+    For,
     Loop,
     Break,
     Continue,

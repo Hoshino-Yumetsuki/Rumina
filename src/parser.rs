@@ -62,6 +62,7 @@ impl Parser {
             Token::Return => self.parse_return(),
             Token::If => self.parse_if(),
             Token::While => self.parse_while(),
+            Token::For => self.parse_for(),
             Token::Loop => self.parse_loop(),
             Token::Break => {
                 self.advance();
@@ -287,6 +288,77 @@ impl Parser {
         };
 
         Ok(Stmt::Loop { body })
+    }
+
+    fn parse_for(&mut self) -> Result<Stmt, String> {
+        self.advance(); // 跳过 for
+
+        self.expect(Token::LParen)?;
+
+        // 解析初始化语句 (可选)
+        let init = if self.current_token() == &Token::Semicolon {
+            None
+        } else {
+            Some(Box::new(self.parse_statement()?))
+        };
+
+        // 如果init不是以分号结尾的，需要consume分号
+        if !matches!(self.current_token(), Token::Semicolon) {
+            // init已经消费了分号，不需要再消费
+        } else {
+            self.advance(); // 跳过分号
+        }
+
+        // 解析条件表达式 (可选)
+        let condition = if self.current_token() == &Token::Semicolon {
+            None
+        } else {
+            Some(self.parse_expression()?)
+        };
+        self.expect(Token::Semicolon)?;
+
+        // 解析更新语句 (可选) - 支持赋值等语句
+        let update = if self.current_token() == &Token::RParen {
+            None
+        } else {
+            // 解析更新部分作为语句（可以是赋值或表达式）
+            // 尝试解析为表达式，然后检查是否是赋值
+            let expr = self.parse_expression()?;
+
+            // 检查是否是赋值
+            let stmt = if self.current_token() == &Token::Equal {
+                self.advance(); // 跳过 =
+                let value = self.parse_expression()?;
+                match expr {
+                    Expr::Ident(name) => Stmt::Assign { name, value },
+                    _ => return Err("Invalid assignment target in for update".to_string()),
+                }
+            } else {
+                // 否则作为表达式语句
+                Stmt::Expr(expr)
+            };
+
+            Some(Box::new(stmt))
+        };
+        self.expect(Token::RParen)?;
+
+        // 解析循环体
+        let body = if self.current_token() == &Token::LBrace {
+            self.advance(); // 跳过 {
+            let stmts = self.parse_block_statements()?;
+            self.expect(Token::RBrace)?;
+            stmts
+        } else {
+            // 单行for语句
+            vec![self.parse_statement()?]
+        };
+
+        Ok(Stmt::For {
+            init,
+            condition,
+            update,
+            body,
+        })
     }
 
     fn parse_include(&mut self) -> Result<Stmt, String> {
