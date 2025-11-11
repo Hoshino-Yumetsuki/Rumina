@@ -573,4 +573,109 @@ mod tests {
             _ => panic!("Expected Int(10), got {:?}", result),
         }
     }
+
+    #[test]
+    fn test_compile_and_run_user_defined_function() {
+        use crate::vm::VM;
+        use std::cell::RefCell;
+        use std::collections::HashMap;
+        use std::rc::Rc;
+
+        let mut compiler = Compiler::new();
+
+        // Compile: func double(x) { return x * 2; } double(21)
+        let stmts = vec![
+            Stmt::FuncDef {
+                name: "double".to_string(),
+                params: vec!["x".to_string()],
+                body: vec![Stmt::Return(Some(Expr::Binary {
+                    left: Box::new(Expr::Ident("x".to_string())),
+                    op: BinOp::Mul,
+                    right: Box::new(Expr::Int(2)),
+                }))],
+                decorators: vec![],
+            },
+            Stmt::Expr(Expr::Call {
+                func: Box::new(Expr::Ident("double".to_string())),
+                args: vec![Expr::Int(21)],
+            }),
+        ];
+
+        let bytecode = compiler.compile(stmts).unwrap();
+
+        let globals = Rc::new(RefCell::new(HashMap::new()));
+        let mut vm = VM::new(globals);
+        vm.load(bytecode);
+
+        let result = vm.run().unwrap();
+        match result {
+            Some(Value::Int(n)) => assert_eq!(n, 42),
+            _ => panic!("Expected Int(42), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn test_compile_and_run_recursive_fibonacci() {
+        use crate::vm::VM;
+        use std::cell::RefCell;
+        use std::collections::HashMap;
+        use std::rc::Rc;
+
+        let mut compiler = Compiler::new();
+
+        // Compile: func fib(n) { if (n <= 1) { return n; } return fib(n-1) + fib(n-2); } fib(8)
+        let stmts = vec![
+            Stmt::FuncDef {
+                name: "fib".to_string(),
+                params: vec!["n".to_string()],
+                body: vec![
+                    Stmt::If {
+                        condition: Expr::Binary {
+                            left: Box::new(Expr::Ident("n".to_string())),
+                            op: BinOp::LessEq,
+                            right: Box::new(Expr::Int(1)),
+                        },
+                        then_branch: vec![Stmt::Return(Some(Expr::Ident("n".to_string())))],
+                        else_branch: None,
+                    },
+                    Stmt::Return(Some(Expr::Binary {
+                        left: Box::new(Expr::Call {
+                            func: Box::new(Expr::Ident("fib".to_string())),
+                            args: vec![Expr::Binary {
+                                left: Box::new(Expr::Ident("n".to_string())),
+                                op: BinOp::Sub,
+                                right: Box::new(Expr::Int(1)),
+                            }],
+                        }),
+                        op: BinOp::Add,
+                        right: Box::new(Expr::Call {
+                            func: Box::new(Expr::Ident("fib".to_string())),
+                            args: vec![Expr::Binary {
+                                left: Box::new(Expr::Ident("n".to_string())),
+                                op: BinOp::Sub,
+                                right: Box::new(Expr::Int(2)),
+                            }],
+                        }),
+                    })),
+                ],
+                decorators: vec![],
+            },
+            Stmt::Expr(Expr::Call {
+                func: Box::new(Expr::Ident("fib".to_string())),
+                args: vec![Expr::Int(8)],
+            }),
+        ];
+
+        let bytecode = compiler.compile(stmts).unwrap();
+
+        let globals = Rc::new(RefCell::new(HashMap::new()));
+        let mut vm = VM::new(globals);
+        vm.load(bytecode);
+
+        let result = vm.run().unwrap();
+        match result {
+            Some(Value::Int(n)) => assert_eq!(n, 21), // fib(8) = 21
+            _ => panic!("Expected Int(21), got {:?}", result),
+        }
+    }
 }
