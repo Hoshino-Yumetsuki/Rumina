@@ -7,30 +7,61 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
+use std::thread;
 
 fn main() {
+    // Increase stack size to handle deep recursion
+    // The default stack size is typically 2MB, we increase it to 128MB
+    // This allows much deeper recursion without stack overflow
+    const STACK_SIZE: usize = 128 * 1024 * 1024; // 128 MB
+
     let args: Vec<String> = env::args().collect();
 
+    // Spawn a thread with larger stack size to run the actual program
+    let child = thread::Builder::new()
+        .name("main".to_string())
+        .stack_size(STACK_SIZE)
+        .spawn(move || {
+            main_with_large_stack(args)
+        })
+        .unwrap();
+
+    // Wait for the thread to finish and propagate the exit code
+    match child.join() {
+        Ok(exit_code) => {
+            if exit_code != 0 {
+                std::process::exit(exit_code);
+            }
+        }
+        Err(_) => {
+            eprintln!("Thread panicked");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn main_with_large_stack(args: Vec<String>) -> i32 {
     // 查找第一个 .lm 文件
     let lm_file = args.iter().skip(1).find(|arg| arg.ends_with(".lm"));
 
     if let Some(filename) = lm_file {
         // 文件模式
-        run_file(filename);
+        run_file(filename)
     } else if args.len() > 1 {
         // 有参数但没有 .lm 文件
         eprintln!("Error: No .lm file specified");
         eprintln!("Usage:");
         eprintln!("  cargo run              - Start REPL");
         eprintln!("  cargo run <file.lm>    - Run Lamina file");
-        std::process::exit(1);
+        1
     } else {
         // REPL模式
         run_repl();
+        0
     }
 }
 
-fn run_file(filename: &str) {
+fn run_file(filename: &str) -> i32 {
     let contents = fs::read_to_string(filename).unwrap_or_else(|err| {
         eprintln!("Error reading file '{}': {}", filename, err);
         std::process::exit(1);
@@ -42,8 +73,9 @@ fn run_file(filename: &str) {
     if let Err(err) = rumina::run(&contents) {
         // Use formatted error output with stack trace
         eprint!("{}", err.format_error());
-        std::process::exit(1);
+        return 1;
     }
+    0
 }
 
 fn check_semicolons(contents: &str, filename: &str) {

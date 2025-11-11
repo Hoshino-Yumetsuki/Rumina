@@ -73,6 +73,16 @@ impl Interpreter {
                     ));
                 }
 
+                // Check recursion depth to prevent stack overflow
+                self.recursion_depth += 1;
+                if self.recursion_depth > self.max_recursion_depth {
+                    self.recursion_depth -= 1;
+                    return Err(format!(
+                        "Maximum recursion depth exceeded ({}). Consider using memoization with @memoize decorator or iterative approach.",
+                        self.max_recursion_depth
+                    ));
+                }
+
                 // Push function name onto call stack
                 self.call_stack.push(name.clone());
 
@@ -91,6 +101,9 @@ impl Interpreter {
 
                 // Pop function name from call stack
                 self.call_stack.pop();
+
+                // Decrement recursion depth
+                self.recursion_depth -= 1;
 
                 // Check execution result
                 exec_result?;
@@ -113,6 +126,16 @@ impl Interpreter {
                     ));
                 }
 
+                // Check recursion depth to prevent stack overflow
+                self.recursion_depth += 1;
+                if self.recursion_depth > self.max_recursion_depth {
+                    self.recursion_depth -= 1;
+                    return Err(format!(
+                        "Maximum recursion depth exceeded ({}). Consider using memoization or iterative approach.",
+                        self.max_recursion_depth
+                    ));
+                }
+
                 // Push lambda marker onto call stack
                 self.call_stack.push("<lambda>".to_string());
 
@@ -131,6 +154,9 @@ impl Interpreter {
 
                 // Pop lambda from call stack
                 self.call_stack.pop();
+
+                // Decrement recursion depth
+                self.recursion_depth -= 1;
 
                 // Check execution result
                 exec_result?;

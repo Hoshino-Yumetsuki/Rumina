@@ -43,6 +43,9 @@ pub struct Interpreter {
     // Error tracking fields
     current_file: String,
     call_stack: Vec<String>, // Stack of function names
+    // Recursion depth tracking for stack overflow prevention
+    recursion_depth: usize,
+    max_recursion_depth: usize,
 }
 
 impl Interpreter {
@@ -65,6 +68,8 @@ impl Interpreter {
             continue_flag: false,
             current_file: "<unknown>".to_string(),
             call_stack: Vec::new(),
+            recursion_depth: 0,
+            max_recursion_depth: 10000, // Allow deep recursion without stack overflow
         }
     }
 
