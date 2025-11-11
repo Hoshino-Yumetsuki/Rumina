@@ -683,7 +683,10 @@ mod tests {
             infinite(0);
         "#;
         let result = eval_expr(code);
-        assert!(result.is_err(), "Should fail when exceeding recursion limit");
+        assert!(
+            result.is_err(),
+            "Should fail when exceeding recursion limit"
+        );
         let err = result.unwrap_err();
         let err_msg = format!("{}", err);
         assert!(

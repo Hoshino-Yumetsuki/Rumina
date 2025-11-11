@@ -21,9 +21,7 @@ fn main() {
     let child = thread::Builder::new()
         .name("main".to_string())
         .stack_size(STACK_SIZE)
-        .spawn(move || {
-            main_with_large_stack(args)
-        })
+        .spawn(move || main_with_large_stack(args))
         .unwrap();
 
     // Wait for the thread to finish and propagate the exit code
