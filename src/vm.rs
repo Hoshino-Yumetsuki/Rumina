@@ -807,9 +807,16 @@ impl VM {
         )))
     }
 
-    /// Set variable in locals
+    /// Set variable (in globals if at top level, otherwise in locals)
     fn set_variable(&mut self, name: String, value: Value) {
-        self.locals.insert(name, value);
+        // If we're at the top level (no active call frames), store in globals
+        // This allows REPL state to persist across executions
+        if self.call_stack.is_empty() {
+            self.globals.borrow_mut().insert(name, value);
+        } else {
+            // Inside a function, use locals
+            self.locals.insert(name, value);
+        }
     }
 }
 

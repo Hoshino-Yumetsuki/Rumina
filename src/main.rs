@@ -1,4 +1,4 @@
-use rumina::{Interpreter, Lexer, Parser, RuminaError};
+use rumina::{Compiler, Interpreter, Lexer, Parser, RuminaError, VM};
 use std::env;
 use std::fs;
 use std::io::{self, Write};
@@ -131,7 +131,7 @@ fn check_semicolons(contents: &str, filename: &str) {
 }
 
 fn run_repl() {
-    println!("Rumina - Lamina Language Interpreter");
+    println!("Rumina - Lamina Language Interpreter (VM Mode)");
     println!("Type 'exit' to quit, or enter Lamina code to execute.");
     println!();
 
@@ -145,7 +145,10 @@ fn run_repl() {
         .expect("failed to set Ctrl-C handler");
     }
 
-    let mut interpreter = Interpreter::new();
+    // Initialize interpreter once for globals (shared across all VM executions)
+    let interpreter = Interpreter::new();
+    let globals = interpreter.get_globals();
+    
     let mut line_number = 1;
 
     loop {
@@ -180,8 +183,8 @@ fn run_repl() {
             continue;
         }
 
-        // 尝试执行输入
-        match execute_input(&mut interpreter, input) {
+        // Execute input using VM - globals are shared so state persists
+        match execute_input_vm(&globals, input) {
             Ok(Some(value)) => {
                 println!("{}", value);
             }
@@ -195,8 +198,8 @@ fn run_repl() {
     println!("Goodbye!");
 }
 
-fn execute_input(
-    interpreter: &mut Interpreter,
+fn execute_input_vm(
+    globals: &std::rc::Rc<std::cell::RefCell<std::collections::HashMap<String, rumina::Value>>>,
     input: &str,
 ) -> Result<Option<rumina::Value>, RuminaError> {
     let needs_semicolon = !input.ends_with(';')
@@ -224,7 +227,11 @@ fn execute_input(
     let mut parser = Parser::new(tokens);
     let ast = parser.parse().map_err(|e| RuminaError::runtime(e))?;
 
-    let result = interpreter.interpret(ast)?;
+    let mut compiler = Compiler::new();
+    let bytecode = compiler.compile(ast)?;
 
-    Ok(result)
+    let mut vm = VM::new(globals.clone());
+    vm.load(bytecode);
+
+    vm.run()
 }
