@@ -69,7 +69,7 @@ impl Interpreter {
             current_file: "<unknown>".to_string(),
             call_stack: Vec::new(),
             recursion_depth: 0,
-            max_recursion_depth: 10000, // Allow deep recursion without stack overflow
+            max_recursion_depth: 4000, // Conservative limit based on 128MB stack size
         }
     }
 
@@ -620,6 +620,91 @@ mod tests {
                 }
             }
             other => panic!("Expected Irrational(Product(-1, Sqrt(2))), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_deep_recursion_simple() {
+        // Test that we can handle moderately deep recursion (50 levels)
+        // Note: test runner has limited stack, so we test conservatively
+        let code = r#"
+            func countdown(n) {
+                if (n <= 0) {
+                    return 0;
+                }
+                return countdown(n - 1);
+            }
+            countdown(50);
+        "#;
+        let result = eval_expr(code);
+        assert!(result.is_ok(), "Should handle 50 levels of recursion");
+        match result.unwrap() {
+            Value::Int(n) => assert_eq!(n, 0, "Expected 0, got {}", n),
+            other => panic!("Expected Int(0), got {:?}", other),
+        }
+    }
+
+    #[test]
+    #[ignore] // This test requires the increased stack size from main()
+    fn test_deep_recursion_moderate() {
+        // Test that we can handle deep recursion (1000 levels)
+        // This test is ignored by default as it requires the CLI's increased stack size
+        let code = r#"
+            func countdown(n) {
+                if (n <= 0) {
+                    return 0;
+                }
+                return countdown(n - 1);
+            }
+            countdown(1000);
+        "#;
+        let result = eval_expr(code);
+        assert!(result.is_ok(), "Should handle 1000 levels of recursion");
+        match result.unwrap() {
+            Value::Int(n) => assert_eq!(n, 0, "Expected 0, got {}", n),
+            other => panic!("Expected Int(0), got {:?}", other),
+        }
+    }
+
+    #[test]
+    #[ignore] // This test requires the increased stack size from main()
+    fn test_recursion_limit() {
+        // Test that we get a proper error when exceeding recursion limit
+        // This test is ignored by default as it requires the CLI's increased stack size
+        let code = r#"
+            func infinite(n) {
+                return infinite(n + 1);
+            }
+            infinite(0);
+        "#;
+        let result = eval_expr(code);
+        assert!(result.is_err(), "Should fail when exceeding recursion limit");
+        let err = result.unwrap_err();
+        let err_msg = format!("{}", err);
+        assert!(
+            err_msg.contains("Maximum recursion depth exceeded"),
+            "Error should mention recursion depth, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_fibonacci_small() {
+        // Test that basic fibonacci works
+        let code = r#"
+            func fib(n) {
+                if (n <= 1) {
+                    return n;
+                }
+                return fib(n - 1) + fib(n - 2);
+            }
+            fib(10);
+        "#;
+        let result = eval_expr(code);
+        assert!(result.is_ok(), "Should calculate fib(10)");
+        match result.unwrap() {
+            Value::Int(n) => assert_eq!(n, 55, "Expected fib(10) = 55, got {}", n),
+            other => panic!("Expected Int(55), got {:?}", other),
         }
     }
 }
