@@ -241,23 +241,32 @@ impl ByteCode {
     }
 }
 
+/// Function metadata for user-defined functions
+#[derive(Debug, Clone)]
+struct FunctionInfo {
+    /// Function name
+    name: String,
+    /// Parameter names
+    params: Vec<String>,
+    /// Start address in bytecode
+    body_start: usize,
+    /// End address in bytecode
+    body_end: usize,
+}
+
 /// Call frame for function calls
 #[derive(Debug, Clone)]
 struct CallFrame {
     /// Return address (instruction pointer to return to)
-    #[allow(dead_code)]
     return_address: usize,
 
     /// Base pointer for local variables
-    #[allow(dead_code)]
     base_pointer: usize,
 
     /// Function name (for error reporting)
-    #[allow(dead_code)]
     function_name: String,
 
     /// Local variables in this frame
-    #[allow(dead_code)]
     locals: HashMap<String, Value>,
 }
 
@@ -284,13 +293,14 @@ pub struct VM {
     /// Loop break/continue targets
     loop_stack: Vec<(usize, usize)>, // (continue_target, break_target)
 
+    /// Function table: maps function names to their bytecode locations
+    functions: HashMap<String, FunctionInfo>,
+
     /// Halt flag
     halted: bool,
 
     /// Recursion depth tracking
-    #[allow(dead_code)]
     recursion_depth: usize,
-    #[allow(dead_code)]
     max_recursion_depth: usize,
 }
 
@@ -305,6 +315,7 @@ impl VM {
             globals,
             locals: HashMap::new(),
             loop_stack: Vec::new(),
+            functions: HashMap::new(),
             halted: false,
             recursion_depth: 0,
             max_recursion_depth: 4000,
@@ -560,10 +571,16 @@ impl VM {
 
             OpCode::Return => {
                 // Pop the call frame and jump back
-                if let Some(_frame) = self.call_stack.pop() {
-                    // The return value is already on the stack
-                    // In a full implementation, we'd restore the IP from the frame
-                    self.halted = true; // For now, just halt
+                if let Some(frame) = self.call_stack.pop() {
+                    // Decrement recursion depth
+                    self.recursion_depth = self.recursion_depth.saturating_sub(1);
+
+                    // The return value is already on the stack (or Null was pushed)
+                    // Restore the instruction pointer to return address
+                    self.ip = frame.return_address;
+
+                    // Restore the previous local variables
+                    self.locals = frame.locals;
                 } else {
                     // Top-level return - halt execution
                     self.halted = true;
@@ -597,11 +614,22 @@ impl VM {
             OpCode::DefineFunc {
                 name,
                 params,
-                body_start: _body_start,
-                body_end: _body_end,
+                body_start,
+                body_end,
                 decorators,
             } => {
-                // Store function in globals
+                // Store function metadata in function table
+                self.functions.insert(
+                    name.clone(),
+                    FunctionInfo {
+                        name: name.clone(),
+                        params: params.clone(),
+                        body_start,
+                        body_end,
+                    },
+                );
+
+                // Store function in globals as well (for compatibility)
                 let func_value = Value::Function {
                     name: name.clone(),
                     params: params.clone(),
@@ -609,10 +637,6 @@ impl VM {
                     decorators: decorators.clone(),
                 };
                 self.globals.borrow_mut().insert(name, func_value);
-
-                // Store bytecode addresses for this function
-                // In a full implementation, we'd maintain a function table
-                // For now, just store the function value
             }
 
             OpCode::CallVar(func_name, arg_count) => {
@@ -640,16 +664,54 @@ impl VM {
                         self.stack.push(result);
                     }
                     Value::Function { .. } => {
-                        // For user-defined functions, we'd need to:
-                        // 1. Create a call frame
-                        // 2. Set up parameters as local variables
-                        // 3. Jump to function body
-                        // 4. Return and restore state
-                        // For now, return an error
-                        return Err(RuminaError::runtime(
-                            "User-defined function calls not yet fully implemented in VM"
-                                .to_string(),
-                        ));
+                        // Check if we have the function in our function table
+                        if let Some(func_info) = self.functions.get(&func_name).cloned() {
+                            // Check recursion depth
+                            if self.recursion_depth >= self.max_recursion_depth {
+                                return Err(RuminaError::runtime(format!(
+                                    "Maximum recursion depth ({}) exceeded",
+                                    self.max_recursion_depth
+                                )));
+                            }
+
+                            // Check parameter count
+                            if args.len() != func_info.params.len() {
+                                return Err(RuminaError::runtime(format!(
+                                    "Function '{}' expects {} arguments, got {}",
+                                    func_name,
+                                    func_info.params.len(),
+                                    args.len()
+                                )));
+                            }
+
+                            // Create new call frame
+                            let frame = CallFrame {
+                                return_address: self.ip,
+                                base_pointer: self.stack.len(),
+                                function_name: func_name.clone(),
+                                locals: std::mem::take(&mut self.locals), // Save current locals
+                            };
+
+                            // Push call frame
+                            self.call_stack.push(frame);
+                            self.recursion_depth += 1;
+
+                            // Set up parameters as local variables
+                            self.locals.clear();
+                            for (param_name, arg_value) in
+                                func_info.params.iter().zip(args.into_iter())
+                            {
+                                self.locals.insert(param_name.clone(), arg_value);
+                            }
+
+                            // Jump to function body
+                            self.ip = func_info.body_start;
+                        } else {
+                            return Err(RuminaError::runtime(format!(
+                                "Function '{}' not found in function table",
+                                func_name
+                            )));
+                        }
                     }
                     _ => {
                         return Err(RuminaError::runtime(format!(
@@ -907,6 +969,137 @@ mod tests {
         match result {
             Some(Value::Int(n)) => assert_eq!(n, 30),
             other => panic!("Expected Int(30), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_vm_user_defined_function() {
+        let globals = Rc::new(RefCell::new(HashMap::new()));
+        let mut vm = VM::new(globals);
+
+        let mut bytecode = ByteCode::new();
+
+        // func add(a, b) { return a + b; }
+        // Skip function definition
+        let skip_jump_addr = bytecode.current_address();
+        bytecode.emit(OpCode::Jump(0), None);
+
+        // Function body starts here
+        let body_start = bytecode.current_address();
+        bytecode.emit(OpCode::PushVar("a".to_string()), None);
+        bytecode.emit(OpCode::PushVar("b".to_string()), None);
+        bytecode.emit(OpCode::Add, None);
+        bytecode.emit(OpCode::Return, None);
+        let body_end = bytecode.current_address();
+
+        // Patch skip jump to here
+        bytecode.patch_jump(skip_jump_addr, body_end);
+
+        // Define the function
+        bytecode.emit(
+            OpCode::DefineFunc {
+                name: "add".to_string(),
+                params: vec!["a".to_string(), "b".to_string()],
+                body_start,
+                body_end,
+                decorators: vec![],
+            },
+            None,
+        );
+
+        // Call the function: add(5, 7)
+        bytecode.emit(OpCode::PushConst(Value::Int(5)), None);
+        bytecode.emit(OpCode::PushConst(Value::Int(7)), None);
+        bytecode.emit(OpCode::CallVar("add".to_string(), 2), None);
+        bytecode.emit(OpCode::Halt, None);
+
+        vm.load(bytecode);
+        let result = vm.run().unwrap();
+
+        match result {
+            Some(Value::Int(n)) => assert_eq!(n, 12),
+            other => panic!("Expected Int(12), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_vm_recursive_function() {
+        let globals = Rc::new(RefCell::new(HashMap::new()));
+        let mut vm = VM::new(globals);
+
+        let mut bytecode = ByteCode::new();
+
+        // func fib(n) {
+        //     if (n <= 1) { return n; }
+        //     return fib(n - 1) + fib(n - 2);
+        // }
+
+        // Skip function definition
+        let skip_jump_addr = bytecode.current_address();
+        bytecode.emit(OpCode::Jump(0), None);
+
+        // Function body starts here
+        let body_start = bytecode.current_address();
+
+        // if (n <= 1)
+        bytecode.emit(OpCode::PushVar("n".to_string()), None);
+        bytecode.emit(OpCode::PushConst(Value::Int(1)), None);
+        bytecode.emit(OpCode::Lte, None);
+        let else_jump = bytecode.current_address();
+        bytecode.emit(OpCode::JumpIfFalse(0), None);
+
+        // then: return n
+        bytecode.emit(OpCode::PushVar("n".to_string()), None);
+        bytecode.emit(OpCode::Return, None);
+
+        // Patch else jump to here
+        bytecode.patch_jump(else_jump, bytecode.current_address());
+
+        // else: return fib(n - 1) + fib(n - 2)
+        // fib(n - 1)
+        bytecode.emit(OpCode::PushVar("n".to_string()), None);
+        bytecode.emit(OpCode::PushConst(Value::Int(1)), None);
+        bytecode.emit(OpCode::Sub, None);
+        bytecode.emit(OpCode::CallVar("fib".to_string(), 1), None);
+
+        // fib(n - 2)
+        bytecode.emit(OpCode::PushVar("n".to_string()), None);
+        bytecode.emit(OpCode::PushConst(Value::Int(2)), None);
+        bytecode.emit(OpCode::Sub, None);
+        bytecode.emit(OpCode::CallVar("fib".to_string(), 1), None);
+
+        // Add results
+        bytecode.emit(OpCode::Add, None);
+        bytecode.emit(OpCode::Return, None);
+
+        let body_end = bytecode.current_address();
+
+        // Patch skip jump to here
+        bytecode.patch_jump(skip_jump_addr, body_end);
+
+        // Define the function
+        bytecode.emit(
+            OpCode::DefineFunc {
+                name: "fib".to_string(),
+                params: vec!["n".to_string()],
+                body_start,
+                body_end,
+                decorators: vec![],
+            },
+            None,
+        );
+
+        // Call the function: fib(10)
+        bytecode.emit(OpCode::PushConst(Value::Int(10)), None);
+        bytecode.emit(OpCode::CallVar("fib".to_string(), 1), None);
+        bytecode.emit(OpCode::Halt, None);
+
+        vm.load(bytecode);
+        let result = vm.run().unwrap();
+
+        match result {
+            Some(Value::Int(n)) => assert_eq!(n, 55), // fib(10) = 55
+            other => panic!("Expected Int(55), got {:?}", other),
         }
     }
 }
