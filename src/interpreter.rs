@@ -611,6 +611,275 @@ impl Interpreter {
                 }
             }
 
+            // BigInt 与 BigInt 的运算
+            (Value::BigInt(a), Value::BigInt(b)) => {
+                match op {
+                    BinOp::Add => Ok(Value::BigInt(a + b)),
+                    BinOp::Sub => Ok(Value::BigInt(a - b)),
+                    BinOp::Mul => Ok(Value::BigInt(a * b)),
+                    BinOp::Div => {
+                        if b == &BigInt::from(0) {
+                            return Err("Division by zero".to_string());
+                        }
+                        // 返回有理数
+                        let rational = BigRational::new(a.clone(), b.clone());
+                        Ok(Value::Rational(rational))
+                    }
+                    BinOp::Mod => {
+                        if b == &BigInt::from(0) {
+                            return Err("Division by zero".to_string());
+                        }
+                        Ok(Value::BigInt(a % b))
+                    }
+                    BinOp::Pow => {
+                        // For BigInt power, convert to i64 for the exponent
+                        if let Ok(exp) = b.to_string().parse::<u32>() {
+                            Ok(Value::BigInt(num::pow(a.clone(), exp as usize)))
+                        } else {
+                            // If exponent is too large or negative, convert to float
+                            let a_float = a.to_string().parse::<f64>().unwrap_or(0.0);
+                            let b_float = b.to_string().parse::<f64>().unwrap_or(0.0);
+                            Ok(Value::Float(a_float.powf(b_float)))
+                        }
+                    }
+                    BinOp::Equal => Ok(Value::Bool(a == b)),
+                    BinOp::NotEqual => Ok(Value::Bool(a != b)),
+                    BinOp::Greater => Ok(Value::Bool(a > b)),
+                    BinOp::GreaterEq => Ok(Value::Bool(a >= b)),
+                    BinOp::Less => Ok(Value::Bool(a < b)),
+                    BinOp::LessEq => Ok(Value::Bool(a <= b)),
+                    _ => Err(format!("Unsupported operation: bigint {} bigint", op)),
+                }
+            }
+
+            // BigInt 与 Int 的运算
+            (Value::BigInt(a), Value::Int(b)) | (Value::Int(b), Value::BigInt(a)) => {
+                let b_bigint = BigInt::from(*b);
+                match op {
+                    BinOp::Add => {
+                        if matches!(left, Value::BigInt(_)) {
+                            Ok(Value::BigInt(a + b_bigint))
+                        } else {
+                            Ok(Value::BigInt(b_bigint + a))
+                        }
+                    }
+                    BinOp::Sub => {
+                        if matches!(left, Value::BigInt(_)) {
+                            Ok(Value::BigInt(a - b_bigint))
+                        } else {
+                            Ok(Value::BigInt(b_bigint - a))
+                        }
+                    }
+                    BinOp::Mul => Ok(Value::BigInt(a * b_bigint)),
+                    BinOp::Div => {
+                        if *b == 0 {
+                            return Err("Division by zero".to_string());
+                        }
+                        if matches!(left, Value::BigInt(_)) {
+                            let rational = BigRational::new(a.clone(), b_bigint);
+                            Ok(Value::Rational(rational))
+                        } else {
+                            let rational = BigRational::new(b_bigint, a.clone());
+                            Ok(Value::Rational(rational))
+                        }
+                    }
+                    BinOp::Mod => {
+                        if *b == 0 {
+                            return Err("Division by zero".to_string());
+                        }
+                        if matches!(left, Value::BigInt(_)) {
+                            Ok(Value::BigInt(a % b_bigint))
+                        } else {
+                            Ok(Value::BigInt(b_bigint % a))
+                        }
+                    }
+                    BinOp::Pow => {
+                        if matches!(left, Value::BigInt(_)) {
+                            if *b >= 0 {
+                                Ok(Value::BigInt(num::pow(a.clone(), *b as usize)))
+                            } else {
+                                // Negative exponent
+                                let a_float = a.to_string().parse::<f64>().unwrap_or(0.0);
+                                Ok(Value::Float(a_float.powf(*b as f64)))
+                            }
+                        } else {
+                            // Int ^ BigInt
+                            if let Ok(exp) = a.to_string().parse::<u32>() {
+                                Ok(Value::BigInt(num::pow(b_bigint, exp as usize)))
+                            } else {
+                                let a_float = a.to_string().parse::<f64>().unwrap_or(0.0);
+                                let b_float = *b as f64;
+                                Ok(Value::Float(b_float.powf(a_float)))
+                            }
+                        }
+                    }
+                    BinOp::Equal => Ok(Value::Bool(a == &b_bigint)),
+                    BinOp::NotEqual => Ok(Value::Bool(a != &b_bigint)),
+                    BinOp::Greater => {
+                        if matches!(left, Value::BigInt(_)) {
+                            Ok(Value::Bool(a > &b_bigint))
+                        } else {
+                            Ok(Value::Bool(&b_bigint > a))
+                        }
+                    }
+                    BinOp::GreaterEq => {
+                        if matches!(left, Value::BigInt(_)) {
+                            Ok(Value::Bool(a >= &b_bigint))
+                        } else {
+                            Ok(Value::Bool(&b_bigint >= a))
+                        }
+                    }
+                    BinOp::Less => {
+                        if matches!(left, Value::BigInt(_)) {
+                            Ok(Value::Bool(a < &b_bigint))
+                        } else {
+                            Ok(Value::Bool(&b_bigint < a))
+                        }
+                    }
+                    BinOp::LessEq => {
+                        if matches!(left, Value::BigInt(_)) {
+                            Ok(Value::Bool(a <= &b_bigint))
+                        } else {
+                            Ok(Value::Bool(&b_bigint <= a))
+                        }
+                    }
+                    _ => Err(format!("Unsupported operation: bigint {} int", op)),
+                }
+            }
+
+            // BigInt 与 Float 的运算
+            (Value::BigInt(a), Value::Float(b)) | (Value::Float(b), Value::BigInt(a)) => {
+                let a_float = a.to_string().parse::<f64>().unwrap_or(0.0);
+                match op {
+                    BinOp::Add => Ok(Value::Float(a_float + b)),
+                    BinOp::Sub => {
+                        if matches!(left, Value::BigInt(_)) {
+                            Ok(Value::Float(a_float - b))
+                        } else {
+                            Ok(Value::Float(b - a_float))
+                        }
+                    }
+                    BinOp::Mul => Ok(Value::Float(a_float * b)),
+                    BinOp::Div => {
+                        if matches!(left, Value::BigInt(_)) {
+                            Ok(Value::Float(a_float / b))
+                        } else {
+                            Ok(Value::Float(b / a_float))
+                        }
+                    }
+                    BinOp::Mod => {
+                        if matches!(left, Value::BigInt(_)) {
+                            Ok(Value::Float(a_float % b))
+                        } else {
+                            Ok(Value::Float(b % a_float))
+                        }
+                    }
+                    BinOp::Pow => {
+                        if matches!(left, Value::BigInt(_)) {
+                            Ok(Value::Float(a_float.powf(*b)))
+                        } else {
+                            Ok(Value::Float(b.powf(a_float)))
+                        }
+                    }
+                    BinOp::Equal => Ok(Value::Bool((a_float - b).abs() < f64::EPSILON)),
+                    BinOp::NotEqual => Ok(Value::Bool((a_float - b).abs() >= f64::EPSILON)),
+                    BinOp::Greater => {
+                        if matches!(left, Value::BigInt(_)) {
+                            Ok(Value::Bool(a_float > *b))
+                        } else {
+                            Ok(Value::Bool(b > &a_float))
+                        }
+                    }
+                    BinOp::GreaterEq => {
+                        if matches!(left, Value::BigInt(_)) {
+                            Ok(Value::Bool(a_float >= *b))
+                        } else {
+                            Ok(Value::Bool(b >= &a_float))
+                        }
+                    }
+                    BinOp::Less => {
+                        if matches!(left, Value::BigInt(_)) {
+                            Ok(Value::Bool(a_float < *b))
+                        } else {
+                            Ok(Value::Bool(b < &a_float))
+                        }
+                    }
+                    BinOp::LessEq => {
+                        if matches!(left, Value::BigInt(_)) {
+                            Ok(Value::Bool(a_float <= *b))
+                        } else {
+                            Ok(Value::Bool(b <= &a_float))
+                        }
+                    }
+                    _ => Err(format!("Unsupported operation: bigint {} float", op)),
+                }
+            }
+
+            // BigInt 与 Rational 的运算
+            (Value::BigInt(a), Value::Rational(b)) | (Value::Rational(b), Value::BigInt(a)) => {
+                let a_rational = BigRational::from_integer(a.clone());
+                match op {
+                    BinOp::Add => Ok(Value::Rational(&a_rational + b)),
+                    BinOp::Sub => {
+                        if matches!(left, Value::BigInt(_)) {
+                            Ok(Value::Rational(&a_rational - b))
+                        } else {
+                            Ok(Value::Rational(b - &a_rational))
+                        }
+                    }
+                    BinOp::Mul => Ok(Value::Rational(&a_rational * b)),
+                    BinOp::Div => {
+                        if matches!(left, Value::BigInt(_)) {
+                            Ok(Value::Rational(&a_rational / b))
+                        } else {
+                            Ok(Value::Rational(b / &a_rational))
+                        }
+                    }
+                    BinOp::Pow => {
+                        // Convert both to float for power operations
+                        let a_float = a.to_string().parse::<f64>().unwrap_or(0.0);
+                        let b_float = b.numer().to_string().parse::<f64>().unwrap_or(0.0)
+                            / b.denom().to_string().parse::<f64>().unwrap_or(1.0);
+                        if matches!(left, Value::BigInt(_)) {
+                            self.compute_power(a_float, b_float)
+                        } else {
+                            self.compute_power(b_float, a_float)
+                        }
+                    }
+                    BinOp::Equal => Ok(Value::Bool(&a_rational == b)),
+                    BinOp::NotEqual => Ok(Value::Bool(&a_rational != b)),
+                    BinOp::Greater => {
+                        if matches!(left, Value::BigInt(_)) {
+                            Ok(Value::Bool(&a_rational > b))
+                        } else {
+                            Ok(Value::Bool(b > &a_rational))
+                        }
+                    }
+                    BinOp::GreaterEq => {
+                        if matches!(left, Value::BigInt(_)) {
+                            Ok(Value::Bool(&a_rational >= b))
+                        } else {
+                            Ok(Value::Bool(b >= &a_rational))
+                        }
+                    }
+                    BinOp::Less => {
+                        if matches!(left, Value::BigInt(_)) {
+                            Ok(Value::Bool(&a_rational < b))
+                        } else {
+                            Ok(Value::Bool(b < &a_rational))
+                        }
+                    }
+                    BinOp::LessEq => {
+                        if matches!(left, Value::BigInt(_)) {
+                            Ok(Value::Bool(&a_rational <= b))
+                        } else {
+                            Ok(Value::Bool(b <= &a_rational))
+                        }
+                    }
+                    _ => Err(format!("Unsupported operation: bigint {} rational", op)),
+                }
+            }
+
             (Value::Float(a), Value::Float(b)) => match op {
                 BinOp::Add => Ok(Value::Float(a + b)),
                 BinOp::Sub => Ok(Value::Float(a - b)),
