@@ -46,13 +46,29 @@ fn run_file(filename: &str) {
 }
 
 fn check_semicolons(contents: &str, filename: &str) {
+    let mut in_multiline_comment = false;
+
     for (line_num, line) in contents.lines().enumerate() {
         let trimmed = line.trim();
+
+        // 检查多行注释的开始和结束
+        if trimmed.contains("/*") {
+            in_multiline_comment = true;
+        }
+        if trimmed.contains("*/") {
+            in_multiline_comment = false;
+            continue;
+        }
+
+        // 跳过多行注释内部的行
+        if in_multiline_comment {
+            continue;
+        }
 
         // 跳过空行、注释和控制流语句
         if trimmed.is_empty()
             || trimmed.starts_with("//")
-            || trimmed.starts_with("/*")
+            || trimmed.starts_with("*")
             || trimmed.starts_with("if ")
             || trimmed.starts_with("while ")
             || trimmed.starts_with("loop ")

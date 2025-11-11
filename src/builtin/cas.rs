@@ -1,5 +1,5 @@
+use crate::ast::{BinOp, Expr, Stmt, UnaryOp};
 use crate::value::Value;
-use crate::ast::{Expr, Stmt, BinOp, UnaryOp};
 use mathcore::MathCore;
 use std::collections::HashMap;
 
@@ -14,17 +14,27 @@ lazy_static::lazy_static! {
 fn value_to_expr_string(value: &Value) -> Result<String, String> {
     match value {
         Value::String(s) => Ok(s.clone()),
-        Value::Lambda { params, body, .. } | Value::Function { name: _, params, body } => {
+        Value::Lambda { params, body, .. }
+        | Value::Function {
+            name: _,
+            params,
+            body,
+        } => {
             // For lambda/function, we need to convert the body to an expression string
             // This is a simplified conversion that handles common cases
             if params.len() != 1 {
-                return Err("Function must have exactly one parameter for calculus operations".to_string());
+                return Err(
+                    "Function must have exactly one parameter for calculus operations".to_string(),
+                );
             }
-            
+
             // Convert the body statement to an expression string
             stmt_to_expr_string(body, &params[0])
         }
-        _ => Err(format!("Cannot convert {} to expression string", value.type_name())),
+        _ => Err(format!(
+            "Cannot convert {} to expression string",
+            value.type_name()
+        )),
     }
 }
 
@@ -84,9 +94,8 @@ fn expr_to_string(expr: &Expr, var: &str) -> Result<String, String> {
         }
         Expr::Call { func, args } => {
             if let Expr::Ident(func_name) = func.as_ref() {
-                let arg_strs: Result<Vec<_>, _> = args.iter()
-                    .map(|arg| expr_to_string(arg, var))
-                    .collect();
+                let arg_strs: Result<Vec<_>, _> =
+                    args.iter().map(|arg| expr_to_string(arg, var)).collect();
                 let arg_strs = arg_strs?;
                 Ok(format!("{}({})", func_name, arg_strs.join(", ")))
             } else {
@@ -292,9 +301,7 @@ pub fn integrate(args: &[Value]) -> Result<Value, String> {
 
 pub fn definite_integral(args: &[Value]) -> Result<Value, String> {
     if args.len() != 4 {
-        return Err(
-            "definite_integral expects 4 arguments (expr, var, lower, upper)".to_string(),
-        );
+        return Err("definite_integral expects 4 arguments (expr, var, lower, upper)".to_string());
     }
 
     let expr_str = value_to_expr_string(&args[0])?;

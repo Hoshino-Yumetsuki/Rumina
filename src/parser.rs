@@ -220,7 +220,7 @@ impl Parser {
         self.advance(); // 跳过 if
 
         let condition = self.parse_expression()?;
-        
+
         // 支持单行if语句（无大括号）或块if语句（有大括号）
         let then_branch = if self.current_token() == &Token::LBrace {
             self.advance(); // 跳过 {
@@ -257,7 +257,7 @@ impl Parser {
         self.advance(); // 跳过 while
 
         let condition = self.parse_expression()?;
-        
+
         // 支持单行while语句（无大括号）或块while语句（有大括号）
         let body = if self.current_token() == &Token::LBrace {
             self.advance(); // 跳过 {

@@ -116,11 +116,7 @@ pub fn register_builtins(globals: &mut HashMap<String, Value>) {
     register_fn(globals, "evaluate_at", cas::evaluate_at);
     register_fn(globals, "store", cas::store);
     register_fn(globals, "load", cas::load);
-    register_fn(
-        globals,
-        "numerical_derivative",
-        cas::numerical_derivative,
-    );
+    register_fn(globals, "numerical_derivative", cas::numerical_derivative);
     register_fn(globals, "integrate", cas::integrate);
     register_fn(globals, "definite_integral", cas::definite_integral);
 }

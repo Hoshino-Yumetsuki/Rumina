@@ -306,11 +306,17 @@ pub fn decimal(args: &[Value]) -> Result<Value, String> {
                             let n_val = match n.as_ref() {
                                 Value::Int(i) => *i as f64,
                                 Value::Float(f) => *f,
-                                _ => return Err("Cannot convert complex irrational to decimal".to_string()),
+                                _ => {
+                                    return Err(
+                                        "Cannot convert complex irrational to decimal".to_string()
+                                    );
+                                }
                             };
                             n_val.sqrt()
                         }
-                        _ => return Err("Cannot convert composite irrational to decimal".to_string()),
+                        _ => {
+                            return Err("Cannot convert composite irrational to decimal".to_string());
+                        }
                     }
                 }
                 _ => return Err("Cannot convert complex real part to decimal".to_string()),
@@ -325,21 +331,23 @@ pub fn decimal(args: &[Value]) -> Result<Value, String> {
                     let denom = r.denom().to_f64().ok_or("Denominator too large")?;
                     numer / denom
                 }
-                Value::Irrational(irr) => {
-                    match irr {
-                        crate::value::IrrationalValue::Pi => std::f64::consts::PI,
-                        crate::value::IrrationalValue::E => std::f64::consts::E,
-                        crate::value::IrrationalValue::Sqrt(n) => {
-                            let n_val = match n.as_ref() {
-                                Value::Int(i) => *i as f64,
-                                Value::Float(f) => *f,
-                                _ => return Err("Cannot convert complex irrational to decimal".to_string()),
-                            };
-                            n_val.sqrt()
-                        }
-                        _ => return Err("Cannot convert composite irrational to decimal".to_string()),
+                Value::Irrational(irr) => match irr {
+                    crate::value::IrrationalValue::Pi => std::f64::consts::PI,
+                    crate::value::IrrationalValue::E => std::f64::consts::E,
+                    crate::value::IrrationalValue::Sqrt(n) => {
+                        let n_val = match n.as_ref() {
+                            Value::Int(i) => *i as f64,
+                            Value::Float(f) => *f,
+                            _ => {
+                                return Err(
+                                    "Cannot convert complex irrational to decimal".to_string()
+                                );
+                            }
+                        };
+                        n_val.sqrt()
                     }
-                }
+                    _ => return Err("Cannot convert composite irrational to decimal".to_string()),
+                },
                 _ => return Err("Cannot convert complex imaginary part to decimal".to_string()),
             };
 

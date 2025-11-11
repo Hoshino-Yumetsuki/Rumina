@@ -132,34 +132,38 @@ impl fmt::Display for Value {
                 // Format complex numbers symbolically
                 let re_str = format!("{}", re);
                 let im_str = format!("{}", im);
-                
+
                 // Check if real part is zero
                 let re_is_zero = match re.as_ref() {
                     Value::Int(0) => true,
                     Value::Rational(r) => r.numer().to_string() == "0",
                     _ => false,
                 };
-                
+
                 // Check if imaginary part is zero
                 let im_is_zero = match im.as_ref() {
                     Value::Int(0) => true,
                     Value::Rational(r) => r.numer().to_string() == "0",
                     _ => false,
                 };
-                
+
                 // Check if imaginary coefficient is 1 or -1
                 let im_is_one = match im.as_ref() {
                     Value::Int(1) => true,
-                    Value::Rational(r) => r.numer().to_string() == "1" && r.denom().to_string() == "1",
+                    Value::Rational(r) => {
+                        r.numer().to_string() == "1" && r.denom().to_string() == "1"
+                    }
                     _ => false,
                 };
-                
+
                 let im_is_neg_one = match im.as_ref() {
                     Value::Int(-1) => true,
-                    Value::Rational(r) => r.numer().to_string() == "-1" && r.denom().to_string() == "1",
+                    Value::Rational(r) => {
+                        r.numer().to_string() == "-1" && r.denom().to_string() == "1"
+                    }
                     _ => false,
                 };
-                
+
                 if im_is_zero {
                     // Pure real number
                     write!(f, "{}", re_str)
@@ -185,7 +189,7 @@ impl fmt::Display for Value {
                             Value::Rational(r) if r.numer().to_string().starts_with('-') => true,
                             _ => false,
                         };
-                        
+
                         if im_is_negative {
                             write!(f, "{}{}i", re_str, im_str)
                         } else {
