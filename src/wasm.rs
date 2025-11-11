@@ -40,7 +40,7 @@ pub fn rumina(code: &str) -> String {
     };
 
     // 创建 VM 并执行
-    let mut interpreter = Interpreter::new();
+    let interpreter = Interpreter::new();
     let globals = interpreter.get_globals();
     let mut vm = VM::new(globals);
     vm.load(bytecode);
