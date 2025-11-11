@@ -1,0 +1,304 @@
+# Rumina VM Architecture
+
+## Overview
+
+Rumina now includes a bytecode Virtual Machine (VM) with an instruction set inspired by x86_64 CISC architecture. This document describes the VM's design, instruction set, and implementation details.
+
+## Architecture
+
+### Components
+
+1. **Compiler (`src/compiler.rs`)**: Translates AST to bytecode instructions
+2. **VM (`src/vm.rs`)**: Executes bytecode with stack-based operations
+3. **VM Operations Bridge (`src/vm_ops.rs`)**: Connects VM to existing interpreter operations
+4. **Bytecode**: Sequence of opcodes with optional debug information
+
+### Execution Model
+
+- **Stack-based**: All operations work with a value stack
+- **Instruction Pointer (IP)**: Points to the next instruction to execute
+- **Global Variables**: Shared across all scopes, includes built-in functions
+- **Local Variables**: Scoped to current execution context
+- **Call Stack**: Manages function calls and returns (partial implementation)
+
+## Instruction Set
+
+The instruction set is inspired by x86_64, using CISC-style operations with high-level abstractions suitable for a dynamic language.
+
+### Data Movement Instructions (MOV family)
+
+| OpCode | x86_64 Equivalent | Description |
+|--------|-------------------|-------------|
+| `PushConst(Value)` | `PUSH imm` | Push a constant value onto the stack |
+| `PushVar(String)` | `MOV reg, [addr]` | Push a variable value onto the stack |
+| `PopVar(String)` | `MOV [addr], reg` | Pop value from stack and store in variable |
+| `Dup` | `PUSH [rsp]` | Duplicate top stack value |
+| `Pop` | `ADD rsp, 8` | Pop and discard top stack value |
+
+### Arithmetic Instructions (ADD, SUB, MUL, DIV family)
+
+| OpCode | x86_64 Equivalent | Description |
+|--------|-------------------|-------------|
+| `Add` | `ADD rax, rbx` | Add top two stack values |
+| `Sub` | `SUB rax, rbx` | Subtract (TOS-1 - TOS) |
+| `Mul` | `MUL rbx` | Multiply top two stack values |
+| `Div` | `DIV rbx` | Divide (TOS-1 / TOS) |
+| `Mod` | `IDIV (rdx)` | Modulo operation |
+| `Pow` | - | Power operation (TOS-1 ^ TOS) |
+| `Neg` | `NEG rax` | Negate top stack value |
+| `Factorial` | - | Factorial operation (postfix !) |
+
+### Logical Instructions (CMP, TEST, AND, OR family)
+
+| OpCode | x86_64 Equivalent | Description |
+|--------|-------------------|-------------|
+| `Not` | `NOT rax` | Logical NOT |
+| `And` | `AND rax, rbx` | Logical AND |
+| `Or` | `OR rax, rbx` | Logical OR |
+| `Eq` | `CMP + SETE` | Compare equal |
+| `Neq` | `CMP + SETNE` | Compare not equal |
+| `Gt` | `CMP + SETG` | Compare greater than |
+| `Gte` | `CMP + SETGE` | Compare greater or equal |
+| `Lt` | `CMP + SETL` | Compare less than |
+| `Lte` | `CMP + SETLE` | Compare less or equal |
+
+### Control Flow Instructions (JMP, CALL, RET family)
+
+| OpCode | x86_64 Equivalent | Description |
+|--------|-------------------|-------------|
+| `Jump(usize)` | `JMP addr` | Unconditional jump to address |
+| `JumpIfFalse(usize)` | `TEST + JZ` | Jump if false (pop condition) |
+| `JumpIfTrue(usize)` | `TEST + JNZ` | Jump if true (pop condition) |
+| `Call(usize)` | `CALL addr` | Call function (address) |
+| `CallVar(String, usize)` | `CALL [addr]` | Call function by name with N args |
+| `Return` | `RET` | Return from function |
+
+### Array/Structure Instructions (LEA, MOV family)
+
+| OpCode | x86_64 Equivalent | Description |
+|--------|-------------------|-------------|
+| `MakeArray(usize)` | `MOV [addr], ...` | Create array from N stack values |
+| `MakeStruct(usize)` | - | Create struct from N key-value pairs |
+| `Index` | `MOV rax, [rbx + rcx*8]` | Array index access |
+| `Member(String)` | `MOV rax, [rbx + offset]` | Member access |
+| `IndexAssign` | - | Assign to array element |
+| `MemberAssign(String)` | - | Assign to struct member |
+
+### Function Definition Instructions
+
+| OpCode | Description |
+|--------|-------------|
+| `DefineFunc {...}` | Define a function with metadata |
+| `MakeLambda {...}` | Create lambda/closure |
+
+### Scope Management
+
+| OpCode | x86_64 Equivalent | Description |
+|--------|-------------------|-------------|
+| `EnterScope` | `PUSH rbp; MOV rbp, rsp` | Enter new local scope |
+| `ExitScope` | `MOV rsp, rbp; POP rbp` | Exit local scope |
+
+### Control Structures
+
+| OpCode | Description |
+|--------|-------------|
+| `LoopBegin` | Mark loop begin (for continue) |
+| `LoopEnd` | Mark loop end (for break) |
+| `Break` | Break from loop |
+| `Continue` | Continue loop |
+
+### Special Instructions
+
+| OpCode | x86_64 Equivalent | Description |
+|--------|-------------------|-------------|
+| `Nop` | `NOP` | No operation |
+| `Halt` | `HLT` | Halt execution |
+
+## Compilation Process
+
+### 1. Lexing and Parsing
+Input source code → Tokens → AST (unchanged from original interpreter)
+
+### 2. Compilation
+AST → Bytecode instructions
+
+The compiler:
+- Maintains a symbol table for variable resolution
+- Manages jump targets for control flow
+- Tracks loop contexts for break/continue
+- Emits opcodes with optional line numbers for debugging
+
+Example compilation:
+```lamina
+let x = 10;
+let y = 20;
+x + y;
+```
+
+Compiles to:
+```
+PushConst(Int(10))
+PopVar("x")
+PushConst(Int(20))
+PopVar("y")
+PushVar("x")
+PushVar("y")
+Add
+Halt
+```
+
+### 3. Execution
+The VM:
+1. Loads bytecode
+2. Initializes instruction pointer (IP) to 0
+3. Executes instructions sequentially
+4. Modifies IP for jumps/branches
+5. Returns top of stack as result
+
+## Integration with Existing Code
+
+### Operation Bridge
+
+The VM reuses the existing interpreter's operation implementations through `vm_ops.rs`:
+
+- `vm_add()`, `vm_sub()`, etc. delegate to `interpreter.eval_binary_op()`
+- Maintains exact same semantics as AST interpreter
+- Ensures backward compatibility
+- Leverages battle-tested operation logic
+
+### Built-in Functions
+
+Built-in functions are integrated through the interpreter's globals:
+1. Interpreter initializes with built-in functions
+2. VM receives reference to interpreter's globals
+3. `CallVar` opcode can call native functions directly
+4. No code duplication or re-registration needed
+
+## Implementation Status
+
+### Completed ✅
+- All OpCodes defined and documented
+- Compiler for most AST constructs
+- VM execution engine
+- Stack operations
+- Variable storage (locals and globals)
+- Arithmetic, logical, and comparison operations
+- Control flow (if, while, jumps)
+- Array and struct operations
+- Native function calls
+- Built-in function integration
+- Comprehensive test suite (38 tests)
+
+### In Progress 🔄
+- User-defined function calls with proper call frames
+- Lambda/closure support
+- For loop compilation
+- Enhanced scope management
+
+### Future Enhancements 🔮
+- Constant folding optimization
+- Dead code elimination
+- Register allocation simulation
+- JIT compilation possibilities
+- Performance benchmarking
+
+## Examples
+
+### Simple Arithmetic
+```lamina
+10 + 20 * 2;
+```
+
+Bytecode:
+```
+PushConst(Int(10))
+PushConst(Int(20))
+PushConst(Int(2))
+Mul
+Add
+Halt
+```
+
+### Variables and Conditionals
+```lamina
+let x = 10;
+if (x > 5) {
+    x + 10;
+} else {
+    x - 5;
+}
+```
+
+Bytecode:
+```
+PushConst(Int(10))
+PopVar("x")
+PushVar("x")
+PushConst(Int(5))
+Gt
+JumpIfFalse(8)
+PushVar("x")
+PushConst(Int(10))
+Add
+Jump(11)
+PushVar("x")
+PushConst(Int(5))
+Sub
+Halt
+```
+
+### Built-in Function Calls
+```lamina
+abs(-42);
+```
+
+Bytecode:
+```
+PushConst(Int(-42))
+CallVar("abs", 1)
+Halt
+```
+
+## Testing
+
+The VM includes comprehensive tests:
+
+### Unit Tests
+- `test_vm_push_pop`: Basic stack operations
+- `test_vm_arithmetic`: Arithmetic operations
+- `test_vm_variables`: Variable storage and retrieval
+- `test_vm_comparison`: Comparison operations
+- `test_vm_array`: Array creation
+- `test_vm_native_function_call`: Native function calls
+
+### Integration Tests
+- `test_compile_and_run_simple`: End-to-end simple expressions
+- `test_compile_and_run_variables`: Variables and operations
+- `test_compile_and_run_with_builtins`: Built-in function integration
+
+## Performance Considerations
+
+The VM is designed for:
+- **Simplicity**: Easy to understand and maintain
+- **Compatibility**: Reuses existing interpreter logic
+- **Future optimization**: Foundation for JIT or AOT compilation
+
+Current trade-offs:
+- Creating new interpreter instance per operation (can be optimized)
+- Stack-based (vs. register-based) design
+- No constant pooling yet
+
+## Future Directions
+
+1. **Complete Function Support**: Implement proper call frames for user-defined functions
+2. **Optimization Pass**: Add compiler optimization phase
+3. **Performance Tuning**: Profile and optimize hot paths
+4. **Default Integration**: Switch main `run()` to use VM by default
+5. **JIT Compilation**: Explore runtime compilation for hot loops
+6. **WASM Integration**: Ensure VM works in WASM environment
+
+## References
+
+- x86_64 Instruction Set Reference: https://www.felixcloutier.com/x86/
+- Virtual Machine Design Patterns
+- Stack Machine Architecture
