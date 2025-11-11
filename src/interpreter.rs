@@ -213,6 +213,53 @@ impl Interpreter {
                 Ok(())
             }
 
+            Stmt::For {
+                init,
+                condition,
+                update,
+                body,
+            } => {
+                // 执行初始化语句（如果有）
+                if let Some(init_stmt) = init {
+                    self.execute_stmt(init_stmt)?;
+                }
+
+                // 循环
+                loop {
+                    // 检查条件（如果有）
+                    if let Some(cond) = condition {
+                        let cond_val = self.eval_expr(cond)?;
+                        if !cond_val.is_truthy() {
+                            break;
+                        }
+                    }
+
+                    // 执行循环体
+                    for stmt in body {
+                        self.execute_stmt(stmt)?;
+                        if self.return_value.is_some() || self.break_flag {
+                            break;
+                        }
+                        if self.continue_flag {
+                            self.continue_flag = false;
+                            break;
+                        }
+                    }
+
+                    // 如果有return或break，退出循环
+                    if self.return_value.is_some() || self.break_flag {
+                        self.break_flag = false;
+                        break;
+                    }
+
+                    // 执行更新语句（如果有）
+                    if let Some(upd) = update {
+                        self.execute_stmt(upd)?;
+                    }
+                }
+                Ok(())
+            }
+
             Stmt::Break => {
                 self.break_flag = true;
                 Ok(())
@@ -1128,7 +1175,8 @@ impl Interpreter {
             },
 
             // BigInt 与 Irrational 的运算
-            (Value::BigInt(b), Value::Irrational(irr)) | (Value::Irrational(irr), Value::BigInt(b)) => {
+            (Value::BigInt(b), Value::Irrational(irr))
+            | (Value::Irrational(irr), Value::BigInt(b)) => {
                 match op {
                     BinOp::Mul => {
                         if b == &BigInt::from(0) {

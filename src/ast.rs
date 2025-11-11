@@ -50,6 +50,14 @@ pub enum Stmt {
         body: Vec<Stmt>,
     },
 
+    // For循环 (for (init; condition; update) { body })
+    For {
+        init: Option<Box<Stmt>>,   // 初始化语句 (var i = 0)
+        condition: Option<Expr>,   // 条件表达式 (i < n)
+        update: Option<Box<Stmt>>, // 更新语句 (i = i + 1)
+        body: Vec<Stmt>,
+    },
+
     // Loop循环
     Loop {
         body: Vec<Stmt>,

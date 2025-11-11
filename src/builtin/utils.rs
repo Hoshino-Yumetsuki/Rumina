@@ -315,7 +315,9 @@ pub fn decimal(args: &[Value]) -> Result<Value, String> {
                             n_val.sqrt()
                         }
                         _ => {
-                            return Err("Cannot convert composite irrational to decimal".to_string());
+                            return Err(
+                                "Cannot convert composite irrational to decimal".to_string()
+                            );
                         }
                     }
                 }
@@ -362,4 +364,35 @@ pub fn decimal(args: &[Value]) -> Result<Value, String> {
         }
         _ => Err(format!("Cannot convert {} to decimal", args[0].type_name())),
     }
+}
+
+// Lamina-compliant: assert() - assertion function
+// Usage: assert(condition) or assert(condition, "error message")
+pub fn assert(args: &[Value]) -> Result<Value, String> {
+    if args.is_empty() {
+        return Err("assert expects at least 1 argument".to_string());
+    }
+
+    if args.len() > 2 {
+        return Err("assert expects at most 2 arguments".to_string());
+    }
+
+    let condition = &args[0];
+
+    // Check if condition is truthy
+    if !condition.is_truthy() {
+        // Get error message (use provided message or default)
+        let message = if args.len() == 2 {
+            match &args[1] {
+                Value::String(s) => s.clone(),
+                other => format!("Assertion failed: {}", other),
+            }
+        } else {
+            "Assertion failed".to_string()
+        };
+
+        return Err(message);
+    }
+
+    Ok(Value::Null)
 }

@@ -39,6 +39,7 @@ pub fn register_builtins(globals: &mut HashMap<String, Value>) {
     register_fn(globals, "update", utils::update);
     register_fn(globals, "fraction", utils::fraction);
     register_fn(globals, "decimal", utils::decimal);
+    register_fn(globals, "assert", utils::assert);
 
     // Lamina-compliant string functions (with underscores)
     register_fn(globals, "string_concat", string::concat);
