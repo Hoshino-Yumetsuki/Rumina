@@ -78,6 +78,11 @@ impl Interpreter {
         self.current_file = filename;
     }
 
+    /// Get the globals reference (for VM integration)
+    pub fn get_globals(&self) -> Rc<RefCell<HashMap<String, Value>>> {
+        Rc::clone(&self.globals)
+    }
+
     /// Helper method to wrap errors with stack trace
     fn wrap_error(&self, message: String) -> RuminaError {
         let mut error = RuminaError::runtime(message);

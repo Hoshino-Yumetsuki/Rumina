@@ -135,7 +135,7 @@ impl Interpreter {
         }
     }
 
-    pub(super) fn eval_binary_op(
+    pub fn eval_binary_op(
         &mut self,
         left: &Value,
         op: BinOp,
@@ -1190,7 +1190,7 @@ impl Interpreter {
         }
     }
 
-    pub(super) fn eval_unary_op(&mut self, op: UnaryOp, val: &Value) -> Result<Value, String> {
+    pub fn eval_unary_op(&mut self, op: UnaryOp, val: &Value) -> Result<Value, String> {
         match op {
             UnaryOp::Neg => match val {
                 Value::Int(n) => Ok(Value::Int(-n)),

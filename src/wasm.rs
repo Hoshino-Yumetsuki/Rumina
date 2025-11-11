@@ -1,5 +1,5 @@
 // WASM 接口模块
-use crate::{Interpreter, Lexer, Parser};
+use crate::{Compiler, Interpreter, Lexer, Parser, VM};
 use wasm_bindgen::prelude::*;
 
 /// Rumina - 执行 Lamina 代码并返回结果
@@ -32,11 +32,21 @@ pub fn rumina(code: &str) -> String {
         Err(e) => return format!("Error: Parse error: {}", e),
     };
 
-    // 创建解释器
+    // 编译为字节码
+    let mut compiler = Compiler::new();
+    let bytecode = match compiler.compile(statements) {
+        Ok(bc) => bc,
+        Err(e) => return format!("Error: Compilation error: {}", e),
+    };
+
+    // 创建 VM 并执行
     let mut interpreter = Interpreter::new();
+    let globals = interpreter.get_globals();
+    let mut vm = VM::new(globals);
+    vm.load(bytecode);
 
     // 执行代码
-    match interpreter.interpret(statements) {
+    match vm.run() {
         Ok(result) => {
             // 如果有返回值，转换为字符串；否则返回空字符串
             result.map(|v| v.to_string()).unwrap_or_default()
