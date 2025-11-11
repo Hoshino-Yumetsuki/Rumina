@@ -2,7 +2,7 @@
 
 ## Overview
 
-Rumina now includes a bytecode Virtual Machine (VM) with an instruction set inspired by x86_64 CISC architecture. This document describes the VM's design, instruction set, and implementation details.
+Rumina uses a bytecode Virtual Machine (VM) with an instruction set inspired by x86_64 CISC architecture. **The VM is now the default execution engine for all Lamina code.** This document describes the VM's design, instruction set, and implementation details.
 
 ## Architecture
 
@@ -20,6 +20,16 @@ Rumina now includes a bytecode Virtual Machine (VM) with an instruction set insp
 - **Global Variables**: Shared across all scopes, includes built-in functions
 - **Local Variables**: Scoped to current execution context
 - **Call Stack**: Manages function calls and returns (partial implementation)
+- **Decoupled Frontend**: Lexer and Parser produce AST, Compiler produces bytecode, VM executes
+
+### API
+
+All public APIs now use the VM by default:
+
+- `run(source: &str) -> Result<(), RuminaError>` - Main entry point, uses VM
+- `run_vm(source: &str) -> Result<Option<Value>, RuminaError>` - VM execution with return value
+- `run_interpreter(source: &str) -> Result<Option<Value>, RuminaError>` - Alias for `run_vm()` (backward compatible)
+- WASM `rumina(code: &str) -> String` - Uses VM internally
 
 ## Instruction Set
 
