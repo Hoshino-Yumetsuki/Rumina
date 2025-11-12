@@ -38,7 +38,7 @@ fn main_with_large_stack(args: Vec<String>) -> i32 {
     }
 
     let filename = &args[1];
-    
+
     if !filename.ends_with(".rmc") {
         eprintln!("Error: File must have .rmc extension");
         eprintln!("Usage: rmvm <file.rmc>");

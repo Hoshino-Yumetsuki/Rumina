@@ -1,14 +1,14 @@
 // Re-export compiler-related types from rumina for external library use
-pub use rumina::{ASTOptimizer, Compiler, Lexer, Parser, RuminaError, Value, ByteCode};
+pub use rumina::{ASTOptimizer, ByteCode, Compiler, Lexer, Parser, RuminaError, Value};
 
 /// Compile Lamina source code to bytecode
 pub fn compile(source: &str) -> Result<ByteCode, RuminaError> {
     let mut lexer = Lexer::new(source.to_string());
     let tokens = lexer.tokenize();
-    
+
     let mut parser = Parser::new(tokens);
     let ast = parser.parse().map_err(|e| RuminaError::runtime(e))?;
-    
+
     let mut compiler = Compiler::new();
     compiler.compile(ast)
 }
