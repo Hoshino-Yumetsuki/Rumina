@@ -105,6 +105,32 @@ INSTRUCTIONS:
 0010 [L?] Halt
 ```
 
+## 构建
+
+### 构建所有二进制文件
+
+```bash
+# 构建整个工作空间（包括 rumina-cli、ruminac 和 rmvm）
+cargo build --workspace --release
+
+# 或者单独构建某个二进制文件
+cargo build --release --bin rumina-cli
+cargo build --release --bin ruminac
+cargo build --release --bin rmvm
+```
+
+### 构建 WASM 包
+
+```bash
+# 安装依赖
+yarn install
+
+# 构建 WASM 包（从根包构建）
+yarn build
+```
+
+注意：WASM 构建会使用根包的库部分，不包含独立的二进制工具。
+
 ## 作为库使用
 
 ### 在 Rust 中使用
