@@ -1,6 +1,6 @@
 import { rumina } from './lib/index.mjs'
 
-const result = await rumina('bigint a = 114514; bigint b = 1919810; a ^ b;')
+const result = await rumina('10 * 3')
 
 if (result.startsWith('Error:')) {
   console.error(result)
