@@ -1,5 +1,5 @@
 // Performance tests for VM vs Interpreter
-use rumina::{Compiler, Interpreter, Lexer, Parser, Value, VM};
+use rumina::{Compiler, Interpreter, Lexer, Parser, VM, Value};
 use std::time::Instant;
 
 #[test]
@@ -50,8 +50,11 @@ fib(20);
     }
 
     // VM should be faster (or at least not significantly slower)
-    println!("VM time: {:?}, Interpreter time: {:?}", vm_time, interp_time);
-    
+    println!(
+        "VM time: {:?}, Interpreter time: {:?}",
+        vm_time, interp_time
+    );
+
     // In debug mode, just verify the VM completes successfully
     // Performance comparison is more meaningful in release mode
 }

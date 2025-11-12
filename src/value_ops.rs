@@ -1,3 +1,5 @@
+use mathcore::MathCore;
+use num::complex::Complex64;
 /// Standalone value operations module
 ///
 /// This module provides optimized operation implementations for the VM that don't require
@@ -26,10 +28,7 @@
 /// With these optimizations, the VM is now **1.8-2x faster** than the AST interpreter:
 /// - fib(30) in release mode: VM 1.93s vs Interpreter 3.45s
 /// - fib(20) in debug mode: VM 90ms vs Interpreter 185ms
-
 use num::{BigInt, BigRational};
-use num::complex::Complex64;
-use mathcore::MathCore;
 
 use crate::ast::{BinOp, UnaryOp};
 use crate::value::{IrrationalValue, Value};
@@ -210,56 +209,52 @@ pub fn value_binary_op(left: &Value, op: BinOp, right: &Value) -> Result<Value, 
         }
 
         // BigInt operations
-        (Value::BigInt(a), Value::BigInt(b)) => {
-            match op {
-                BinOp::Add => Ok(Value::BigInt(a + b)),
-                BinOp::Sub => Ok(Value::BigInt(a - b)),
-                BinOp::Mul => Ok(Value::BigInt(a * b)),
-                BinOp::Div => {
-                    if b == &BigInt::from(0) {
-                        return Err("Division by zero".to_string());
-                    }
-                    let rational = BigRational::new(a.clone(), b.clone());
-                    Ok(Value::Rational(rational))
+        (Value::BigInt(a), Value::BigInt(b)) => match op {
+            BinOp::Add => Ok(Value::BigInt(a + b)),
+            BinOp::Sub => Ok(Value::BigInt(a - b)),
+            BinOp::Mul => Ok(Value::BigInt(a * b)),
+            BinOp::Div => {
+                if b == &BigInt::from(0) {
+                    return Err("Division by zero".to_string());
                 }
-                BinOp::Mod => {
-                    if b == &BigInt::from(0) {
-                        return Err("Division by zero".to_string());
-                    }
-                    Ok(Value::BigInt(a % b))
-                }
-                BinOp::Pow => {
-                    if let Ok(exp) = b.to_string().parse::<u32>() {
-                        Ok(Value::BigInt(num::pow(a.clone(), exp as usize)))
-                    } else {
-                        let a_float = a.to_string().parse::<f64>().unwrap_or(0.0);
-                        let b_float = b.to_string().parse::<f64>().unwrap_or(0.0);
-                        Ok(Value::Float(a_float.powf(b_float)))
-                    }
-                }
-                BinOp::Equal => Ok(Value::Bool(a == b)),
-                BinOp::NotEqual => Ok(Value::Bool(a != b)),
-                BinOp::Greater => Ok(Value::Bool(a > b)),
-                BinOp::GreaterEq => Ok(Value::Bool(a >= b)),
-                BinOp::Less => Ok(Value::Bool(a < b)),
-                BinOp::LessEq => Ok(Value::Bool(a <= b)),
-                _ => Err(format!("Unsupported operation: bigint {} bigint", op)),
+                let rational = BigRational::new(a.clone(), b.clone());
+                Ok(Value::Rational(rational))
             }
-        }
+            BinOp::Mod => {
+                if b == &BigInt::from(0) {
+                    return Err("Division by zero".to_string());
+                }
+                Ok(Value::BigInt(a % b))
+            }
+            BinOp::Pow => {
+                if let Ok(exp) = b.to_string().parse::<u32>() {
+                    Ok(Value::BigInt(num::pow(a.clone(), exp as usize)))
+                } else {
+                    let a_float = a.to_string().parse::<f64>().unwrap_or(0.0);
+                    let b_float = b.to_string().parse::<f64>().unwrap_or(0.0);
+                    Ok(Value::Float(a_float.powf(b_float)))
+                }
+            }
+            BinOp::Equal => Ok(Value::Bool(a == b)),
+            BinOp::NotEqual => Ok(Value::Bool(a != b)),
+            BinOp::Greater => Ok(Value::Bool(a > b)),
+            BinOp::GreaterEq => Ok(Value::Bool(a >= b)),
+            BinOp::Less => Ok(Value::Bool(a < b)),
+            BinOp::LessEq => Ok(Value::Bool(a <= b)),
+            _ => Err(format!("Unsupported operation: bigint {} bigint", op)),
+        },
 
         // For complex operations, fallback to more complex logic if needed
         // For now, keep only the essential fast paths for Int operations
-        
+
         // Boolean operations
-        (Value::Bool(a), Value::Bool(b)) => {
-            match op {
-                BinOp::And => Ok(Value::Bool(*a && *b)),
-                BinOp::Or => Ok(Value::Bool(*a || *b)),
-                BinOp::Equal => Ok(Value::Bool(a == b)),
-                BinOp::NotEqual => Ok(Value::Bool(a != b)),
-                _ => Err(format!("Unsupported operation: bool {} bool", op)),
-            }
-        }
+        (Value::Bool(a), Value::Bool(b)) => match op {
+            BinOp::And => Ok(Value::Bool(*a && *b)),
+            BinOp::Or => Ok(Value::Bool(*a || *b)),
+            BinOp::Equal => Ok(Value::Bool(a == b)),
+            BinOp::NotEqual => Ok(Value::Bool(a != b)),
+            _ => Err(format!("Unsupported operation: bool {} bool", op)),
+        },
 
         // For other types, we need the full interpreter logic
         // Fall back to creating an interpreter for these cases
@@ -289,12 +284,10 @@ pub fn value_unary_op(op: UnaryOp, val: &Value) -> Result<Value, String> {
                 }
             }
         }
-        UnaryOp::Not => {
-            match val {
-                Value::Bool(b) => Ok(Value::Bool(!b)),
-                _ => Err(format!("Cannot apply 'not' to {}", val.type_name())),
-            }
-        }
+        UnaryOp::Not => match val {
+            Value::Bool(b) => Ok(Value::Bool(!b)),
+            _ => Err(format!("Cannot apply 'not' to {}", val.type_name())),
+        },
         UnaryOp::Factorial => {
             // Fall back to interpreter for factorial
             use crate::interpreter::Interpreter;

@@ -20,13 +20,13 @@ impl ASTOptimizer {
     /// Optimize a list of statements
     pub fn optimize(&mut self, statements: Vec<Stmt>) -> Result<Vec<Stmt>, RuminaError> {
         let mut optimized = Vec::new();
-        
+
         for stmt in statements {
             if let Some(opt_stmt) = self.optimize_stmt(stmt)? {
                 optimized.push(opt_stmt);
             }
         }
-        
+
         Ok(optimized)
     }
 
@@ -39,7 +39,12 @@ impl ASTOptimizer {
                 Ok(Some(Stmt::Expr(opt_expr)))
             }
 
-            Stmt::VarDecl { name, value, is_bigint, declared_type } => {
+            Stmt::VarDecl {
+                name,
+                value,
+                is_bigint,
+                declared_type,
+            } => {
                 let opt_value = self.optimize_expr(value)?;
                 Ok(Some(Stmt::VarDecl {
                     name,
@@ -119,11 +124,7 @@ impl ASTOptimizer {
                     let opt_then = self.optimize_stmts(then_branch)?;
                     let opt_else = if let Some(else_stmts) = else_branch {
                         let opt = self.optimize_stmts(else_stmts)?;
-                        if opt.is_empty() {
-                            None
-                        } else {
-                            Some(opt)
-                        }
+                        if opt.is_empty() { None } else { Some(opt) }
                     } else {
                         None
                     };
@@ -219,13 +220,13 @@ impl ASTOptimizer {
     /// Optimize a list of statements
     fn optimize_stmts(&mut self, stmts: Vec<Stmt>) -> Result<Vec<Stmt>, RuminaError> {
         let mut optimized = Vec::new();
-        
+
         for stmt in stmts {
             if let Some(opt_stmt) = self.optimize_stmt(stmt)? {
                 optimized.push(opt_stmt);
             }
         }
-        
+
         Ok(optimized)
     }
 
@@ -407,7 +408,11 @@ impl ASTOptimizer {
                 })
             }
 
-            Expr::Lambda { params, body, is_simple } => {
+            Expr::Lambda {
+                params,
+                body,
+                is_simple,
+            } => {
                 // Lambda body is a single Stmt, not Vec<Stmt>
                 let opt_body = if let Some(opt_stmt) = self.optimize_stmt(*body)? {
                     opt_stmt
@@ -562,7 +567,7 @@ mod tests {
 
         let result = optimizer.optimize_stmt(stmt).unwrap();
         assert!(optimizer.modified);
-        
+
         match result {
             Some(Stmt::Block(stmts)) => {
                 assert_eq!(stmts.len(), 1);
@@ -584,7 +589,7 @@ mod tests {
 
         let result = optimizer.optimize_stmt(stmt).unwrap();
         assert!(optimizer.modified);
-        
+
         match result {
             Some(Stmt::Block(stmts)) => {
                 assert_eq!(stmts.len(), 1);
@@ -620,7 +625,7 @@ mod tests {
 
         let result = optimizer.optimize_stmt(stmt).unwrap();
         assert!(optimizer.modified);
-        
+
         match result {
             Some(Stmt::Block(stmts)) => {
                 assert_eq!(stmts.len(), 1);
