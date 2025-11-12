@@ -148,7 +148,7 @@ fn run_repl() {
     // Initialize interpreter once for globals (shared across all VM executions)
     let interpreter = Interpreter::new();
     let globals = interpreter.get_globals();
-    
+
     let mut line_number = 1;
 
     loop {

@@ -263,7 +263,7 @@ impl ByteCode {
                 return i;
             }
         }
-        
+
         // Add new constant
         let index = self.constants.len();
         self.constants.push(value);
@@ -324,6 +324,7 @@ struct CallFrame {
 #[derive(Debug, Clone)]
 struct InlineCache {
     /// Member name being accessed
+    #[allow(dead_code)]
     member: String,
     /// Cached result for fast path (if object structure matches)
     /// Currently unused but reserved for future optimization
@@ -691,7 +692,7 @@ impl VM {
 
             OpCode::Member(member_name) => {
                 let cache_addr = self.ip - 1; // Address of this Member instruction
-                
+
                 let object = self
                     .stack
                     .pop()
@@ -707,12 +708,10 @@ impl VM {
                                 cache.hits += 1;
                             } else {
                                 // First access - initialize cache entry
-                                self.member_cache.insert(
-                                    cache_addr,
-                                    InlineCache::new(member_name.clone()),
-                                );
+                                self.member_cache
+                                    .insert(cache_addr, InlineCache::new(member_name.clone()));
                             }
-                            
+
                             self.stack.push(value.clone());
                         } else {
                             // Member not found - track miss
@@ -724,7 +723,7 @@ impl VM {
                                 cache.misses = 1;
                                 self.member_cache.insert(cache_addr, cache);
                             }
-                            
+
                             return Err(RuminaError::runtime(format!(
                                 "Struct does not have member '{}'",
                                 member_name
@@ -741,7 +740,7 @@ impl VM {
                             cache.misses = 1;
                             self.member_cache.insert(cache_addr, cache);
                         }
-                        
+
                         return Err(RuminaError::runtime(format!(
                             "Cannot access member of type {}",
                             object.type_name()
@@ -905,7 +904,12 @@ impl VM {
                             )));
                         }
                     }
-                    Value::Lambda { params, body, closure, .. } => {
+                    Value::Lambda {
+                        params,
+                        body,
+                        closure,
+                        ..
+                    } => {
                         // Check recursion depth
                         if self.recursion_depth >= self.max_recursion_depth {
                             return Err(RuminaError::runtime(format!(
@@ -942,9 +946,13 @@ impl VM {
                         };
 
                         // Look up the lambda function info
-                        let func_info = self.functions.get(&lambda_id).ok_or_else(|| {
-                            RuminaError::runtime(format!("Lambda '{}' not found", lambda_id))
-                        })?.clone();
+                        let func_info = self
+                            .functions
+                            .get(&lambda_id)
+                            .ok_or_else(|| {
+                                RuminaError::runtime(format!("Lambda '{}' not found", lambda_id))
+                            })?
+                            .clone();
 
                         // Create new call frame
                         let frame = CallFrame {
@@ -1019,7 +1027,7 @@ impl VM {
                     _ => {
                         return Err(RuminaError::runtime(
                             "Expected lambda ID as string".to_string(),
-                        ))
+                        ));
                     }
                 };
 
@@ -1417,19 +1425,19 @@ mod tests {
     #[test]
     fn test_constant_pooling() {
         let mut bytecode = ByteCode::new();
-        
+
         // Add the same constant multiple times
         let idx1 = bytecode.add_constant(Value::Int(42));
         let idx2 = bytecode.add_constant(Value::Int(42));
         let idx3 = bytecode.add_constant(Value::Int(100));
         let idx4 = bytecode.add_constant(Value::Int(42));
-        
+
         // First two should be the same index (deduplicated)
         assert_eq!(idx1, idx2);
         assert_eq!(idx1, idx4);
         // Third should be different
         assert_ne!(idx1, idx3);
-        
+
         // Pool should only have 2 constants
         assert_eq!(bytecode.constants.len(), 2);
     }
@@ -1437,17 +1445,17 @@ mod tests {
     #[test]
     fn test_constant_pooling_strings() {
         let mut bytecode = ByteCode::new();
-        
+
         // Add the same string multiple times
         let idx1 = bytecode.add_constant(Value::String("hello".to_string()));
         let idx2 = bytecode.add_constant(Value::String("hello".to_string()));
         let idx3 = bytecode.add_constant(Value::String("world".to_string()));
-        
+
         // First two should be the same index
         assert_eq!(idx1, idx2);
         // Third should be different
         assert_ne!(idx1, idx3);
-        
+
         // Pool should only have 2 constants
         assert_eq!(bytecode.constants.len(), 2);
     }
@@ -1458,11 +1466,11 @@ mod tests {
         let mut vm = VM::new(globals);
 
         let mut bytecode = ByteCode::new();
-        
+
         // Add constants to pool
         let idx1 = bytecode.add_constant(Value::Int(10));
         let idx2 = bytecode.add_constant(Value::Int(20));
-        
+
         // Use pooled constants
         bytecode.emit(OpCode::PushConstPooled(idx1), None);
         bytecode.emit(OpCode::PushConstPooled(idx2), None);
@@ -1481,17 +1489,17 @@ mod tests {
     #[test]
     fn test_constant_pooling_floats() {
         let mut bytecode = ByteCode::new();
-        
+
         // Add the same float multiple times
         let idx1 = bytecode.add_constant(Value::Float(3.14));
         let idx2 = bytecode.add_constant(Value::Float(3.14));
         let idx3 = bytecode.add_constant(Value::Float(2.71));
-        
+
         // First two should be the same index
         assert_eq!(idx1, idx2);
         // Third should be different
         assert_ne!(idx1, idx3);
-        
+
         // Pool should only have 2 constants
         assert_eq!(bytecode.constants.len(), 2);
     }
@@ -1502,22 +1510,22 @@ mod tests {
         let mut vm = VM::new(globals);
 
         let mut bytecode = ByteCode::new();
-        
+
         // Create a struct with a member: { x: 42 }
         let idx_key = bytecode.add_constant(Value::String("x".to_string()));
         let idx_val = bytecode.add_constant(Value::Int(42));
-        
+
         bytecode.emit(OpCode::PushConstPooled(idx_key), None);
         bytecode.emit(OpCode::PushConstPooled(idx_val), None);
         bytecode.emit(OpCode::MakeStruct(1), None);
-        
+
         // Store struct in a variable
         bytecode.emit(OpCode::PopVar("obj".to_string()), None);
-        
+
         // Access member - this will create a cache entry at this instruction address
         bytecode.emit(OpCode::PushVar("obj".to_string()), None);
         bytecode.emit(OpCode::Member("x".to_string()), None);
-        
+
         bytecode.emit(OpCode::Halt, None);
 
         vm.load(bytecode);
@@ -1540,30 +1548,30 @@ mod tests {
         let mut vm = VM::new(globals);
 
         let mut bytecode = ByteCode::new();
-        
+
         // Create a struct with multiple members: { x: 10, y: 20 }
         let idx_key_x = bytecode.add_constant(Value::String("x".to_string()));
         let idx_val_x = bytecode.add_constant(Value::Int(10));
         let idx_key_y = bytecode.add_constant(Value::String("y".to_string()));
         let idx_val_y = bytecode.add_constant(Value::Int(20));
-        
+
         bytecode.emit(OpCode::PushConstPooled(idx_key_x), None);
         bytecode.emit(OpCode::PushConstPooled(idx_val_x), None);
         bytecode.emit(OpCode::PushConstPooled(idx_key_y), None);
         bytecode.emit(OpCode::PushConstPooled(idx_val_y), None);
         bytecode.emit(OpCode::MakeStruct(2), None);
-        
+
         // Store struct in a variable
         bytecode.emit(OpCode::PopVar("obj".to_string()), None);
-        
+
         // Access first member
         bytecode.emit(OpCode::PushVar("obj".to_string()), None);
         bytecode.emit(OpCode::Member("x".to_string()), None);
-        
+
         // Access second member
         bytecode.emit(OpCode::PushVar("obj".to_string()), None);
         bytecode.emit(OpCode::Member("y".to_string()), None);
-        
+
         // Add the results
         bytecode.emit(OpCode::Add, None);
         bytecode.emit(OpCode::Halt, None);
@@ -1584,15 +1592,15 @@ mod tests {
         let mut vm = VM::new(globals);
 
         let mut bytecode = ByteCode::new();
-        
+
         // Create a struct with one member: { x: 42 }
         let idx_key = bytecode.add_constant(Value::String("x".to_string()));
         let idx_val = bytecode.add_constant(Value::Int(42));
-        
+
         bytecode.emit(OpCode::PushConstPooled(idx_key), None);
         bytecode.emit(OpCode::PushConstPooled(idx_val), None);
         bytecode.emit(OpCode::MakeStruct(1), None);
-        
+
         // Try to access non-existent member (will fail)
         bytecode.emit(OpCode::Member("nonexistent".to_string()), None);
         bytecode.emit(OpCode::Halt, None);
@@ -1614,11 +1622,11 @@ mod tests {
         let mut vm = VM::new(globals);
 
         let mut bytecode = ByteCode::new();
-        
+
         // Add constants to pool
         let idx1 = bytecode.add_constant(Value::Int(15));
         let idx2 = bytecode.add_constant(Value::Int(27));
-        
+
         // Use specialized integer add
         bytecode.emit(OpCode::PushConstPooled(idx1), None);
         bytecode.emit(OpCode::PushConstPooled(idx2), None);
@@ -1640,10 +1648,10 @@ mod tests {
         let mut vm = VM::new(globals);
 
         let mut bytecode = ByteCode::new();
-        
+
         let idx1 = bytecode.add_constant(Value::Int(100));
         let idx2 = bytecode.add_constant(Value::Int(42));
-        
+
         bytecode.emit(OpCode::PushConstPooled(idx1), None);
         bytecode.emit(OpCode::PushConstPooled(idx2), None);
         bytecode.emit(OpCode::SubInt, None);
@@ -1664,10 +1672,10 @@ mod tests {
         let mut vm = VM::new(globals);
 
         let mut bytecode = ByteCode::new();
-        
+
         let idx1 = bytecode.add_constant(Value::Int(6));
         let idx2 = bytecode.add_constant(Value::Int(7));
-        
+
         bytecode.emit(OpCode::PushConstPooled(idx1), None);
         bytecode.emit(OpCode::PushConstPooled(idx2), None);
         bytecode.emit(OpCode::MulInt, None);
@@ -1688,11 +1696,11 @@ mod tests {
         let mut vm = VM::new(globals);
 
         let mut bytecode = ByteCode::new();
-        
+
         // Mix int and float - should fallback to generic add
         let idx1 = bytecode.add_constant(Value::Int(10));
         let idx2 = bytecode.add_constant(Value::Float(3.14));
-        
+
         bytecode.emit(OpCode::PushConstPooled(idx1), None);
         bytecode.emit(OpCode::PushConstPooled(idx2), None);
         bytecode.emit(OpCode::AddInt, None);
@@ -1708,5 +1716,3 @@ mod tests {
         }
     }
 }
-
-
