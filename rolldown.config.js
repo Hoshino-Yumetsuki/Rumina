@@ -7,7 +7,7 @@ const external = new RegExp(
 )
 
 const config = {
-  input: './src/index.ts'
+  input: './crates/rumina/src/index.ts'
 }
 
 function inlineWasm() {

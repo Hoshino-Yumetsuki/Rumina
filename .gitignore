@@ -9,8 +9,12 @@
 node_modules/
 
 lib
-src/bindings.ts
+crates/rumina/src/bindings.ts
 # Yarn PnP files
 .pnp.cjs
 .pnp.loader.mjs
 LSR-main
+
+# Old structure (kept for reference)
+Cargo.toml.bak
+src/

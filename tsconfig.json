@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "rootDir": "src",
+    "rootDir": "crates/rumina/src",
     "outDir": "lib",
     "target": "ES2022",
     "module": "ESNext",
@@ -15,6 +15,6 @@
     ]
   },
   "include": [
-    "src"
+    "crates/rumina/src"
   ]
 }

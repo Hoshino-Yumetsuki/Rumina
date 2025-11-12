@@ -7,7 +7,7 @@ const __dirname = dirname(__filename)
 
 const wasmBgJsPath = resolve(__dirname, '../lib/rumina_bg.js')
 const wasmBinaryPath = resolve(__dirname, '../lib/rumina_bg.wasm')
-const outputPath = resolve(__dirname, '../src/bindings.ts')
+const outputPath = resolve(__dirname, '../crates/rumina/src/bindings.ts')
 
 console.log('正在从 lib 同步 wasm 绑定代码...')
 
