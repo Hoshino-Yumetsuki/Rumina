@@ -5,6 +5,10 @@ edition = "2024"
 description = "Rumina VM - executes .rmc bytecode files"
 license = "LGPL-2.1"
 
+[lib]
+name = "rmvm"
+path = "src/lib.rs"
+
 [[bin]]
 name = "rmvm"
 path = "src/main.rs"
