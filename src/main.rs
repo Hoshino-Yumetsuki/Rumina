@@ -131,7 +131,7 @@ fn check_semicolons(contents: &str, filename: &str) {
 }
 
 fn run_repl() {
-    println!("Rumina - Lamina Language Interpreter (VM Mode)");
+    println!("Rumina");
     println!("Type 'exit' to quit, or enter Lamina code to execute.");
     println!();
 
