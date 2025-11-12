@@ -150,15 +150,13 @@ impl Compiler {
                     }
                     BinOp::Div => false, // Division may produce rational/float
                     BinOp::Pow => false, // Power may produce float for negative exponents
-                    _ => false, // Comparisons return bool, logical ops work on bool
+                    _ => false,          // Comparisons return bool, logical ops work on bool
                 }
             }
-            Expr::Unary { op, expr } => {
-                match op {
-                    UnaryOp::Neg => self.is_likely_int(expr),
-                    _ => false,
-                }
-            }
+            Expr::Unary { op, expr } => match op {
+                UnaryOp::Neg => self.is_likely_int(expr),
+                _ => false,
+            },
             // Function calls might return integers
             Expr::Call { .. } => true,
             _ => false,
