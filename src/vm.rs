@@ -245,12 +245,14 @@ impl ByteCode {
 #[derive(Debug, Clone)]
 struct FunctionInfo {
     /// Function name
+    #[allow(dead_code)]
     name: String,
     /// Parameter names
     params: Vec<String>,
     /// Start address in bytecode
     body_start: usize,
     /// End address in bytecode
+    #[allow(dead_code)]
     body_end: usize,
 }
 
@@ -261,9 +263,11 @@ struct CallFrame {
     return_address: usize,
 
     /// Base pointer for local variables
+    #[allow(dead_code)]
     base_pointer: usize,
 
     /// Function name (for error reporting)
+    #[allow(dead_code)]
     function_name: String,
 
     /// Local variables in this frame
