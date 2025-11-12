@@ -7,6 +7,7 @@ pub mod lexer;
 pub mod parser;
 pub mod token;
 pub mod value;
+pub mod value_ops;
 pub mod vm;
 pub mod vm_ops;
 

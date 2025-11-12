@@ -19,7 +19,7 @@ Rumina uses a bytecode Virtual Machine (VM) with an instruction set inspired by 
 - **Instruction Pointer (IP)**: Points to the next instruction to execute
 - **Global Variables**: Shared across all scopes, includes built-in functions
 - **Local Variables**: Scoped to current execution context
-- **Call Stack**: Manages function calls and returns (partial implementation)
+- **Call Stack**: Manages function calls and returns with proper call frames
 - **Decoupled Frontend**: Lexer and Parser produce AST, Compiler produces bytecode, VM executes
 
 ### API
@@ -188,23 +188,25 @@ Built-in functions are integrated through the interpreter's globals:
 
 ### Completed ✅
 - All OpCodes defined and documented
-- Compiler for most AST constructs
-- VM execution engine
-- Stack operations
-- Variable storage (locals and globals)
-- Arithmetic, logical, and comparison operations
-- Control flow (if, while, jumps)
-- Array and struct operations
-- Native function calls
+- Compiler for all implemented AST constructs:
+  - Variable declarations and assignments
+  - Arithmetic, logical, and comparison operations
+  - Control flow (if/else, while loops, break/continue)
+  - User-defined functions with parameters
+  - Recursive function calls with proper call frames
+  - Array and struct operations
+  - Native function calls
+  - Member and index access
+- VM execution engine with stack-based operations
+- Variable storage (locals and globals with proper scoping)
 - Built-in function integration
-- **User-defined function calls with proper call frames**
-- **Recursive function support with depth tracking**
-- Comprehensive test suite (49 tests)
+- Comprehensive test suite (48 unit tests + 2 performance tests)
 
-### In Progress 🔄
-- Lambda/closure support
-- For loop compilation
-- Enhanced scope management
+### Not Yet Implemented ⚠️
+- Lambda/closure compilation (interpreter supports this, VM compiler does not yet)
+- For loop compilation (interpreter supports this, VM compiler does not yet)
+
+**Note**: These features work in the interpreter but need compiler implementation for VM support. The VM will continue to work for all other language features.
 
 ### Future Enhancements 🔮
 - Constant folding optimization
@@ -290,23 +292,46 @@ The VM includes comprehensive tests:
 ## Performance Considerations
 
 The VM is designed for:
+- **Performance**: Optimized operation implementations without overhead
 - **Simplicity**: Easy to understand and maintain
-- **Compatibility**: Reuses existing interpreter logic
+- **Compatibility**: Falls back to existing interpreter logic for complex types
 - **Future optimization**: Foundation for JIT or AOT compilation
 
-Current trade-offs:
-- Creating new interpreter instance per operation (can be optimized)
-- Stack-based (vs. register-based) design
-- No constant pooling yet
+### Performance Optimizations Implemented
+
+**Optimized VM Operations** (`src/value_ops.rs`):
+- Direct operation implementations for common types (Int, BigInt, Bool)
+- No interpreter instantiation overhead for basic operations
+- Fast paths for arithmetic, comparison, and logical operations
+- Falls back to full interpreter only for complex types (Irrational, Complex, etc.)
+
+**Performance Results** (fib(30) benchmark):
+- VM (release): **1.93 seconds**
+- AST Interpreter (release): **3.45 seconds**
+- **Speedup: 1.79x** (VM is nearly 2x faster than interpreter)
+
+Debug mode (fib(20)):
+- VM: ~90ms
+- AST Interpreter: ~185ms
+- **Speedup: 2.06x**
+
+### Architecture Trade-offs
+
+Current design choices:
+- Stack-based (vs. register-based) design - simpler to implement and maintain
+- No constant pooling yet - opportunity for future optimization
+- Function calls use call frames with proper local variable management
 
 ## Future Directions
 
-1. **Complete Function Support**: Implement proper call frames for user-defined functions
-2. **Optimization Pass**: Add compiler optimization phase
-3. **Performance Tuning**: Profile and optimize hot paths
-4. **Default Integration**: Switch main `run()` to use VM by default
-5. **JIT Compilation**: Explore runtime compilation for hot loops
-6. **WASM Integration**: Ensure VM works in WASM environment
+1. **Further Performance Optimizations**: 
+   - Constant pooling to reduce memory allocations
+   - Inline caching for property access
+   - Type specialization for hot paths
+2. **Optimization Pass**: Add compiler optimization phase (constant folding, dead code elimination)
+3. **JIT Compilation**: Explore runtime compilation for hot loops
+4. **WASM Integration**: Ensure VM works efficiently in WASM environment
+5. **Profiling Tools**: Add built-in profiling support for identifying bottlenecks
 
 ## References
 
