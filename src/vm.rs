@@ -1508,7 +1508,8 @@ impl VM {
                     }
                     Value::Function { .. } => {
                         // Check if we have the function in our function table
-                        if let Some(func_info) = self.functions.get(&func_name).cloned() {
+                        // Use get() instead of cloned() to avoid cloning FunctionInfo
+                        if let Some(func_info) = self.functions.get(&func_name) {
                             // Check recursion depth
                             if self.recursion_depth >= self.max_recursion_depth {
                                 return Err(RuminaError::runtime(format!(
@@ -1527,11 +1528,15 @@ impl VM {
                                 )));
                             }
 
+                            // Get body_start before creating frame (avoid borrow issues)
+                            let body_start = func_info.body_start;
+                            let params = func_info.params.clone(); // Clone only param names, not entire FunctionInfo
+
                             // Create new call frame
                             let frame = CallFrame {
                                 return_address: self.ip,
                                 base_pointer: self.stack.len(),
-                                function_name: func_name.clone(),
+                                function_name: func_name.clone(), // Keep clone for error reporting
                                 locals: std::mem::take(&mut self.locals), // Save current locals
                             };
 
@@ -1541,14 +1546,12 @@ impl VM {
 
                             // Set up parameters as local variables
                             self.locals.clear();
-                            for (param_name, arg_value) in
-                                func_info.params.iter().zip(args.into_iter())
-                            {
+                            for (param_name, arg_value) in params.iter().zip(args.into_iter()) {
                                 self.locals.insert(param_name.clone(), arg_value);
                             }
 
                             // Jump to function body
-                            self.ip = func_info.body_start;
+                            self.ip = body_start;
                         } else {
                             return Err(RuminaError::runtime(format!(
                                 "Function '{}' not found in function table",
