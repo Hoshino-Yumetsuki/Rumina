@@ -1,5 +1,7 @@
 # JIT Compilation Necessity Analysis for Rumina
 
+**中文摘要**：[JIT_ANALYSIS_ZH.md](JIT_ANALYSIS_ZH.md)
+
 ## Executive Summary
 
 **Recommendation: JIT compilation is NOT necessary at this stage for the Rumina project.**
