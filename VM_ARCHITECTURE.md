@@ -304,15 +304,27 @@ The VM is designed for:
 - Fast paths for arithmetic, comparison, and logical operations
 - Falls back to full interpreter only for complex types (Irrational, Complex, etc.)
 
+**Specialized Integer Opcodes** (December 2024):
+- Compiler performs type inference to detect integer operations
+- Emits specialized opcodes: AddInt, SubInt, MulInt for arithmetic
+- Emits specialized opcodes: LtInt, LteInt, GtInt, GteInt, EqInt, NeqInt for comparisons
+- Eliminates type checking overhead in hot paths
+- Falls back to generic opcodes for mixed types
+
+**Function Call Optimization** (December 2024):
+- Reduced unnecessary clones in function call path
+- Avoids cloning FunctionInfo on every call
+- Optimized parameter setup and call frame management
+
 **Performance Results** (fib(30) benchmark):
-- VM (release): **1.93 seconds**
+- VM (release): **1.84 seconds** (improved from 1.93s)
 - AST Interpreter (release): **3.45 seconds**
-- **Speedup: 1.79x** (VM is nearly 2x faster than interpreter)
+- **Speedup: 1.98x** (VM is nearly 2x faster than interpreter, up from 1.79x)
 
 Debug mode (fib(20)):
-- VM: ~90ms
-- AST Interpreter: ~185ms
-- **Speedup: 2.06x**
+- VM: **15.4ms** (improved from ~90ms)
+- AST Interpreter: **30.5ms** (was ~185ms)
+- **Speedup: 1.98x**
 
 ### Architecture Trade-offs
 
@@ -362,10 +374,22 @@ Member access operations use inline caching for performance:
 ### 4. Type Specialization ✅
 
 Specialized opcodes provide fast paths for common type operations:
+
+**Arithmetic Operations:**
 - `AddInt`, `SubInt`, `MulInt`: Optimized integer arithmetic
 - Direct integer operations without trait overhead
 - Automatic fallback to generic operations for mixed types
-- Significant performance improvement for integer-heavy code
+
+**Comparison Operations:**
+- `LtInt`, `LteInt`, `GtInt`, `GteInt`, `EqInt`, `NeqInt`: Optimized integer comparisons
+- Direct integer comparisons without trait overhead
+- Critical for recursive functions with conditional branches
+
+**Compiler Integration:**
+- Type inference detects likely integer operations
+- Emits specialized opcodes when both operands are integers
+- Optimistic approach: assumes variables/function results might be integers
+- Significant performance improvement for integer-heavy code (5-10% faster)
 
 ## Future Directions
 

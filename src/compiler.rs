@@ -133,6 +133,38 @@ impl Compiler {
         self.bytecode.patch_jump(address, target);
     }
 
+    /// Simple type inference: Check if an expression is likely to produce an integer
+    /// This is an optimistic heuristic - we emit specialized integer opcodes when there's
+    /// a good chance the operands will be integers. The VM has fallback logic for mixed types.
+    fn is_likely_int(&self, expr: &Expr) -> bool {
+        match expr {
+            Expr::Int(_) => true,
+            // Optimistically assume variables might be integers
+            // This is safe because the VM has fallback logic
+            Expr::Ident(_) => true,
+            Expr::Binary { left, op, right } => {
+                // Integer arithmetic operations preserve integer type
+                match op {
+                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Mod => {
+                        self.is_likely_int(left) && self.is_likely_int(right)
+                    }
+                    BinOp::Div => false, // Division may produce rational/float
+                    BinOp::Pow => false, // Power may produce float for negative exponents
+                    _ => false, // Comparisons return bool, logical ops work on bool
+                }
+            }
+            Expr::Unary { op, expr } => {
+                match op {
+                    UnaryOp::Neg => self.is_likely_int(expr),
+                    _ => false,
+                }
+            }
+            // Function calls might return integers
+            Expr::Call { .. } => true,
+            _ => false,
+        }
+    }
+
     /// Compile a statement
     fn compile_stmt(&mut self, stmt: &Stmt) -> Result<(), RuminaError> {
         match stmt {
@@ -447,20 +479,77 @@ impl Compiler {
                 self.compile_expr(left)?;
                 self.compile_expr(right)?;
 
-                // Emit operation
+                // Determine if we can use specialized integer opcodes
+                let use_int_ops = self.is_likely_int(left) && self.is_likely_int(right);
+
+                // Emit operation - use specialized opcodes when possible
                 let opcode = match op {
-                    BinOp::Add => OpCode::Add,
-                    BinOp::Sub => OpCode::Sub,
-                    BinOp::Mul => OpCode::Mul,
+                    BinOp::Add => {
+                        if use_int_ops {
+                            OpCode::AddInt
+                        } else {
+                            OpCode::Add
+                        }
+                    }
+                    BinOp::Sub => {
+                        if use_int_ops {
+                            OpCode::SubInt
+                        } else {
+                            OpCode::Sub
+                        }
+                    }
+                    BinOp::Mul => {
+                        if use_int_ops {
+                            OpCode::MulInt
+                        } else {
+                            OpCode::Mul
+                        }
+                    }
                     BinOp::Div => OpCode::Div,
                     BinOp::Mod => OpCode::Mod,
                     BinOp::Pow => OpCode::Pow,
-                    BinOp::Equal => OpCode::Eq,
-                    BinOp::NotEqual => OpCode::Neq,
-                    BinOp::Greater => OpCode::Gt,
-                    BinOp::GreaterEq => OpCode::Gte,
-                    BinOp::Less => OpCode::Lt,
-                    BinOp::LessEq => OpCode::Lte,
+                    BinOp::Equal => {
+                        if use_int_ops {
+                            OpCode::EqInt
+                        } else {
+                            OpCode::Eq
+                        }
+                    }
+                    BinOp::NotEqual => {
+                        if use_int_ops {
+                            OpCode::NeqInt
+                        } else {
+                            OpCode::Neq
+                        }
+                    }
+                    BinOp::Greater => {
+                        if use_int_ops {
+                            OpCode::GtInt
+                        } else {
+                            OpCode::Gt
+                        }
+                    }
+                    BinOp::GreaterEq => {
+                        if use_int_ops {
+                            OpCode::GteInt
+                        } else {
+                            OpCode::Gte
+                        }
+                    }
+                    BinOp::Less => {
+                        if use_int_ops {
+                            OpCode::LtInt
+                        } else {
+                            OpCode::Lt
+                        }
+                    }
+                    BinOp::LessEq => {
+                        if use_int_ops {
+                            OpCode::LteInt
+                        } else {
+                            OpCode::Lte
+                        }
+                    }
                     BinOp::And => OpCode::And,
                     BinOp::Or => OpCode::Or,
                 };
