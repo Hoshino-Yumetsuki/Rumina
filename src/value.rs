@@ -100,6 +100,12 @@ impl Value {
         match self {
             Value::Int(i) => Ok(*i as f64),
             Value::Float(f) => Ok(*f),
+            Value::BigInt(b) => {
+                // Convert BigInt to f64 via string parsing
+                b.to_string()
+                    .parse::<f64>()
+                    .map_err(|_| format!("BigInt {} is too large to convert to float", b))
+            }
             Value::Rational(r) => {
                 let num = r.numer().to_string().parse::<f64>().unwrap_or(0.0);
                 let den = r.denom().to_string().parse::<f64>().unwrap_or(1.0);
