@@ -1,4 +1,5 @@
-use rumina::{ByteCode, Compiler, Interpreter, Lexer, Parser, RuminaError, VM};
+use rumina::{ByteCode, Interpreter, Lexer, Parser, RuminaError, VM};
+use ruminac::Compiler;
 use std::env;
 use std::fs;
 use std::io::{self, Write};
@@ -91,6 +92,25 @@ fn run_bytecode_file(filename: &str) -> i32 {
     }
 }
 
+/// Run Lamina code
+fn run_rumina(source: &str) -> Result<Option<rumina::Value>, RuminaError> {
+    let mut lexer = Lexer::new(source.to_string());
+    let tokens = lexer.tokenize();
+
+    let mut parser = Parser::new(tokens);
+    let ast = parser.parse().map_err(|e| RuminaError::runtime(e))?;
+
+    let mut compiler = Compiler::new();
+    let bytecode = compiler.compile(ast)?;
+
+    let interpreter = Interpreter::new();
+    let globals = interpreter.get_globals();
+    let mut vm = VM::new(globals);
+    vm.load(bytecode);
+
+    vm.run()
+}
+
 fn run_lm_file(filename: &str) -> i32 {
     let contents = fs::read_to_string(filename).unwrap_or_else(|err| {
         eprintln!("Error reading file '{}': {}", filename, err);
@@ -100,7 +120,7 @@ fn run_lm_file(filename: &str) -> i32 {
     // Check for missing semicolons
     check_semicolons(&contents, filename);
 
-    if let Err(err) = rumina::run(&contents) {
+    if let Err(err) = run_rumina(&contents) {
         eprint!("{}", err.format_error());
         return 1;
     }

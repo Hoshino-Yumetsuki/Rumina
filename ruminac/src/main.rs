@@ -1,4 +1,4 @@
-use rumina::{Compiler, Lexer, Parser, RuminaError};
+use ruminac::{Compiler, Lexer, Parser, RuminaError};
 use std::env;
 use std::fs;
 use std::path::Path;

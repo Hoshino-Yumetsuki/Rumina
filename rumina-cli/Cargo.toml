@@ -1,12 +1,12 @@
 [package]
-name = "rmvm"
+name = "rumina-cli"
 version = "1.1.1"
 edition = "2024"
-description = "Rumina VM - executes .rmc bytecode files"
+description = "Rumina CLI - Lamina language interpreter with REPL"
 license = "LGPL-2.1"
 
 [[bin]]
-name = "rmvm"
+name = "rumina-cli"
 path = "src/main.rs"
 
 [dependencies]

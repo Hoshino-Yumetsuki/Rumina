@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "ruminac", "rmvm"]
+members = [".", "ruminac", "rmvm", "rumina-cli"]
 resolver = "2"
 
 [package]
@@ -11,10 +11,6 @@ license = "LGPL-2.1"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
-
-[[bin]]
-name = "rumina-cli"
-path = "src/main.rs"
 
 [dependencies]
 num = "^0.4"
@@ -32,3 +28,4 @@ getrandom = { version = "^0.3", features = ["wasm_js"] }
 
 [dev-dependencies]
 criterion = "^0.7"
+ruminac = { path = "ruminac" }

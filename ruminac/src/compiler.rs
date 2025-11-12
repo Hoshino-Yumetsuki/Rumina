@@ -1,10 +1,10 @@
 /// Bytecode compiler for Rumina
 ///
 /// This module compiles AST to bytecode instructions for the VM.
-use crate::ast::*;
-use crate::error::RuminaError;
-use crate::value::Value;
-use crate::vm::{ByteCode, OpCode};
+use rumina::ast::*;
+use rumina::error::RuminaError;
+use rumina::value::Value;
+use rumina::vm::{ByteCode, OpCode};
 use std::collections::HashMap;
 
 /// Symbol table for variable resolution
@@ -608,7 +608,7 @@ mod tests {
 
     #[test]
     fn test_compile_and_run_simple() {
-        use crate::vm::VM;
+        use rumina::vm::VM;
         use std::cell::RefCell;
         use std::collections::HashMap;
         use std::rc::Rc;
@@ -637,7 +637,7 @@ mod tests {
 
     #[test]
     fn test_compile_and_run_variables() {
-        use crate::vm::VM;
+        use rumina::vm::VM;
         use std::cell::RefCell;
         use std::collections::HashMap;
         use std::rc::Rc;
@@ -680,8 +680,8 @@ mod tests {
 
     #[test]
     fn test_compile_and_run_with_builtins() {
-        use crate::interpreter::Interpreter;
-        use crate::vm::VM;
+        use rumina::interpreter::Interpreter;
+        use rumina::vm::VM;
 
         let mut compiler = Compiler::new();
 
@@ -709,7 +709,7 @@ mod tests {
 
     #[test]
     fn test_compile_and_run_user_defined_function() {
-        use crate::vm::VM;
+        use rumina::vm::VM;
         use std::cell::RefCell;
         use std::collections::HashMap;
         use std::rc::Rc;
@@ -749,7 +749,7 @@ mod tests {
 
     #[test]
     fn test_compile_and_run_recursive_fibonacci() {
-        use crate::vm::VM;
+        use rumina::vm::VM;
         use std::cell::RefCell;
         use std::collections::HashMap;
         use std::rc::Rc;
@@ -814,7 +814,7 @@ mod tests {
 
     #[test]
     fn test_compile_and_run_for_loop() {
-        use crate::vm::VM;
+        use rumina::vm::VM;
         use std::cell::RefCell;
         use std::collections::HashMap;
         use std::rc::Rc;
@@ -876,7 +876,7 @@ mod tests {
 
     #[test]
     fn test_compile_and_run_lambda() {
-        use crate::vm::VM;
+        use rumina::vm::VM;
         use std::cell::RefCell;
         use std::collections::HashMap;
         use std::rc::Rc;
@@ -920,7 +920,7 @@ mod tests {
 
     #[test]
     fn test_compile_and_run_lambda_with_closure() {
-        use crate::vm::VM;
+        use rumina::vm::VM;
         use std::cell::RefCell;
         use std::collections::HashMap;
         use std::rc::Rc;

@@ -3,8 +3,8 @@
 /// This module implements various optimization techniques:
 /// - Constant folding: Evaluate constant expressions at compile time
 /// - Dead code elimination: Remove unreachable code
-use crate::ast::*;
-use crate::error::RuminaError;
+use rumina::ast::*;
+use rumina::error::RuminaError;
 
 /// Optimizer for AST transformations
 pub struct ASTOptimizer {

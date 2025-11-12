@@ -769,6 +769,7 @@ version = "1.1.1"
 dependencies = [
  "ctrlc",
  "rumina",
+ "ruminac",
 ]
 
 [[package]]
@@ -783,7 +784,17 @@ dependencies = [
  "mathcore",
  "num",
  "rand",
+ "ruminac",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "rumina-cli"
+version = "1.1.1"
+dependencies = [
+ "ctrlc",
+ "rumina",
+ "ruminac",
 ]
 
 [[package]]
