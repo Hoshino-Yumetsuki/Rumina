@@ -4,6 +4,7 @@ pub mod compiler;
 pub mod error;
 pub mod interpreter;
 pub mod lexer;
+pub mod optimizer;
 pub mod parser;
 pub mod token;
 pub mod value;
@@ -19,6 +20,7 @@ pub use compiler::Compiler;
 pub use error::{ErrorType, RuminaError, StackFrame};
 pub use interpreter::Interpreter;
 pub use lexer::Lexer;
+pub use optimizer::ASTOptimizer;
 pub use parser::Parser;
 pub use value::Value;
 pub use vm::VM;
@@ -42,8 +44,12 @@ pub fn run_rumina(source: &str) -> Result<Option<Value>, RuminaError> {
     let mut parser = Parser::new(tokens);
     let ast = parser.parse().map_err(|e| RuminaError::runtime(e))?;
 
+    // Apply optimization passes
+    let mut optimizer = ASTOptimizer::new();
+    let optimized_ast = optimizer.optimize(ast)?;
+
     let mut compiler = Compiler::new();
-    let bytecode = compiler.compile(ast)?;
+    let bytecode = compiler.compile(optimized_ast)?;
 
     let interpreter = Interpreter::new();
     let globals = interpreter.get_globals();
