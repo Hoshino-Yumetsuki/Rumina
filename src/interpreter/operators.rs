@@ -156,7 +156,17 @@ impl Interpreter {
                         Ok(Value::Rational(rational))
                     }
                     BinOp::Mod => Ok(Value::Int(a % b)),
-                    BinOp::Pow => Ok(Value::Int(a.pow(*b as u32))),
+                    BinOp::Pow => {
+                        // Try as int first, promote to BigInt on overflow
+                        match a.checked_pow(*b as u32) {
+                            Some(result) => Ok(Value::Int(result)),
+                            None => {
+                                // Overflow: promote to BigInt
+                                let a_big = BigInt::from(*a);
+                                Ok(Value::BigInt(a_big.pow(*b as u32)))
+                            }
+                        }
+                    }
                     BinOp::Equal => Ok(Value::Bool(a == b)),
                     BinOp::NotEqual => Ok(Value::Bool(a != b)),
                     BinOp::Greater => Ok(Value::Bool(a > b)),
@@ -190,7 +200,7 @@ impl Interpreter {
                     BinOp::Pow => {
                         // For BigInt power, convert to i64 for the exponent
                         if let Ok(exp) = b.to_string().parse::<u32>() {
-                            Ok(Value::BigInt(num::pow(a.clone(), exp as usize)))
+                            Ok(Value::BigInt(a.pow(exp)))
                         } else {
                             // If exponent is too large or negative, convert to float
                             let a_float = a.to_string().parse::<f64>().unwrap_or(0.0);
@@ -252,7 +262,7 @@ impl Interpreter {
                     BinOp::Pow => {
                         if matches!(left, Value::BigInt(_)) {
                             if *b >= 0 {
-                                Ok(Value::BigInt(num::pow(a.clone(), *b as usize)))
+                                Ok(Value::BigInt(a.pow(*b as u32)))
                             } else {
                                 // Negative exponent
                                 let a_float = a.to_string().parse::<f64>().unwrap_or(0.0);
@@ -261,7 +271,7 @@ impl Interpreter {
                         } else {
                             // Int ^ BigInt
                             if let Ok(exp) = a.to_string().parse::<u32>() {
-                                Ok(Value::BigInt(num::pow(b_bigint, exp as usize)))
+                                Ok(Value::BigInt(b_bigint.pow(exp)))
                             } else {
                                 let a_float = a.to_string().parse::<f64>().unwrap_or(0.0);
                                 let b_float = *b as f64;
