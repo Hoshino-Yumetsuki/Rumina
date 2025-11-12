@@ -6,13 +6,28 @@
 
 ## 项目结构
 
-Rumina 现在采用 Cargo workspace 结构，包含三个主要组件：
+Rumina 采用 Cargo workspace 结构，包含以下组件：
 
-- **rumina-lib**: 核心库，提供编译器和虚拟机功能
-- **ruminac**: 编译器可执行文件，将 `.lm` 文件编译为 `.rmc` 字节码
-- **rmvm**: 虚拟机可执行文件，执行 `.rmc` 字节码或 `.lm` 文件
+- **rumina**: 核心库和主程序 (`rumina-cli`)，提供编译器、虚拟机和 REPL 功能
+- **ruminac**: 独立的编译器可执行文件，将 `.lm` 文件编译为 `.rmc` 字节码
+- **rmvm**: 独立的虚拟机可执行文件，执行 `.rmc` 字节码或 `.lm` 文件
 
-## 命令行工具
+## 主程序
+
+### rumina-cli - Rumina 主程序
+
+主程序保持原有功能不变，支持 REPL 和执行 `.lm` 文件。
+
+**使用方法：**
+```bash
+# 启动 REPL
+rumina-cli
+
+# 执行 .lm 文件
+rumina-cli program.lm
+```
+
+## 独立工具
 
 ### ruminac - Rumina 编译器
 

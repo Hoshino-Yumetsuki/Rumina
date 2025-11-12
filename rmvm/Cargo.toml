@@ -1,16 +1,16 @@
 [package]
 name = "rmvm"
-version.workspace = true
-edition.workspace = true
+version = "1.1.1"
+edition = "2024"
 description = "Rumina VM - executes .rmc bytecode files"
-license.workspace = true
+license = "LGPL-2.1"
 
 [[bin]]
 name = "rmvm"
 path = "src/main.rs"
 
 [dependencies]
-rumina = { path = "../rumina-lib" }
+rumina = { path = ".." }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 ctrlc = "^3"

@@ -1,13 +1,13 @@
 [package]
 name = "ruminac"
-version.workspace = true
-edition.workspace = true
+version = "1.1.1"
+edition = "2024"
 description = "Rumina compiler - compiles .lm files to .rmc bytecode"
-license.workspace = true
+license = "LGPL-2.1"
 
 [[bin]]
 name = "ruminac"
 path = "src/main.rs"
 
 [dependencies]
-rumina = { path = "../rumina-lib" }
+rumina = { path = ".." }
