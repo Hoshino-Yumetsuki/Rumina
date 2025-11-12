@@ -1,0 +1,13 @@
+[package]
+name = "ruminac"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Lamina language compiler - compiles .lm files to .rmc bytecode"
+
+[[bin]]
+name = "ruminac"
+path = "src/main.rs"
+
+[dependencies]
+rumina = { path = "../rumina" }

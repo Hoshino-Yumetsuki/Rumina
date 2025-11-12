@@ -1,0 +1,13 @@
+[package]
+name = "rmvm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Lamina language VM - executes .rmc bytecode files"
+
+[[bin]]
+name = "rmvm"
+path = "src/main.rs"
+
+[dependencies]
+rumina = { path = "../rumina" }
