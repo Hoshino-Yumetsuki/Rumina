@@ -1,6 +1,5 @@
 // Performance tests for VM vs Interpreter
-use rumina::{Interpreter, Lexer, Parser, VM, Value};
-use ruminac::Compiler;
+use rumina::{Compiler, Interpreter, Lexer, Parser, VM, Value};
 use std::time::Instant;
 
 #[test]
