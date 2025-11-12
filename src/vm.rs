@@ -812,6 +812,24 @@ impl ByteCode {
                 });
             }
         }
+        if let Some(dtype_str) = s
+            .strip_prefix("ConvertType(")
+            .and_then(|s| s.strip_suffix(")"))
+        {
+            let dtype = match dtype_str {
+                "Int" => DeclaredType::Int,
+                "Float" => DeclaredType::Float,
+                "Bool" => DeclaredType::Bool,
+                "String" => DeclaredType::String,
+                "Rational" => DeclaredType::Rational,
+                "Irrational" => DeclaredType::Irrational,
+                "Complex" => DeclaredType::Complex,
+                "Array" => DeclaredType::Array,
+                "BigInt" => DeclaredType::BigInt,
+                _ => return Err(format!("Unknown DeclaredType: {}", dtype_str)),
+            };
+            return Ok(OpCode::ConvertType(dtype));
+        }
 
         Err(format!("Unknown opcode: {}", s))
     }
@@ -2484,6 +2502,38 @@ INSTRUCTIONS:
         match (result1, result2) {
             (Some(Value::String(s1)), Some(Value::String(s2))) => assert_eq!(s1, s2),
             _ => panic!("Expected matching String results"),
+        }
+    }
+
+    #[test]
+    fn test_bytecode_convert_type_roundtrip() {
+        // Test serialization/deserialization of ConvertType opcode
+        let mut original = ByteCode::new();
+
+        // Test all DeclaredType variants
+        original.emit(OpCode::ConvertType(DeclaredType::Int), Some(1));
+        original.emit(OpCode::ConvertType(DeclaredType::Float), Some(2));
+        original.emit(OpCode::ConvertType(DeclaredType::Bool), Some(3));
+        original.emit(OpCode::ConvertType(DeclaredType::String), Some(4));
+        original.emit(OpCode::ConvertType(DeclaredType::Rational), Some(5));
+        original.emit(OpCode::ConvertType(DeclaredType::Irrational), Some(6));
+        original.emit(OpCode::ConvertType(DeclaredType::Complex), Some(7));
+        original.emit(OpCode::ConvertType(DeclaredType::Array), Some(8));
+        original.emit(OpCode::ConvertType(DeclaredType::BigInt), Some(9));
+        original.emit(OpCode::Halt, None);
+
+        // Serialize and deserialize
+        let serialized = original.serialize();
+        let deserialized = ByteCode::deserialize(&serialized).unwrap();
+
+        // Verify all opcodes match
+        assert_eq!(deserialized.instructions.len(), original.instructions.len());
+        for i in 0..original.instructions.len() {
+            assert_eq!(
+                deserialized.instructions[i], original.instructions[i],
+                "Opcode at index {} should match",
+                i
+            );
         }
     }
 }

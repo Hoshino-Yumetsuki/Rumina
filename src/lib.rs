@@ -105,4 +105,65 @@ mod vm_integration_tests {
             _ => panic!("Expected Int(42)"),
         }
     }
+
+    #[test]
+    fn test_trig_with_bigint() {
+        // Test cos with bigint - should not panic with "Cannot convert bigint to float"
+        let result = run_rumina("cos(10^10);").unwrap();
+        match result {
+            Some(Value::Float(_)) => (), // Should return a float, actual value doesn't matter
+            _ => panic!("Expected Float result from cos(10^10)"),
+        }
+    }
+
+    #[test]
+    fn test_sin_with_bigint() {
+        // Test sin with bigint
+        let result = run_rumina("sin(10^10);").unwrap();
+        match result {
+            Some(Value::Float(_)) => (), // Should return a float
+            _ => panic!("Expected Float result from sin(10^10)"),
+        }
+    }
+
+    #[test]
+    fn test_tan_with_bigint() {
+        // Test tan with bigint
+        let result = run_rumina("tan(10^10);").unwrap();
+        match result {
+            Some(Value::Float(_)) => (), // Should return a float
+            _ => panic!("Expected Float result from tan(10^10)"),
+        }
+    }
+
+    #[test]
+    fn test_exp_with_bigint() {
+        // Test exp with bigint - should return inf for large values
+        let result = run_rumina("exp(10^10);").unwrap();
+        match result {
+            Some(Value::Float(f)) => assert!(f.is_infinite()),
+            _ => panic!("Expected Float result from exp(10^10)"),
+        }
+    }
+
+    #[test]
+    fn test_log_with_bigint() {
+        // Test log with bigint
+        let result = run_rumina("log(10^10);").unwrap();
+        match result {
+            Some(Value::Float(_)) => (), // Should return a float
+            _ => panic!("Expected Float result from log(10^10)"),
+        }
+    }
+
+    #[test]
+    fn test_cos_with_very_large_bigint() {
+        // Test with extremely large bigint (like the original issue)
+        // This should overflow to infinity and cos(infinity) = NaN
+        let result = run_rumina("cos(114514^114514);").unwrap();
+        match result {
+            Some(Value::Float(f)) => assert!(f.is_nan()),
+            _ => panic!("Expected Float NaN result from cos(114514^114514)"),
+        }
+    }
 }
