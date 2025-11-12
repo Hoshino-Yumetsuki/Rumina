@@ -317,7 +317,8 @@ impl Compiler {
                 if let Some(expr) = expr {
                     self.compile_expr(expr)?;
                 } else {
-                    self.emit(OpCode::PushConst(Value::Null));
+                    let index = self.bytecode.add_constant(Value::Null);
+                    self.emit(OpCode::PushConstPooled(index));
                 }
                 self.emit(OpCode::Return);
             }
@@ -362,7 +363,8 @@ impl Compiler {
                 }
 
                 // Implicit return null if no explicit return
-                self.emit(OpCode::PushConst(Value::Null));
+                let index = self.bytecode.add_constant(Value::Null);
+                self.emit(OpCode::PushConstPooled(index));
                 self.emit(OpCode::Return);
 
                 self.symbols.exit_scope();
@@ -399,23 +401,28 @@ impl Compiler {
     fn compile_expr(&mut self, expr: &Expr) -> Result<(), RuminaError> {
         match expr {
             Expr::Int(n) => {
-                self.emit(OpCode::PushConst(Value::Int(*n)));
+                let index = self.bytecode.add_constant(Value::Int(*n));
+                self.emit(OpCode::PushConstPooled(index));
             }
 
             Expr::Float(f) => {
-                self.emit(OpCode::PushConst(Value::Float(*f)));
+                let index = self.bytecode.add_constant(Value::Float(*f));
+                self.emit(OpCode::PushConstPooled(index));
             }
 
             Expr::String(s) => {
-                self.emit(OpCode::PushConst(Value::String(s.clone())));
+                let index = self.bytecode.add_constant(Value::String(s.clone()));
+                self.emit(OpCode::PushConstPooled(index));
             }
 
             Expr::Bool(b) => {
-                self.emit(OpCode::PushConst(Value::Bool(*b)));
+                let index = self.bytecode.add_constant(Value::Bool(*b));
+                self.emit(OpCode::PushConstPooled(index));
             }
 
             Expr::Null => {
-                self.emit(OpCode::PushConst(Value::Null));
+                let index = self.bytecode.add_constant(Value::Null);
+                self.emit(OpCode::PushConstPooled(index));
             }
 
             Expr::Ident(name) => {
@@ -541,7 +548,8 @@ impl Compiler {
                 });
 
                 // Now push a marker that tells VM this is a lambda with this ID
-                self.emit(OpCode::PushConst(Value::String(lambda_id.clone())));
+                let index = self.bytecode.add_constant(Value::String(lambda_id.clone()));
+                self.emit(OpCode::PushConstPooled(index));
                 self.emit(OpCode::MakeLambda {
                     params: params.clone(),
                     body_start,

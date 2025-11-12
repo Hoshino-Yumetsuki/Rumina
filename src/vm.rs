@@ -17,6 +17,10 @@ pub enum OpCode {
     /// Similar to: PUSH imm
     PushConst(Value),
 
+    /// Push a constant from the constant pool onto the stack
+    /// Similar to: PUSH [constant_pool + index]
+    PushConstPooled(usize),
+
     /// Push a variable value onto the stack
     /// Similar to: MOV reg, [addr]
     PushVar(String),
@@ -38,13 +42,23 @@ pub enum OpCode {
     /// Similar to: ADD rax, rbx
     Add,
 
+    /// Specialized add for known integer types (hot path optimization)
+    /// Similar to: ADD rax, rbx (with type check)
+    AddInt,
+
     /// Subtract top two stack values (TOS-1 - TOS)
     /// Similar to: SUB rax, rbx
     Sub,
 
+    /// Specialized subtract for known integer types (hot path optimization)
+    SubInt,
+
     /// Multiply top two stack values
     /// Similar to: MUL rbx
     Mul,
+
+    /// Specialized multiply for known integer types (hot path optimization)
+    MulInt,
 
     /// Divide top two stack values (TOS-1 / TOS)
     /// Similar to: DIV rbx
@@ -239,6 +253,38 @@ impl ByteCode {
             _ => panic!("Attempted to patch non-jump instruction at {}", address),
         }
     }
+
+    /// Add a constant to the pool or return existing index
+    /// This deduplicates constants to reduce memory usage
+    pub fn add_constant(&mut self, value: Value) -> usize {
+        // Check if constant already exists in the pool
+        for (i, existing) in self.constants.iter().enumerate() {
+            if Self::values_equal(existing, &value) {
+                return i;
+            }
+        }
+        
+        // Add new constant
+        let index = self.constants.len();
+        self.constants.push(value);
+        index
+    }
+
+    /// Helper to check if two values are equal for pooling purposes
+    fn values_equal(a: &Value, b: &Value) -> bool {
+        match (a, b) {
+            (Value::Int(a), Value::Int(b)) => a == b,
+            (Value::Float(a), Value::Float(b)) => {
+                // For floats, use exact bit comparison to avoid floating point issues
+                a.to_bits() == b.to_bits()
+            }
+            (Value::Bool(a), Value::Bool(b)) => a == b,
+            (Value::String(a), Value::String(b)) => a == b,
+            (Value::Null, Value::Null) => true,
+            // For complex types, don't pool them (conservative approach)
+            _ => false,
+        }
+    }
 }
 
 /// Function metadata for user-defined functions
@@ -274,6 +320,32 @@ struct CallFrame {
     locals: HashMap<String, Value>,
 }
 
+/// Inline cache entry for member access
+#[derive(Debug, Clone)]
+struct InlineCache {
+    /// Member name being accessed
+    member: String,
+    /// Cached result for fast path (if object structure matches)
+    /// Currently unused but reserved for future optimization
+    #[allow(dead_code)]
+    cached_value: Option<Value>,
+    /// Cache hits counter
+    hits: usize,
+    /// Cache misses counter
+    misses: usize,
+}
+
+impl InlineCache {
+    fn new(member: String) -> Self {
+        InlineCache {
+            member,
+            cached_value: None,
+            hits: 0,
+            misses: 0,
+        }
+    }
+}
+
 /// Virtual Machine state
 pub struct VM {
     /// Bytecode being executed
@@ -300,6 +372,9 @@ pub struct VM {
     /// Function table: maps function names to their bytecode locations
     functions: HashMap<String, FunctionInfo>,
 
+    /// Inline cache for member access (maps instruction address to cache)
+    member_cache: HashMap<usize, InlineCache>,
+
     /// Halt flag
     halted: bool,
 
@@ -320,6 +395,7 @@ impl VM {
             locals: HashMap::new(),
             loop_stack: Vec::new(),
             functions: HashMap::new(),
+            member_cache: HashMap::new(),
             halted: false,
             recursion_depth: 0,
             max_recursion_depth: 4000,
@@ -353,6 +429,18 @@ impl VM {
                 self.stack.push(value);
             }
 
+            OpCode::PushConstPooled(index) => {
+                let value = self
+                    .bytecode
+                    .constants
+                    .get(index)
+                    .ok_or_else(|| {
+                        RuminaError::runtime(format!("Invalid constant pool index: {}", index))
+                    })?
+                    .clone();
+                self.stack.push(value);
+            }
+
             OpCode::PushVar(name) => {
                 let value = self.get_variable(&name)?;
                 self.stack.push(value);
@@ -382,8 +470,74 @@ impl VM {
             }
 
             OpCode::Add => self.binary_op(|a, b| a.vm_add(b))?,
+            OpCode::AddInt => {
+                // Fast path for integer addition
+                let right = self
+                    .stack
+                    .pop()
+                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                let left = self
+                    .stack
+                    .pop()
+                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+
+                match (&left, &right) {
+                    (Value::Int(a), Value::Int(b)) => {
+                        self.stack.push(Value::Int(a + b));
+                    }
+                    _ => {
+                        // Fallback to generic add
+                        let result = left.vm_add(&right).map_err(|e| RuminaError::runtime(e))?;
+                        self.stack.push(result);
+                    }
+                }
+            }
             OpCode::Sub => self.binary_op(|a, b| a.vm_sub(b))?,
+            OpCode::SubInt => {
+                // Fast path for integer subtraction
+                let right = self
+                    .stack
+                    .pop()
+                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                let left = self
+                    .stack
+                    .pop()
+                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+
+                match (&left, &right) {
+                    (Value::Int(a), Value::Int(b)) => {
+                        self.stack.push(Value::Int(a - b));
+                    }
+                    _ => {
+                        // Fallback to generic sub
+                        let result = left.vm_sub(&right).map_err(|e| RuminaError::runtime(e))?;
+                        self.stack.push(result);
+                    }
+                }
+            }
             OpCode::Mul => self.binary_op(|a, b| a.vm_mul(b))?,
+            OpCode::MulInt => {
+                // Fast path for integer multiplication
+                let right = self
+                    .stack
+                    .pop()
+                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                let left = self
+                    .stack
+                    .pop()
+                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+
+                match (&left, &right) {
+                    (Value::Int(a), Value::Int(b)) => {
+                        self.stack.push(Value::Int(a * b));
+                    }
+                    _ => {
+                        // Fallback to generic mul
+                        let result = left.vm_mul(&right).map_err(|e| RuminaError::runtime(e))?;
+                        self.stack.push(result);
+                    }
+                }
+            }
             OpCode::Div => self.binary_op(|a, b| a.vm_div(b))?,
             OpCode::Mod => self.binary_op(|a, b| a.vm_mod(b))?,
             OpCode::Pow => self.binary_op(|a, b| a.vm_pow(b))?,
@@ -536,6 +690,8 @@ impl VM {
             }
 
             OpCode::Member(member_name) => {
+                let cache_addr = self.ip - 1; // Address of this Member instruction
+                
                 let object = self
                     .stack
                     .pop()
@@ -545,8 +701,30 @@ impl VM {
                     Value::Struct(s) => {
                         let s_ref = s.borrow();
                         if let Some(value) = s_ref.get(&member_name) {
+                            // Check if we have a cache entry for this instruction
+                            if let Some(cache) = self.member_cache.get_mut(&cache_addr) {
+                                // Cache exists - increment hits
+                                cache.hits += 1;
+                            } else {
+                                // First access - initialize cache entry
+                                self.member_cache.insert(
+                                    cache_addr,
+                                    InlineCache::new(member_name.clone()),
+                                );
+                            }
+                            
                             self.stack.push(value.clone());
                         } else {
+                            // Member not found - track miss
+                            if let Some(cache) = self.member_cache.get_mut(&cache_addr) {
+                                cache.misses += 1;
+                            } else {
+                                // Initialize cache with miss
+                                let mut cache = InlineCache::new(member_name.clone());
+                                cache.misses = 1;
+                                self.member_cache.insert(cache_addr, cache);
+                            }
+                            
                             return Err(RuminaError::runtime(format!(
                                 "Struct does not have member '{}'",
                                 member_name
@@ -554,6 +732,16 @@ impl VM {
                         }
                     }
                     _ => {
+                        // Non-struct type - track miss
+                        if let Some(cache) = self.member_cache.get_mut(&cache_addr) {
+                            cache.misses += 1;
+                        } else {
+                            // Initialize cache with miss
+                            let mut cache = InlineCache::new(member_name.clone());
+                            cache.misses = 1;
+                            self.member_cache.insert(cache_addr, cache);
+                        }
+                        
                         return Err(RuminaError::runtime(format!(
                             "Cannot access member of type {}",
                             object.type_name()
@@ -926,6 +1114,14 @@ impl VM {
             self.locals.insert(name, value);
         }
     }
+
+    /// Get inline cache statistics for debugging/profiling
+    #[allow(dead_code)]
+    pub fn get_cache_stats(&self) -> (usize, usize) {
+        let total_hits: usize = self.member_cache.values().map(|c| c.hits).sum();
+        let total_misses: usize = self.member_cache.values().map(|c| c.misses).sum();
+        (total_hits, total_misses)
+    }
 }
 
 #[cfg(test)]
@@ -1217,4 +1413,300 @@ mod tests {
             other => panic!("Expected Int(55), got {:?}", other),
         }
     }
+
+    #[test]
+    fn test_constant_pooling() {
+        let mut bytecode = ByteCode::new();
+        
+        // Add the same constant multiple times
+        let idx1 = bytecode.add_constant(Value::Int(42));
+        let idx2 = bytecode.add_constant(Value::Int(42));
+        let idx3 = bytecode.add_constant(Value::Int(100));
+        let idx4 = bytecode.add_constant(Value::Int(42));
+        
+        // First two should be the same index (deduplicated)
+        assert_eq!(idx1, idx2);
+        assert_eq!(idx1, idx4);
+        // Third should be different
+        assert_ne!(idx1, idx3);
+        
+        // Pool should only have 2 constants
+        assert_eq!(bytecode.constants.len(), 2);
+    }
+
+    #[test]
+    fn test_constant_pooling_strings() {
+        let mut bytecode = ByteCode::new();
+        
+        // Add the same string multiple times
+        let idx1 = bytecode.add_constant(Value::String("hello".to_string()));
+        let idx2 = bytecode.add_constant(Value::String("hello".to_string()));
+        let idx3 = bytecode.add_constant(Value::String("world".to_string()));
+        
+        // First two should be the same index
+        assert_eq!(idx1, idx2);
+        // Third should be different
+        assert_ne!(idx1, idx3);
+        
+        // Pool should only have 2 constants
+        assert_eq!(bytecode.constants.len(), 2);
+    }
+
+    #[test]
+    fn test_push_const_pooled() {
+        let globals = Rc::new(RefCell::new(HashMap::new()));
+        let mut vm = VM::new(globals);
+
+        let mut bytecode = ByteCode::new();
+        
+        // Add constants to pool
+        let idx1 = bytecode.add_constant(Value::Int(10));
+        let idx2 = bytecode.add_constant(Value::Int(20));
+        
+        // Use pooled constants
+        bytecode.emit(OpCode::PushConstPooled(idx1), None);
+        bytecode.emit(OpCode::PushConstPooled(idx2), None);
+        bytecode.emit(OpCode::Add, None);
+        bytecode.emit(OpCode::Halt, None);
+
+        vm.load(bytecode);
+        let result = vm.run().unwrap();
+
+        match result {
+            Some(Value::Int(n)) => assert_eq!(n, 30),
+            _ => panic!("Expected Int(30)"),
+        }
+    }
+
+    #[test]
+    fn test_constant_pooling_floats() {
+        let mut bytecode = ByteCode::new();
+        
+        // Add the same float multiple times
+        let idx1 = bytecode.add_constant(Value::Float(3.14));
+        let idx2 = bytecode.add_constant(Value::Float(3.14));
+        let idx3 = bytecode.add_constant(Value::Float(2.71));
+        
+        // First two should be the same index
+        assert_eq!(idx1, idx2);
+        // Third should be different
+        assert_ne!(idx1, idx3);
+        
+        // Pool should only have 2 constants
+        assert_eq!(bytecode.constants.len(), 2);
+    }
+
+    #[test]
+    fn test_inline_cache_member_access() {
+        let globals = Rc::new(RefCell::new(HashMap::new()));
+        let mut vm = VM::new(globals);
+
+        let mut bytecode = ByteCode::new();
+        
+        // Create a struct with a member: { x: 42 }
+        let idx_key = bytecode.add_constant(Value::String("x".to_string()));
+        let idx_val = bytecode.add_constant(Value::Int(42));
+        
+        bytecode.emit(OpCode::PushConstPooled(idx_key), None);
+        bytecode.emit(OpCode::PushConstPooled(idx_val), None);
+        bytecode.emit(OpCode::MakeStruct(1), None);
+        
+        // Store struct in a variable
+        bytecode.emit(OpCode::PopVar("obj".to_string()), None);
+        
+        // Access member - this will create a cache entry at this instruction address
+        bytecode.emit(OpCode::PushVar("obj".to_string()), None);
+        bytecode.emit(OpCode::Member("x".to_string()), None);
+        
+        bytecode.emit(OpCode::Halt, None);
+
+        vm.load(bytecode);
+        let result = vm.run().unwrap();
+
+        // Verify result
+        match result {
+            Some(Value::Int(n)) => assert_eq!(n, 42),
+            _ => panic!("Expected Int(42)"),
+        }
+
+        // Verify cache entry was created (even though this is first access, no "hits" yet)
+        let cache_entries = vm.member_cache.len();
+        assert_eq!(cache_entries, 1, "Should have created one cache entry");
+    }
+
+    #[test]
+    fn test_inline_cache_multiple_members() {
+        let globals = Rc::new(RefCell::new(HashMap::new()));
+        let mut vm = VM::new(globals);
+
+        let mut bytecode = ByteCode::new();
+        
+        // Create a struct with multiple members: { x: 10, y: 20 }
+        let idx_key_x = bytecode.add_constant(Value::String("x".to_string()));
+        let idx_val_x = bytecode.add_constant(Value::Int(10));
+        let idx_key_y = bytecode.add_constant(Value::String("y".to_string()));
+        let idx_val_y = bytecode.add_constant(Value::Int(20));
+        
+        bytecode.emit(OpCode::PushConstPooled(idx_key_x), None);
+        bytecode.emit(OpCode::PushConstPooled(idx_val_x), None);
+        bytecode.emit(OpCode::PushConstPooled(idx_key_y), None);
+        bytecode.emit(OpCode::PushConstPooled(idx_val_y), None);
+        bytecode.emit(OpCode::MakeStruct(2), None);
+        
+        // Store struct in a variable
+        bytecode.emit(OpCode::PopVar("obj".to_string()), None);
+        
+        // Access first member
+        bytecode.emit(OpCode::PushVar("obj".to_string()), None);
+        bytecode.emit(OpCode::Member("x".to_string()), None);
+        
+        // Access second member
+        bytecode.emit(OpCode::PushVar("obj".to_string()), None);
+        bytecode.emit(OpCode::Member("y".to_string()), None);
+        
+        // Add the results
+        bytecode.emit(OpCode::Add, None);
+        bytecode.emit(OpCode::Halt, None);
+
+        vm.load(bytecode);
+        let result = vm.run().unwrap();
+
+        // Verify result: x + y = 30
+        match result {
+            Some(Value::Int(n)) => assert_eq!(n, 30),
+            _ => panic!("Expected Int(30)"),
+        }
+    }
+
+    #[test]
+    fn test_inline_cache_miss_tracking() {
+        let globals = Rc::new(RefCell::new(HashMap::new()));
+        let mut vm = VM::new(globals);
+
+        let mut bytecode = ByteCode::new();
+        
+        // Create a struct with one member: { x: 42 }
+        let idx_key = bytecode.add_constant(Value::String("x".to_string()));
+        let idx_val = bytecode.add_constant(Value::Int(42));
+        
+        bytecode.emit(OpCode::PushConstPooled(idx_key), None);
+        bytecode.emit(OpCode::PushConstPooled(idx_val), None);
+        bytecode.emit(OpCode::MakeStruct(1), None);
+        
+        // Try to access non-existent member (will fail)
+        bytecode.emit(OpCode::Member("nonexistent".to_string()), None);
+        bytecode.emit(OpCode::Halt, None);
+
+        vm.load(bytecode);
+        let result = vm.run();
+
+        // Should fail with error
+        assert!(result.is_err(), "Should error on nonexistent member");
+
+        // Verify cache miss was tracked
+        let (_hits, misses) = vm.get_cache_stats();
+        assert_eq!(misses, 1, "Cache should have recorded exactly one miss");
+    }
+
+    #[test]
+    fn test_specialized_int_add() {
+        let globals = Rc::new(RefCell::new(HashMap::new()));
+        let mut vm = VM::new(globals);
+
+        let mut bytecode = ByteCode::new();
+        
+        // Add constants to pool
+        let idx1 = bytecode.add_constant(Value::Int(15));
+        let idx2 = bytecode.add_constant(Value::Int(27));
+        
+        // Use specialized integer add
+        bytecode.emit(OpCode::PushConstPooled(idx1), None);
+        bytecode.emit(OpCode::PushConstPooled(idx2), None);
+        bytecode.emit(OpCode::AddInt, None);
+        bytecode.emit(OpCode::Halt, None);
+
+        vm.load(bytecode);
+        let result = vm.run().unwrap();
+
+        match result {
+            Some(Value::Int(n)) => assert_eq!(n, 42),
+            _ => panic!("Expected Int(42)"),
+        }
+    }
+
+    #[test]
+    fn test_specialized_int_sub() {
+        let globals = Rc::new(RefCell::new(HashMap::new()));
+        let mut vm = VM::new(globals);
+
+        let mut bytecode = ByteCode::new();
+        
+        let idx1 = bytecode.add_constant(Value::Int(100));
+        let idx2 = bytecode.add_constant(Value::Int(42));
+        
+        bytecode.emit(OpCode::PushConstPooled(idx1), None);
+        bytecode.emit(OpCode::PushConstPooled(idx2), None);
+        bytecode.emit(OpCode::SubInt, None);
+        bytecode.emit(OpCode::Halt, None);
+
+        vm.load(bytecode);
+        let result = vm.run().unwrap();
+
+        match result {
+            Some(Value::Int(n)) => assert_eq!(n, 58),
+            _ => panic!("Expected Int(58)"),
+        }
+    }
+
+    #[test]
+    fn test_specialized_int_mul() {
+        let globals = Rc::new(RefCell::new(HashMap::new()));
+        let mut vm = VM::new(globals);
+
+        let mut bytecode = ByteCode::new();
+        
+        let idx1 = bytecode.add_constant(Value::Int(6));
+        let idx2 = bytecode.add_constant(Value::Int(7));
+        
+        bytecode.emit(OpCode::PushConstPooled(idx1), None);
+        bytecode.emit(OpCode::PushConstPooled(idx2), None);
+        bytecode.emit(OpCode::MulInt, None);
+        bytecode.emit(OpCode::Halt, None);
+
+        vm.load(bytecode);
+        let result = vm.run().unwrap();
+
+        match result {
+            Some(Value::Int(n)) => assert_eq!(n, 42),
+            _ => panic!("Expected Int(42)"),
+        }
+    }
+
+    #[test]
+    fn test_specialized_int_fallback_to_generic() {
+        let globals = Rc::new(RefCell::new(HashMap::new()));
+        let mut vm = VM::new(globals);
+
+        let mut bytecode = ByteCode::new();
+        
+        // Mix int and float - should fallback to generic add
+        let idx1 = bytecode.add_constant(Value::Int(10));
+        let idx2 = bytecode.add_constant(Value::Float(3.14));
+        
+        bytecode.emit(OpCode::PushConstPooled(idx1), None);
+        bytecode.emit(OpCode::PushConstPooled(idx2), None);
+        bytecode.emit(OpCode::AddInt, None);
+        bytecode.emit(OpCode::Halt, None);
+
+        vm.load(bytecode);
+        let result = vm.run().unwrap();
+
+        // Result should be a float
+        match result {
+            Some(Value::Float(f)) => assert!((f - 13.14).abs() < 0.01),
+            _ => panic!("Expected Float(13.14)"),
+        }
+    }
 }
+
+

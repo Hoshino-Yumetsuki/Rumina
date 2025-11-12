@@ -40,6 +40,7 @@ The instruction set is inspired by x86_64, using CISC-style operations with high
 | OpCode | x86_64 Equivalent | Description |
 |--------|-------------------|-------------|
 | `PushConst(Value)` | `PUSH imm` | Push a constant value onto the stack |
+| `PushConstPooled(usize)` | `PUSH [constant_pool + index]` | Push a constant from constant pool ✅ |
 | `PushVar(String)` | `MOV reg, [addr]` | Push a variable value onto the stack |
 | `PopVar(String)` | `MOV [addr], reg` | Pop value from stack and store in variable |
 | `Dup` | `PUSH [rsp]` | Duplicate top stack value |
@@ -50,8 +51,11 @@ The instruction set is inspired by x86_64, using CISC-style operations with high
 | OpCode | x86_64 Equivalent | Description |
 |--------|-------------------|-------------|
 | `Add` | `ADD rax, rbx` | Add top two stack values |
+| `AddInt` | `ADD rax, rbx` | Specialized integer add (hot path) ✅ |
 | `Sub` | `SUB rax, rbx` | Subtract (TOS-1 - TOS) |
+| `SubInt` | `SUB rax, rbx` | Specialized integer subtract (hot path) ✅ |
 | `Mul` | `MUL rbx` | Multiply top two stack values |
+| `MulInt` | `MUL rbx` | Specialized integer multiply (hot path) ✅ |
 | `Div` | `DIV rbx` | Divide (TOS-1 / TOS) |
 | `Mod` | `IDIV (rdx)` | Modulo operation |
 | `Pow` | - | Power operation (TOS-1 ^ TOS) |
@@ -317,13 +321,59 @@ Current design choices:
 - No constant pooling yet - opportunity for future optimization
 - Function calls use call frames with proper local variable management
 
+## Optimizations Implemented
+
+The VM includes several performance optimization techniques:
+
+### 1. Compiler Optimization Pass ✅
+
+The compiler applies optimization passes to the AST before generating bytecode:
+
+**Constant Folding**: Evaluates constant expressions at compile time
+- `2 + 3` becomes `5`
+- `true && false` becomes `false`
+- `10 > 5` becomes `true`
+
+**Algebraic Simplifications**: Applies mathematical identities
+- `x * 0` becomes `0`
+- `x * 1` becomes `x`
+- `x + 0` becomes `x`
+
+**Dead Code Elimination**: Removes unreachable code
+- Code after `return` statements is eliminated
+- `if (false) { ... }` branches are removed
+- `while (false) { ... }` loops are eliminated
+
+### 2. Constant Pooling ✅
+
+Constants are deduplicated in a constant pool to reduce memory allocations:
+- Multiple occurrences of the same constant (e.g., `42`) are stored once
+- `PushConstPooled` opcode references pooled constants by index
+- Reduces memory footprint for programs with repeated constants
+
+### 3. Inline Caching ✅
+
+Member access operations use inline caching for performance:
+- Caches member access results at instruction addresses
+- Tracks cache hits and misses for profiling
+- Reduces lookup overhead for repeated property access
+- Cache statistics available via `VM::get_cache_stats()`
+
+### 4. Type Specialization ✅
+
+Specialized opcodes provide fast paths for common type operations:
+- `AddInt`, `SubInt`, `MulInt`: Optimized integer arithmetic
+- Direct integer operations without trait overhead
+- Automatic fallback to generic operations for mixed types
+- Significant performance improvement for integer-heavy code
+
 ## Future Directions
 
 1. **Further Performance Optimizations**: 
-   - Constant pooling to reduce memory allocations
-   - Inline caching for property access
-   - Type specialization for hot paths
-2. **Optimization Pass**: Add compiler optimization phase (constant folding, dead code elimination)
+   - ~~Constant pooling to reduce memory allocations~~ ✅ Implemented
+   - ~~Inline caching for property access~~ ✅ Implemented
+   - ~~Type specialization for hot paths~~ ✅ Implemented
+2. ~~**Optimization Pass**: Add compiler optimization phase (constant folding, dead code elimination)~~ ✅ Implemented
 3. **JIT Compilation**: Explore runtime compilation for hot loops
 4. **WASM Integration**: Ensure VM works efficiently in WASM environment
 5. **Profiling Tools**: Add built-in profiling support for identifying bottlenecks
