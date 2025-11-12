@@ -194,16 +194,8 @@ pub fn value_binary_op(left: &Value, op: BinOp, right: &Value) -> Result<Value, 
                         let result = (*a as f64).powf(*b as f64);
                         Ok(Value::Float(result))
                     } else {
-                        // Positive exponent: try int, fallback to BigInt on overflow
-                        match a.checked_pow(*b as u32) {
-                            Some(result) => Ok(Value::Int(result)),
-                            None => {
-                                // Overflow: use BigInt
-                                let base = BigInt::from(*a);
-                                let exp = *b as usize;
-                                Ok(Value::BigInt(num::pow(base, exp)))
-                            }
-                        }
+                        // Positive exponent: keep as int
+                        Ok(Value::Int(a.pow(*b as u32)))
                     }
                 }
                 BinOp::Equal => Ok(Value::Bool(a == b)),

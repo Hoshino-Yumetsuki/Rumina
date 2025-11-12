@@ -85,6 +85,9 @@ pub struct Compiler {
 
     /// Lambda counter for unique IDs
     lambda_counter: usize,
+
+    /// Use BigInt for integer literals (LSR 007 compliance)
+    use_bigint_by_default: bool,
 }
 
 impl Compiler {
@@ -95,6 +98,19 @@ impl Compiler {
             loop_stack: Vec::new(),
             current_line: None,
             lambda_counter: 0,
+            use_bigint_by_default: false,
+        }
+    }
+
+    /// Create a new compiler with BigInt mode enabled (LSR 007 compliance)
+    pub fn new_with_bigint_mode() -> Self {
+        Compiler {
+            bytecode: ByteCode::new(),
+            symbols: SymbolTable::new(),
+            loop_stack: Vec::new(),
+            current_line: None,
+            lambda_counter: 0,
+            use_bigint_by_default: true,
         }
     }
 
@@ -401,8 +417,15 @@ impl Compiler {
     fn compile_expr(&mut self, expr: &Expr) -> Result<(), RuminaError> {
         match expr {
             Expr::Int(n) => {
-                let index = self.bytecode.add_constant(Value::Int(*n));
-                self.emit(OpCode::PushConstPooled(index));
+                // LSR 007: Use BigInt by default in REPL mode
+                if self.use_bigint_by_default {
+                    use num::BigInt;
+                    let index = self.bytecode.add_constant(Value::BigInt(BigInt::from(*n)));
+                    self.emit(OpCode::PushConstPooled(index));
+                } else {
+                    let index = self.bytecode.add_constant(Value::Int(*n));
+                    self.emit(OpCode::PushConstPooled(index));
+                }
             }
 
             Expr::Float(f) => {

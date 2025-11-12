@@ -230,7 +230,8 @@ fn execute_input_vm(
     let mut parser = Parser::new(tokens);
     let ast = parser.parse().map_err(|e| RuminaError::runtime(e))?;
 
-    let mut compiler = Compiler::new();
+    // LSR 007: Use BigInt by default in REPL mode
+    let mut compiler = Compiler::new_with_bigint_mode();
     let bytecode = compiler.compile(ast)?;
 
     let mut vm = VM::new(globals.clone());
