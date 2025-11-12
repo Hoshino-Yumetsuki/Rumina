@@ -9,7 +9,7 @@ use crate::value::*;
 
 // Submodules for code organization
 mod call;
-mod convert;
+pub(crate) mod convert;
 mod expr;
 mod operators;
 mod stmt;

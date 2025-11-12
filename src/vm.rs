@@ -209,6 +209,10 @@ pub enum OpCode {
     /// Halt execution
     /// Similar to: HLT
     Halt,
+
+    // ===== Type Conversion Instructions =====
+    /// Convert top stack value to specified type
+    ConvertType(DeclaredType),
 }
 
 /// Bytecode chunk - compiled function or program
@@ -1543,6 +1547,12 @@ impl VM {
                 ));
             }
 
+            OpCode::ConvertType(dtype) => {
+                let val = self.pop()?;
+                let converted = self.convert_to_type(val, dtype)?;
+                self.push(converted);
+            }
+
             OpCode::Halt => {
                 self.halted = true;
             }
@@ -1573,6 +1583,13 @@ impl VM {
 
         self.stack.push(result);
         Ok(())
+    }
+
+    /// Convert value to specified type
+    fn convert_to_type(&self, val: Value, dtype: &DeclaredType) -> Result<Value, RuminaError> {
+        use crate::interpreter::convert;
+        convert::convert_to_declared_type(val, dtype)
+            .map_err(|e| RuminaError::runtime(e))
     }
 
     /// Get variable from locals or globals

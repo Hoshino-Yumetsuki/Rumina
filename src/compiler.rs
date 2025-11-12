@@ -141,9 +141,17 @@ impl Compiler {
                 // Keep expression result on stack for potential return value
             }
 
-            Stmt::VarDecl { name, value, .. } => {
+            Stmt::VarDecl { name, value, is_bigint, declared_type } => {
                 // Compile the value expression
                 self.compile_expr(value)?;
+
+                // Apply type conversion if declared_type is specified
+                if let Some(dtype) = declared_type {
+                    self.emit(OpCode::ConvertType(dtype.clone()));
+                } else if *is_bigint {
+                    // Backward compatibility
+                    self.emit(OpCode::ConvertType(DeclaredType::BigInt));
+                }
 
                 // Store in variable
                 self.emit(OpCode::PopVar(name.clone()));

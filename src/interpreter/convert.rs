@@ -3,7 +3,7 @@ use crate::ast::DeclaredType;
 use crate::value::{IrrationalValue, Value};
 use num::BigInt;
 
-pub(super) fn convert_to_declared_type(val: Value, dtype: &DeclaredType) -> Result<Value, String> {
+pub(crate) fn convert_to_declared_type(val: Value, dtype: &DeclaredType) -> Result<Value, String> {
     match dtype {
         DeclaredType::Int => convert_to_int(val),
         DeclaredType::Float => convert_to_float(val),
