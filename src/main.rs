@@ -186,7 +186,10 @@ fn run_repl() {
         // Execute input using VM - globals are shared so state persists
         match execute_input_vm(&globals, input) {
             Ok(Some(value)) => {
-                println!("{}", value);
+                // Don't print null values
+                if !matches!(value, rumina::Value::Null) {
+                    println!("{}", value);
+                }
             }
             Ok(None) => {}
             Err(err) => eprint!("{}", err.format_error()),
