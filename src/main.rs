@@ -2,6 +2,7 @@ use rumina::{Compiler, Interpreter, Lexer, Parser, RuminaError, VM};
 use std::env;
 use std::fs;
 use std::io::{self, Write};
+use std::panic;
 
 use std::sync::{
     Arc,
@@ -184,12 +185,23 @@ fn run_repl() {
         }
 
         // Execute input using VM - globals are shared so state persists
-        match execute_input_vm(&globals, input) {
-            Ok(Some(value)) => {
-                println!("{}", value);
+        // Catch panics to prevent REPL from crashing
+        let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+            execute_input_vm(&globals, input)
+        }));
+
+        match result {
+            Ok(Ok(Some(value))) => {
+                // Don't print null values (e.g., from print() function)
+                if !matches!(value, rumina::Value::Null) {
+                    println!("{}", value);
+                }
             }
-            Ok(None) => {}
-            Err(err) => eprint!("{}", err.format_error()),
+            Ok(Ok(None)) => {}
+            Ok(Err(err)) => eprint!("{}", err.format_error()),
+            Err(_) => {
+                eprintln!("Error: A panic occurred during execution");
+            }
         }
 
         line_number += 1;
