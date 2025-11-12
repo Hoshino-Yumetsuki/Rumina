@@ -82,6 +82,9 @@ pub struct Compiler {
 
     /// Current line number (for debugging)
     current_line: Option<usize>,
+
+    /// Lambda counter for unique IDs
+    lambda_counter: usize,
 }
 
 impl Compiler {
@@ -91,6 +94,7 @@ impl Compiler {
             symbols: SymbolTable::new(),
             loop_stack: Vec::new(),
             current_line: None,
+            lambda_counter: 0,
         }
     }
 
@@ -227,6 +231,78 @@ impl Compiler {
 
                 // Patch end jump
                 self.patch_jump(end_jump);
+
+                // Patch all break statements
+                if let Some(loop_ctx) = self.loop_stack.pop() {
+                    let break_target = self.current_address();
+                    for break_addr in loop_ctx.break_patches {
+                        self.bytecode.patch_jump(break_addr, break_target);
+                    }
+                }
+            }
+
+            Stmt::For {
+                init,
+                condition,
+                update,
+                body,
+            } => {
+                // Compile initialization (if present)
+                if let Some(init_stmt) = init {
+                    self.compile_stmt(init_stmt)?;
+                }
+
+                // Mark loop start (for continue, we'll jump to update)
+                let condition_start = self.current_address();
+
+                // Compile condition (if present)
+                let end_jump = if let Some(cond_expr) = condition {
+                    self.compile_expr(cond_expr)?;
+                    Some(self.emit_jump(OpCode::JumpIfFalse(0)))
+                } else {
+                    None
+                };
+
+                // Remember where update starts (for continue)
+                let update_placeholder = self.current_address();
+
+                // Push loop context - continue jumps to update section
+                self.loop_stack.push(LoopContext {
+                    continue_target: update_placeholder,
+                    break_patches: Vec::new(),
+                });
+
+                // Jump over update to body
+                let body_jump = self.emit_jump(OpCode::Jump(0));
+
+                // Compile update section
+                let update_start = self.current_address();
+                if let Some(update_stmt) = update {
+                    self.compile_stmt(update_stmt)?;
+                }
+                // Jump back to condition
+                self.emit(OpCode::Jump(condition_start));
+
+                // Patch body jump to here
+                self.patch_jump(body_jump);
+
+                // Update the loop context with correct continue target
+                if let Some(loop_ctx) = self.loop_stack.last_mut() {
+                    loop_ctx.continue_target = update_start;
+                }
+
+                // Compile body
+                for stmt in body {
+                    self.compile_stmt(stmt)?;
+                }
+
+                // Jump to update
+                self.emit(OpCode::Jump(update_start));
+
+                // Patch end jump (if condition exists)
+                if let Some(end_addr) = end_jump {
+                    self.patch_jump(end_addr);
+                }
 
                 // Patch all break statements
                 if let Some(loop_ctx) = self.loop_stack.pop() {
@@ -422,6 +498,55 @@ impl Compiler {
             Expr::Member { object, member } => {
                 self.compile_expr(object)?;
                 self.emit(OpCode::Member(member.clone()));
+            }
+
+            Expr::Lambda { params, body, .. } => {
+                // Generate unique lambda ID
+                let lambda_id = format!("__lambda_{}", self.lambda_counter);
+                self.lambda_counter += 1;
+
+                // Skip over the lambda body (similar to function definition)
+                let skip_jump = self.emit_jump(OpCode::Jump(0));
+
+                let body_start = self.current_address();
+
+                // Compile lambda body
+                self.symbols.enter_scope();
+                for param in params {
+                    self.symbols.define(param.clone());
+                }
+
+                // Lambda body is a statement - could be a block or an expression
+                self.compile_stmt(body)?;
+
+                // For simple lambdas (expressions), the result is already on stack
+                // For complex lambdas, we need to ensure proper return
+                self.emit(OpCode::Return);
+
+                self.symbols.exit_scope();
+
+                let body_end = self.current_address();
+
+                // Patch skip jump
+                self.patch_jump(skip_jump);
+
+                // Create the lambda value and push it on stack
+                // Store lambda_id in the bytecode so VM can register it
+                self.emit(OpCode::DefineFunc {
+                    name: lambda_id.clone(),
+                    params: params.clone(),
+                    body_start,
+                    body_end,
+                    decorators: vec![],
+                });
+
+                // Now push a marker that tells VM this is a lambda with this ID
+                self.emit(OpCode::PushConst(Value::String(lambda_id.clone())));
+                self.emit(OpCode::MakeLambda {
+                    params: params.clone(),
+                    body_start,
+                    body_end,
+                });
             }
 
             _ => {
@@ -676,6 +801,162 @@ mod tests {
         match result {
             Some(Value::Int(n)) => assert_eq!(n, 21), // fib(8) = 21
             _ => panic!("Expected Int(21), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn test_compile_and_run_for_loop() {
+        use crate::vm::VM;
+        use std::cell::RefCell;
+        use std::collections::HashMap;
+        use std::rc::Rc;
+
+        let mut compiler = Compiler::new();
+
+        // Compile: let sum = 0; for (let i = 1; i <= 5; i = i + 1) { sum = sum + i; } sum
+        let stmts = vec![
+            Stmt::VarDecl {
+                name: "sum".to_string(),
+                is_bigint: false,
+                declared_type: None,
+                value: Expr::Int(0),
+            },
+            Stmt::For {
+                init: Some(Box::new(Stmt::VarDecl {
+                    name: "i".to_string(),
+                    is_bigint: false,
+                    declared_type: None,
+                    value: Expr::Int(1),
+                })),
+                condition: Some(Expr::Binary {
+                    left: Box::new(Expr::Ident("i".to_string())),
+                    op: BinOp::LessEq,
+                    right: Box::new(Expr::Int(5)),
+                }),
+                update: Some(Box::new(Stmt::Assign {
+                    name: "i".to_string(),
+                    value: Expr::Binary {
+                        left: Box::new(Expr::Ident("i".to_string())),
+                        op: BinOp::Add,
+                        right: Box::new(Expr::Int(1)),
+                    },
+                })),
+                body: vec![Stmt::Assign {
+                    name: "sum".to_string(),
+                    value: Expr::Binary {
+                        left: Box::new(Expr::Ident("sum".to_string())),
+                        op: BinOp::Add,
+                        right: Box::new(Expr::Ident("i".to_string())),
+                    },
+                }],
+            },
+            Stmt::Expr(Expr::Ident("sum".to_string())),
+        ];
+
+        let bytecode = compiler.compile(stmts).unwrap();
+
+        let globals = Rc::new(RefCell::new(HashMap::new()));
+        let mut vm = VM::new(globals);
+        vm.load(bytecode);
+
+        let result = vm.run().unwrap();
+        match result {
+            Some(Value::Int(n)) => assert_eq!(n, 15), // 1+2+3+4+5 = 15
+            _ => panic!("Expected Int(15), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn test_compile_and_run_lambda() {
+        use crate::vm::VM;
+        use std::cell::RefCell;
+        use std::collections::HashMap;
+        use std::rc::Rc;
+
+        let mut compiler = Compiler::new();
+
+        // Compile: let add = |a, b| a + b; add(10, 20)
+        let stmts = vec![
+            Stmt::VarDecl {
+                name: "add".to_string(),
+                is_bigint: false,
+                declared_type: None,
+                value: Expr::Lambda {
+                    params: vec!["a".to_string(), "b".to_string()],
+                    body: Box::new(Stmt::Expr(Expr::Binary {
+                        left: Box::new(Expr::Ident("a".to_string())),
+                        op: BinOp::Add,
+                        right: Box::new(Expr::Ident("b".to_string())),
+                    })),
+                    is_simple: true,
+                },
+            },
+            Stmt::Expr(Expr::Call {
+                func: Box::new(Expr::Ident("add".to_string())),
+                args: vec![Expr::Int(10), Expr::Int(20)],
+            }),
+        ];
+
+        let bytecode = compiler.compile(stmts).unwrap();
+
+        let globals = Rc::new(RefCell::new(HashMap::new()));
+        let mut vm = VM::new(globals);
+        vm.load(bytecode);
+
+        let result = vm.run().unwrap();
+        match result {
+            Some(Value::Int(n)) => assert_eq!(n, 30),
+            _ => panic!("Expected Int(30), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn test_compile_and_run_lambda_with_closure() {
+        use crate::vm::VM;
+        use std::cell::RefCell;
+        use std::collections::HashMap;
+        use std::rc::Rc;
+
+        let mut compiler = Compiler::new();
+
+        // Compile: let x = 5; let add_x = |a| a + x; add_x(10)
+        let stmts = vec![
+            Stmt::VarDecl {
+                name: "x".to_string(),
+                is_bigint: false,
+                declared_type: None,
+                value: Expr::Int(5),
+            },
+            Stmt::VarDecl {
+                name: "add_x".to_string(),
+                is_bigint: false,
+                declared_type: None,
+                value: Expr::Lambda {
+                    params: vec!["a".to_string()],
+                    body: Box::new(Stmt::Expr(Expr::Binary {
+                        left: Box::new(Expr::Ident("a".to_string())),
+                        op: BinOp::Add,
+                        right: Box::new(Expr::Ident("x".to_string())),
+                    })),
+                    is_simple: true,
+                },
+            },
+            Stmt::Expr(Expr::Call {
+                func: Box::new(Expr::Ident("add_x".to_string())),
+                args: vec![Expr::Int(10)],
+            }),
+        ];
+
+        let bytecode = compiler.compile(stmts).unwrap();
+
+        let globals = Rc::new(RefCell::new(HashMap::new()));
+        let mut vm = VM::new(globals);
+        vm.load(bytecode);
+
+        let result = vm.run().unwrap();
+        match result {
+            Some(Value::Int(n)) => assert_eq!(n, 15), // 10 + 5 = 15
+            _ => panic!("Expected Int(15), got {:?}", result),
         }
     }
 }

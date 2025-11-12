@@ -717,6 +717,69 @@ impl VM {
                             )));
                         }
                     }
+                    Value::Lambda { params, body, closure, .. } => {
+                        // Check recursion depth
+                        if self.recursion_depth >= self.max_recursion_depth {
+                            return Err(RuminaError::runtime(format!(
+                                "Maximum recursion depth ({}) exceeded",
+                                self.max_recursion_depth
+                            )));
+                        }
+
+                        // Check parameter count
+                        if args.len() != params.len() {
+                            return Err(RuminaError::runtime(format!(
+                                "Lambda expects {} arguments, got {}",
+                                params.len(),
+                                args.len()
+                            )));
+                        }
+
+                        // Extract lambda_id from the body marker
+                        let lambda_id = match body.as_ref() {
+                            crate::ast::Stmt::Include(id) => id.clone(),
+                            _ => {
+                                // Fallback: try to find by params (less reliable)
+                                let mut found_id = None;
+                                for (name, _) in &self.functions {
+                                    if name.starts_with("__lambda_") {
+                                        found_id = Some(name.clone());
+                                        break;
+                                    }
+                                }
+                                found_id.ok_or_else(|| {
+                                    RuminaError::runtime("Lambda ID not found".to_string())
+                                })?
+                            }
+                        };
+
+                        // Look up the lambda function info
+                        let func_info = self.functions.get(&lambda_id).ok_or_else(|| {
+                            RuminaError::runtime(format!("Lambda '{}' not found", lambda_id))
+                        })?.clone();
+
+                        // Create new call frame
+                        let frame = CallFrame {
+                            return_address: self.ip,
+                            base_pointer: self.stack.len(),
+                            function_name: lambda_id.clone(),
+                            locals: std::mem::take(&mut self.locals), // Save current locals
+                        };
+
+                        // Push call frame
+                        self.call_stack.push(frame);
+                        self.recursion_depth += 1;
+
+                        // Set up parameters as local variables
+                        // Start with the closure environment
+                        self.locals = closure.borrow().clone();
+                        for (param_name, arg_value) in params.iter().zip(args.into_iter()) {
+                            self.locals.insert(param_name.clone(), arg_value);
+                        }
+
+                        // Jump to lambda body
+                        self.ip = func_info.body_start;
+                    }
                     _ => {
                         return Err(RuminaError::runtime(format!(
                             "Cannot call type {}",
@@ -752,10 +815,51 @@ impl VM {
                     .push(Value::Struct(Rc::new(RefCell::new(fields))));
             }
 
-            OpCode::MemberAssign(_)
-            | OpCode::IndexAssign
-            | OpCode::MakeLambda { .. }
-            | OpCode::Call(_) => {
+            OpCode::MakeLambda {
+                params,
+                body_start: _,
+                body_end: _,
+            } => {
+                // Pop the lambda_id from the stack
+                let lambda_id_value = self
+                    .stack
+                    .pop()
+                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+
+                let lambda_id = match lambda_id_value {
+                    Value::String(id) => id,
+                    _ => {
+                        return Err(RuminaError::runtime(
+                            "Expected lambda ID as string".to_string(),
+                        ))
+                    }
+                };
+
+                // Create a lambda value with current locals as closure
+                let closure = if !self.locals.is_empty() {
+                    // Clone current locals for the closure
+                    Rc::new(RefCell::new(self.locals.clone()))
+                } else {
+                    // Use globals as closure
+                    Rc::clone(&self.globals)
+                };
+
+                // Store the lambda_id in the body as an Include statement (marker)
+                // This allows us to identify which lambda this is when calling
+                let marker_body = Box::new(crate::ast::Stmt::Include(lambda_id.clone()));
+
+                let lambda_value = Value::Lambda {
+                    params: params.clone(),
+                    body: marker_body,
+                    closure,
+                };
+
+                // The lambda was already registered by DefineFunc, no need to store again
+                // Just push the lambda value onto stack
+                self.stack.push(lambda_value);
+            }
+
+            OpCode::MemberAssign(_) | OpCode::IndexAssign | OpCode::Call(_) => {
                 return Err(RuminaError::runtime(
                     "Opcode not yet implemented".to_string(),
                 ));
