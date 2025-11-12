@@ -191,8 +191,9 @@ Built-in functions are integrated through the interpreter's globals:
 - Compiler for all implemented AST constructs:
   - Variable declarations and assignments
   - Arithmetic, logical, and comparison operations
-  - Control flow (if/else, while loops, break/continue)
+  - Control flow (if/else, while loops, for loops, break/continue)
   - User-defined functions with parameters
+  - Lambda expressions with closure capture
   - Recursive function calls with proper call frames
   - Array and struct operations
   - Native function calls
@@ -200,13 +201,15 @@ Built-in functions are integrated through the interpreter's globals:
 - VM execution engine with stack-based operations
 - Variable storage (locals and globals with proper scoping)
 - Built-in function integration
-- Comprehensive test suite (48 unit tests + 2 performance tests)
+- Comprehensive test suite (51 unit tests + 2 performance tests)
 
 ### Not Yet Implemented ⚠️
-- Lambda/closure compilation (interpreter supports this, VM compiler does not yet)
-- For loop compilation (interpreter supports this, VM compiler does not yet)
+None - All major language features are now implemented in the VM compiler!
 
-**Note**: These features work in the interpreter but need compiler implementation for VM support. The VM will continue to work for all other language features.
+**Note**: The VM now supports all language features including lambda/closure compilation and for loop compilation. Both features include full support for:
+- Lambda expressions with closure capture
+- For loops with initialization, condition, update, and body
+- Break and continue statements in for loops
 
 ### Future Enhancements 🔮
 - Constant folding optimization
