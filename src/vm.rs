@@ -285,6 +285,336 @@ impl ByteCode {
             _ => false,
         }
     }
+
+    /// Serialize bytecode to plain text format (.rmc)
+    pub fn serialize(&self) -> String {
+        let mut output = String::new();
+        
+        // Header
+        output.push_str("RUMINA-BYTECODE-V1\n");
+        output.push_str(&format!("CONSTANTS: {}\n", self.constants.len()));
+        
+        // Constants section
+        for (i, constant) in self.constants.iter().enumerate() {
+            output.push_str(&format!("CONST[{}]: {}\n", i, Self::serialize_value(constant)));
+        }
+        
+        output.push_str("\nINSTRUCTIONS:\n");
+        
+        // Instructions section
+        for (i, (op, line)) in self.instructions.iter().zip(self.line_numbers.iter()).enumerate() {
+            let line_str = line.map_or("?".to_string(), |l| l.to_string());
+            output.push_str(&format!("{:04} [L{}] {}\n", i, line_str, Self::serialize_opcode(op)));
+        }
+        
+        output
+    }
+    
+    /// Deserialize bytecode from plain text format (.rmc)
+    pub fn deserialize(input: &str) -> Result<Self, String> {
+        let mut bytecode = ByteCode::new();
+        let lines: Vec<&str> = input.lines().collect();
+        let mut i = 0;
+        
+        // Check header
+        if i >= lines.len() || lines[i] != "RUMINA-BYTECODE-V1" {
+            return Err("Invalid bytecode header".to_string());
+        }
+        i += 1;
+        
+        // Parse constants count
+        if i >= lines.len() || !lines[i].starts_with("CONSTANTS: ") {
+            return Err("Missing constants section".to_string());
+        }
+        let const_count: usize = lines[i][11..].parse()
+            .map_err(|_| "Invalid constants count")?;
+        i += 1;
+        
+        // Parse constants
+        for _ in 0..const_count {
+            if i >= lines.len() {
+                return Err("Unexpected end of constants section".to_string());
+            }
+            if let Some(value_str) = lines[i].strip_prefix("CONST[")
+                .and_then(|s| s.split_once("]: "))
+                .map(|(_, v)| v) {
+                bytecode.constants.push(Self::deserialize_value(value_str)?);
+            } else {
+                return Err("Invalid constant format".to_string());
+            }
+            i += 1;
+        }
+        
+        // Skip empty line and instructions header
+        while i < lines.len() && (lines[i].is_empty() || lines[i] == "INSTRUCTIONS:") {
+            i += 1;
+        }
+        
+        // Parse instructions
+        while i < lines.len() {
+            let line = lines[i].trim();
+            if line.is_empty() {
+                i += 1;
+                continue;
+            }
+            
+            // Parse: "0000 [L1] OpCode ..."
+            let parts: Vec<&str> = line.splitn(3, ' ').collect();
+            if parts.len() < 3 {
+                return Err(format!("Invalid instruction format: {}", line));
+            }
+            
+            let line_num = if parts[1].len() > 3 {
+                let num_str = &parts[1][2..parts[1].len()-1]; // Extract number from [L...]
+                if num_str == "?" {
+                    None
+                } else {
+                    Some(num_str.parse().map_err(|_| "Invalid line number")?)
+                }
+            } else {
+                None
+            };
+            
+            let opcode = Self::deserialize_opcode(parts[2])?;
+            bytecode.instructions.push(opcode);
+            bytecode.line_numbers.push(line_num);
+            
+            i += 1;
+        }
+        
+        Ok(bytecode)
+    }
+    
+    fn serialize_value(value: &Value) -> String {
+        match value {
+            Value::Int(n) => format!("Int({})", n),
+            Value::Float(f) => format!("Float({})", f),
+            Value::Bool(b) => format!("Bool({})", b),
+            Value::String(s) => format!("String(\"{}\")", s.replace('"', "\\\"")),
+            Value::Null => "Null".to_string(),
+            Value::Array(arr) => {
+                let items: Vec<String> = arr.borrow().iter()
+                    .map(|v| Self::serialize_value(v))
+                    .collect();
+                format!("Array[{}]", items.join(", "))
+            }
+            Value::Struct(s) => {
+                let items: Vec<String> = s.borrow().iter()
+                    .map(|(k, v)| format!("{}: {}", k, Self::serialize_value(v)))
+                    .collect();
+                format!("Struct{{{}}}", items.join(", "))
+            }
+            Value::NativeFunction { name, .. } => format!("NativeFunction({})", name),
+            Value::Function { name, .. } => format!("Function({})", name),
+            Value::Lambda { .. } => "Lambda".to_string(),
+            _ => format!("{:?}", value),
+        }
+    }
+    
+    fn deserialize_value(s: &str) -> Result<Value, String> {
+        if let Some(num) = s.strip_prefix("Int(").and_then(|s| s.strip_suffix(")")) {
+            return Ok(Value::Int(num.parse().map_err(|_| "Invalid int")?));
+        }
+        if let Some(num) = s.strip_prefix("Float(").and_then(|s| s.strip_suffix(")")) {
+            return Ok(Value::Float(num.parse().map_err(|_| "Invalid float")?));
+        }
+        if let Some(b) = s.strip_prefix("Bool(").and_then(|s| s.strip_suffix(")")) {
+            return Ok(Value::Bool(b.parse().map_err(|_| "Invalid bool")?));
+        }
+        if let Some(str_val) = s.strip_prefix("String(\"").and_then(|s| s.strip_suffix("\")")) {
+            return Ok(Value::String(str_val.replace("\\\"", "\"")));
+        }
+        if s == "Null" {
+            return Ok(Value::Null);
+        }
+        Err(format!("Unsupported value type: {}", s))
+    }
+    
+    fn serialize_opcode(op: &OpCode) -> String {
+        match op {
+            OpCode::PushConst(v) => format!("PushConst({})", Self::serialize_value(v)),
+            OpCode::PushConstPooled(i) => format!("PushConstPooled({})", i),
+            OpCode::PushVar(name) => format!("PushVar({})", name),
+            OpCode::PopVar(name) => format!("PopVar({})", name),
+            OpCode::Dup => "Dup".to_string(),
+            OpCode::Pop => "Pop".to_string(),
+            OpCode::Add => "Add".to_string(),
+            OpCode::AddInt => "AddInt".to_string(),
+            OpCode::Sub => "Sub".to_string(),
+            OpCode::SubInt => "SubInt".to_string(),
+            OpCode::Mul => "Mul".to_string(),
+            OpCode::MulInt => "MulInt".to_string(),
+            OpCode::Div => "Div".to_string(),
+            OpCode::Mod => "Mod".to_string(),
+            OpCode::Pow => "Pow".to_string(),
+            OpCode::Neg => "Neg".to_string(),
+            OpCode::Factorial => "Factorial".to_string(),
+            OpCode::Not => "Not".to_string(),
+            OpCode::And => "And".to_string(),
+            OpCode::Or => "Or".to_string(),
+            OpCode::Eq => "Eq".to_string(),
+            OpCode::Neq => "Neq".to_string(),
+            OpCode::Gt => "Gt".to_string(),
+            OpCode::Gte => "Gte".to_string(),
+            OpCode::Lt => "Lt".to_string(),
+            OpCode::Lte => "Lte".to_string(),
+            OpCode::Jump(addr) => format!("Jump({})", addr),
+            OpCode::JumpIfFalse(addr) => format!("JumpIfFalse({})", addr),
+            OpCode::JumpIfTrue(addr) => format!("JumpIfTrue({})", addr),
+            OpCode::Call(addr) => format!("Call({})", addr),
+            OpCode::CallVar(name, argc) => format!("CallVar({}, {})", name, argc),
+            OpCode::Return => "Return".to_string(),
+            OpCode::MakeArray(size) => format!("MakeArray({})", size),
+            OpCode::MakeStruct(size) => format!("MakeStruct({})", size),
+            OpCode::Index => "Index".to_string(),
+            OpCode::Member(name) => format!("Member({})", name),
+            OpCode::IndexAssign => "IndexAssign".to_string(),
+            OpCode::MemberAssign(name) => format!("MemberAssign({})", name),
+            OpCode::EnterScope => "EnterScope".to_string(),
+            OpCode::ExitScope => "ExitScope".to_string(),
+            OpCode::LoopBegin => "LoopBegin".to_string(),
+            OpCode::LoopEnd => "LoopEnd".to_string(),
+            OpCode::Break => "Break".to_string(),
+            OpCode::Continue => "Continue".to_string(),
+            OpCode::Nop => "Nop".to_string(),
+            OpCode::Halt => "Halt".to_string(),
+            OpCode::DefineFunc { name, params, body_start, body_end, decorators } => {
+                format!("DefineFunc({}, [{}], {}, {}, [{}])", 
+                    name, 
+                    params.join(","), 
+                    body_start, 
+                    body_end,
+                    decorators.join(","))
+            }
+            OpCode::MakeLambda { params, body_start, body_end } => {
+                format!("MakeLambda([{}], {}, {})", params.join(","), body_start, body_end)
+            }
+        }
+    }
+    
+    fn deserialize_opcode(s: &str) -> Result<OpCode, String> {
+        if s == "Dup" { return Ok(OpCode::Dup); }
+        if s == "Pop" { return Ok(OpCode::Pop); }
+        if s == "Add" { return Ok(OpCode::Add); }
+        if s == "AddInt" { return Ok(OpCode::AddInt); }
+        if s == "Sub" { return Ok(OpCode::Sub); }
+        if s == "SubInt" { return Ok(OpCode::SubInt); }
+        if s == "Mul" { return Ok(OpCode::Mul); }
+        if s == "MulInt" { return Ok(OpCode::MulInt); }
+        if s == "Div" { return Ok(OpCode::Div); }
+        if s == "Mod" { return Ok(OpCode::Mod); }
+        if s == "Pow" { return Ok(OpCode::Pow); }
+        if s == "Neg" { return Ok(OpCode::Neg); }
+        if s == "Factorial" { return Ok(OpCode::Factorial); }
+        if s == "Not" { return Ok(OpCode::Not); }
+        if s == "And" { return Ok(OpCode::And); }
+        if s == "Or" { return Ok(OpCode::Or); }
+        if s == "Eq" { return Ok(OpCode::Eq); }
+        if s == "Neq" { return Ok(OpCode::Neq); }
+        if s == "Gt" { return Ok(OpCode::Gt); }
+        if s == "Gte" { return Ok(OpCode::Gte); }
+        if s == "Lt" { return Ok(OpCode::Lt); }
+        if s == "Lte" { return Ok(OpCode::Lte); }
+        if s == "Return" { return Ok(OpCode::Return); }
+        if s == "Index" { return Ok(OpCode::Index); }
+        if s == "IndexAssign" { return Ok(OpCode::IndexAssign); }
+        if s == "EnterScope" { return Ok(OpCode::EnterScope); }
+        if s == "ExitScope" { return Ok(OpCode::ExitScope); }
+        if s == "LoopBegin" { return Ok(OpCode::LoopBegin); }
+        if s == "LoopEnd" { return Ok(OpCode::LoopEnd); }
+        if s == "Break" { return Ok(OpCode::Break); }
+        if s == "Continue" { return Ok(OpCode::Continue); }
+        if s == "Nop" { return Ok(OpCode::Nop); }
+        if s == "Halt" { return Ok(OpCode::Halt); }
+        
+        if let Some(val) = s.strip_prefix("PushConst(").and_then(|s| s.strip_suffix(")")) {
+            return Ok(OpCode::PushConst(Self::deserialize_value(val)?));
+        }
+        if let Some(idx) = s.strip_prefix("PushConstPooled(").and_then(|s| s.strip_suffix(")")) {
+            return Ok(OpCode::PushConstPooled(idx.parse().map_err(|_| "Invalid index")?));
+        }
+        if let Some(name) = s.strip_prefix("PushVar(").and_then(|s| s.strip_suffix(")")) {
+            return Ok(OpCode::PushVar(name.to_string()));
+        }
+        if let Some(name) = s.strip_prefix("PopVar(").and_then(|s| s.strip_suffix(")")) {
+            return Ok(OpCode::PopVar(name.to_string()));
+        }
+        if let Some(addr) = s.strip_prefix("Jump(").and_then(|s| s.strip_suffix(")")) {
+            return Ok(OpCode::Jump(addr.parse().map_err(|_| "Invalid address")?));
+        }
+        if let Some(addr) = s.strip_prefix("JumpIfFalse(").and_then(|s| s.strip_suffix(")")) {
+            return Ok(OpCode::JumpIfFalse(addr.parse().map_err(|_| "Invalid address")?));
+        }
+        if let Some(addr) = s.strip_prefix("JumpIfTrue(").and_then(|s| s.strip_suffix(")")) {
+            return Ok(OpCode::JumpIfTrue(addr.parse().map_err(|_| "Invalid address")?));
+        }
+        if let Some(addr) = s.strip_prefix("Call(").and_then(|s| s.strip_suffix(")")) {
+            return Ok(OpCode::Call(addr.parse().map_err(|_| "Invalid address")?));
+        }
+        if let Some(args) = s.strip_prefix("CallVar(").and_then(|s| s.strip_suffix(")")) {
+            let parts: Vec<&str> = args.splitn(2, ", ").collect();
+            if parts.len() == 2 {
+                let name = parts[0].to_string();
+                let argc = parts[1].parse().map_err(|_| "Invalid arg count")?;
+                return Ok(OpCode::CallVar(name, argc));
+            }
+        }
+        if let Some(size) = s.strip_prefix("MakeArray(").and_then(|s| s.strip_suffix(")")) {
+            return Ok(OpCode::MakeArray(size.parse().map_err(|_| "Invalid size")?));
+        }
+        if let Some(size) = s.strip_prefix("MakeStruct(").and_then(|s| s.strip_suffix(")")) {
+            return Ok(OpCode::MakeStruct(size.parse().map_err(|_| "Invalid size")?));
+        }
+        if let Some(name) = s.strip_prefix("Member(").and_then(|s| s.strip_suffix(")")) {
+            return Ok(OpCode::Member(name.to_string()));
+        }
+        if let Some(name) = s.strip_prefix("MemberAssign(").and_then(|s| s.strip_suffix(")")) {
+            return Ok(OpCode::MemberAssign(name.to_string()));
+        }
+        if let Some(args) = s.strip_prefix("DefineFunc(").and_then(|s| s.strip_suffix(")")) {
+            // Parse: name, [params], body_start, body_end, [decorators]
+            let parts: Vec<&str> = args.split(", ").collect();
+            if parts.len() >= 4 {
+                let name = parts[0].to_string();
+                let params_str = parts[1].trim_matches(|c| c == '[' || c == ']');
+                let params: Vec<String> = if params_str.is_empty() {
+                    vec![]
+                } else {
+                    params_str.split(',').map(|s| s.to_string()).collect()
+                };
+                let body_start = parts[2].parse().map_err(|_| "Invalid body_start")?;
+                let body_end = parts[3].parse().map_err(|_| "Invalid body_end")?;
+                let decorators = if parts.len() > 4 {
+                    let dec_str = parts[4].trim_matches(|c| c == '[' || c == ']');
+                    if dec_str.is_empty() {
+                        vec![]
+                    } else {
+                        dec_str.split(',').map(|s| s.to_string()).collect()
+                    }
+                } else {
+                    vec![]
+                };
+                return Ok(OpCode::DefineFunc { name, params, body_start, body_end, decorators });
+            }
+        }
+        if let Some(args) = s.strip_prefix("MakeLambda(").and_then(|s| s.strip_suffix(")")) {
+            // Parse: [params], body_start, body_end
+            let parts: Vec<&str> = args.split(", ").collect();
+            if parts.len() >= 3 {
+                let params_str = parts[0].trim_matches(|c| c == '[' || c == ']');
+                let params: Vec<String> = if params_str.is_empty() {
+                    vec![]
+                } else {
+                    params_str.split(',').map(|s| s.to_string()).collect()
+                };
+                let body_start = parts[1].parse().map_err(|_| "Invalid body_start")?;
+                let body_end = parts[2].parse().map_err(|_| "Invalid body_end")?;
+                return Ok(OpCode::MakeLambda { params, body_start, body_end });
+            }
+        }
+        
+        Err(format!("Unknown opcode: {}", s))
+    }
 }
 
 /// Function metadata for user-defined functions
@@ -1713,6 +2043,101 @@ mod tests {
         match result {
             Some(Value::Float(f)) => assert!((f - 13.14).abs() < 0.01),
             _ => panic!("Expected Float(13.14)"),
+        }
+    }
+
+    #[test]
+    fn test_bytecode_serialization() {
+        let mut bytecode = ByteCode::new();
+        
+        // Add some constants
+        let idx1 = bytecode.add_constant(Value::Int(10));
+        let idx2 = bytecode.add_constant(Value::Int(20));
+        
+        // Add instructions
+        bytecode.emit(OpCode::PushConstPooled(idx1), Some(1));
+        bytecode.emit(OpCode::PushConstPooled(idx2), Some(2));
+        bytecode.emit(OpCode::Add, Some(3));
+        bytecode.emit(OpCode::Halt, None);
+        
+        // Serialize
+        let serialized = bytecode.serialize();
+        
+        // Check header
+        assert!(serialized.contains("RUMINA-BYTECODE-V1"));
+        assert!(serialized.contains("CONSTANTS: 2"));
+        assert!(serialized.contains("PushConstPooled(0)"));
+        assert!(serialized.contains("PushConstPooled(1)"));
+    }
+
+    #[test]
+    fn test_bytecode_deserialization() {
+        let bytecode_text = r#"RUMINA-BYTECODE-V1
+CONSTANTS: 2
+CONST[0]: Int(10)
+CONST[1]: Int(20)
+
+INSTRUCTIONS:
+0000 [L1] PushConstPooled(0)
+0001 [L2] PushConstPooled(1)
+0002 [L3] Add
+0003 [L?] Halt
+"#;
+        
+        let bytecode = ByteCode::deserialize(bytecode_text).unwrap();
+        
+        assert_eq!(bytecode.constants.len(), 2);
+        assert_eq!(bytecode.instructions.len(), 4);
+        
+        // Check constants
+        match &bytecode.constants[0] {
+            Value::Int(n) => assert_eq!(*n, 10),
+            _ => panic!("Expected Int(10)"),
+        }
+        
+        // Check instructions
+        assert!(matches!(bytecode.instructions[0], OpCode::PushConstPooled(0)));
+        assert!(matches!(bytecode.instructions[1], OpCode::PushConstPooled(1)));
+        assert!(matches!(bytecode.instructions[2], OpCode::Add));
+        assert!(matches!(bytecode.instructions[3], OpCode::Halt));
+    }
+
+    #[test]
+    fn test_bytecode_roundtrip() {
+        // Create original bytecode
+        let mut original = ByteCode::new();
+        
+        let idx1 = original.add_constant(Value::Int(42));
+        let idx2 = original.add_constant(Value::String("test".to_string()));
+        
+        original.emit(OpCode::PushConstPooled(idx1), Some(1));
+        original.emit(OpCode::PopVar("x".to_string()), Some(2));
+        original.emit(OpCode::PushVar("x".to_string()), Some(3));
+        original.emit(OpCode::PushConstPooled(idx2), Some(4));
+        original.emit(OpCode::Halt, None);
+        
+        // Serialize and deserialize
+        let serialized = original.serialize();
+        let deserialized = ByteCode::deserialize(&serialized).unwrap();
+        
+        // Compare
+        assert_eq!(deserialized.constants.len(), original.constants.len());
+        assert_eq!(deserialized.instructions.len(), original.instructions.len());
+        
+        // Execute both and compare results
+        let globals = Rc::new(RefCell::new(HashMap::new()));
+        
+        let mut vm1 = VM::new(globals.clone());
+        vm1.load(original);
+        let result1 = vm1.run().unwrap();
+        
+        let mut vm2 = VM::new(globals.clone());
+        vm2.load(deserialized);
+        let result2 = vm2.run().unwrap();
+        
+        match (result1, result2) {
+            (Some(Value::String(s1)), Some(Value::String(s2))) => assert_eq!(s1, s2),
+            _ => panic!("Expected matching String results"),
         }
     }
 }

@@ -141,27 +141,53 @@ jobs:
 
       - name: Build (native)
         if: matrix.target == 'x86_64-unknown-linux-gnu' || runner.os != 'Linux'
-        run: cargo build --release --target ${{ matrix.target }} --bin rumina-cli
+        run: cargo build --release --target ${{ matrix.target }} --workspace
 
       - name: Build (cross)
         if: matrix.target != 'x86_64-unknown-linux-gnu' && runner.os == 'Linux'
-        run: cross build --release --target ${{ matrix.target }} --bin rumina-cli
+        run: cross build --release --target ${{ matrix.target }} --workspace
 
-      - name: Strip binary (Linux/macOS)
+      - name: Strip binaries (Linux/macOS)
         if: runner.os != 'Windows' && matrix.target == 'x86_64-unknown-linux-gnu'
-        run: strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+        run: |
+          strip target/${{ matrix.target }}/release/rumina-cli
+          strip target/${{ matrix.target }}/release/ruminac
+          strip target/${{ matrix.target }}/release/rmvm
 
-      - name: Rename binary
+      - name: Prepare artifacts
         shell: bash
         run: |
           mkdir -p dist
+          # Copy rumina-cli (main program)
           cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} dist/${{ matrix.asset_name }}
+          # Copy ruminac (compiler)
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp target/${{ matrix.target }}/release/ruminac.exe dist/ruminac-${{ matrix.target }}.exe
+            cp target/${{ matrix.target }}/release/rmvm.exe dist/rmvm-${{ matrix.target }}.exe
+          else
+            cp target/${{ matrix.target }}/release/ruminac dist/ruminac-${{ matrix.target }}
+            cp target/${{ matrix.target }}/release/rmvm dist/rmvm-${{ matrix.target }}
+          fi
 
-      - name: Upload artifact
+      - name: Upload rumina-cli artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
           path: dist/${{ matrix.asset_name }}
+          if-no-files-found: error
+
+      - name: Upload ruminac artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ruminac-${{ matrix.target }}
+          path: dist/ruminac-${{ matrix.target }}*
+          if-no-files-found: error
+
+      - name: Upload rmvm artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rmvm-${{ matrix.target }}
+          path: dist/rmvm-${{ matrix.target }}*
           if-no-files-found: error
 
   release:

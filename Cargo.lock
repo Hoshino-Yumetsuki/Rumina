@@ -764,6 +764,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
 
 [[package]]
+name = "rmvm"
+version = "1.1.1"
+dependencies = [
+ "ctrlc",
+ "rumina",
+]
+
+[[package]]
 name = "rumina"
 version = "1.1.1"
 dependencies = [
@@ -776,6 +784,13 @@ dependencies = [
  "num",
  "rand",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "ruminac"
+version = "1.1.1"
+dependencies = [
+ "rumina",
 ]
 
 [[package]]
