@@ -9,7 +9,7 @@ use crate::value::*;
 
 // Submodules for code organization
 mod call;
-mod convert;
+pub(crate) mod convert;
 mod expr;
 mod operators;
 mod stmt;
@@ -76,6 +76,11 @@ impl Interpreter {
     /// Set the current file being executed (for error reporting)
     pub fn set_file(&mut self, filename: String) {
         self.current_file = filename;
+    }
+
+    /// Get the globals reference (for VM integration)
+    pub fn get_globals(&self) -> Rc<RefCell<HashMap<String, Value>>> {
+        Rc::clone(&self.globals)
     }
 
     /// Helper method to wrap errors with stack trace
@@ -290,6 +295,26 @@ mod tests {
         match result {
             Value::Int(n) => assert_eq!(n, -3, "Expected -3, got {}", n),
             other => panic!("Expected Int result, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_power_int_overflow_promotion_to_bigint() {
+        // Test that Int^Int automatically promotes to BigInt on overflow
+        // This should not panic, but instead return a BigInt
+        let result = eval_expr("114514^100");
+        assert!(result.is_ok(), "Should not panic on large power");
+        match result.unwrap() {
+            Value::BigInt(n) => {
+                // Verify it's a very large number (has more than 100 digits)
+                let str_repr = n.to_string();
+                assert!(
+                    str_repr.len() > 100,
+                    "Expected very large number, got {} digits",
+                    str_repr.len()
+                );
+            }
+            other => panic!("Expected BigInt result for large power, got {:?}", other),
         }
     }
 
@@ -678,7 +703,10 @@ mod tests {
             infinite(0);
         "#;
         let result = eval_expr(code);
-        assert!(result.is_err(), "Should fail when exceeding recursion limit");
+        assert!(
+            result.is_err(),
+            "Should fail when exceeding recursion limit"
+        );
         let err = result.unwrap_err();
         let err_msg = format!("{}", err);
         assert!(

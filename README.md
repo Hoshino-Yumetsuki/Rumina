@@ -4,6 +4,155 @@
 
 一个用 Rust 编写的 Lamina 编程语言解释器，完全兼容 Lamina 语言规范。
 
+## 项目结构
+
+Rumina 采用 Cargo workspace 结构，包含以下组件：
+
+- **rumina**: 核心库和主程序 (`rumina-cli`)，提供编译器、虚拟机和 REPL 功能
+- **ruminac**: 独立的编译器可执行文件，将 `.lm` 文件编译为 `.rmc` 字节码
+- **rmvm**: 独立的虚拟机可执行文件，执行 `.rmc` 字节码或 `.lm` 文件
+
+## 主程序
+
+### rumina-cli - Rumina 主程序
+
+主程序保持原有功能不变，支持 REPL 和执行 `.lm` 文件。
+
+**使用方法：**
+```bash
+# 启动 REPL
+rumina-cli
+
+# 执行 .lm 文件
+rumina-cli program.lm
+```
+
+## 独立工具
+
+### ruminac - Rumina 编译器
+
+将 Lamina 源代码编译为字节码文件。
+
+**使用方法：**
+```bash
+# 编译 .lm 文件为 .rmc 字节码
+ruminac input.lm              # 生成 input.rmc
+ruminac input.lm output.rmc   # 生成 output.rmc
+```
+
+**示例：**
+```bash
+# 创建测试文件
+echo "var x = 10; var y = 20; print(x + y);" > test.lm
+
+# 编译为字节码
+ruminac test.lm
+# 输出: Successfully compiled 'test.lm' to 'test.rmc'
+```
+
+### rmvm - Rumina 虚拟机
+
+执行字节码文件或直接运行 Lamina 源代码。
+
+**使用方法：**
+```bash
+# 执行字节码文件
+rmvm file.rmc
+
+# 直接执行 .lm 文件
+rmvm file.lm
+
+# 启动 REPL 交互模式
+rmvm
+```
+
+**示例：**
+```bash
+# 执行字节码
+rmvm test.rmc
+# 输出: 30
+
+# 直接执行源代码
+rmvm test.lm
+# 输出: 30
+
+# REPL 模式
+rmvm
+# 进入交互式环境
+```
+
+### 字节码格式 (.rmc)
+
+Rumina 字节码采用纯文本格式，便于检查和调试：
+
+```
+RUMINA-BYTECODE-V1
+CONSTANTS: 2
+CONST[0]: Int(10)
+CONST[1]: Int(20)
+
+INSTRUCTIONS:
+0000 [L?] PushConstPooled(0)
+0001 [L?] PopVar(x)
+0002 [L?] PushConstPooled(1)
+0003 [L?] PopVar(y)
+0004 [L?] PushVar(x)
+0005 [L?] PushVar(y)
+0006 [L?] Add
+0007 [L?] PopVar(result)
+0008 [L?] PushVar(result)
+0009 [L?] CallVar(print, 1)
+0010 [L?] Halt
+```
+
+## 构建
+
+### 构建所有二进制文件
+
+```bash
+# 构建整个工作空间（包括 rumina-cli、ruminac 和 rmvm）
+cargo build --workspace --release
+
+# 或者单独构建某个二进制文件
+cargo build --release --bin rumina-cli
+cargo build --release --bin ruminac
+cargo build --release --bin rmvm
+```
+
+### 构建 WASM 包
+
+```bash
+# 安装依赖
+yarn install
+
+# 构建 WASM 包（从根包构建）
+yarn build
+```
+
+注意：WASM 构建会使用根包的库部分，不包含独立的二进制工具。
+
+## 作为库使用
+
+### 在 Rust 中使用
+
+```rust
+use rumina::{run, run_rumina, Compiler, Lexer, Parser, VM};
+
+// 运行 Lamina 代码
+run("var x = 10; print(x);")?;
+
+// 获取返回值
+let result = run_rumina("10 + 20;")?;
+
+// 使用编译器和虚拟机
+let mut lexer = Lexer::new("10 + 20;".to_string());
+let tokens = lexer.tokenize();
+let mut parser = Parser::new(tokens);
+let ast = parser.parse()?;
+let mut compiler = Compiler::new();
+let bytecode = compiler.compile(ast)?;
+```
+
 ## 在 JavaScript 中使用
 
 ## 安装
