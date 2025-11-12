@@ -2,11 +2,71 @@
 
 **WIP**
 
-一个用 Rust 编写的 Lamina 编程语言解释器，完全兼容 Lamina 语言规范。
+一个用 Rust 编写的 Lamina 编程语言实现，完全兼容 Lamina 语言规范。
+
+## 项目结构
+
+Rumina 现在采用 monorepo 结构，包含三个主要组件：
+
+- **rumina** - 核心库（编译器 + 虚拟机）
+- **ruminac** - 命令行编译器
+- **rmvm** - 命令行虚拟机
+
+详细的 monorepo 结构说明请参见 [MONOREPO.md](./MONOREPO.md)
+
+## 命令行工具
+
+### 安装
+
+从源码构建：
+
+```bash
+git clone https://github.com/Hoshino-Yumetsuki/Rumina.git
+cd Rumina
+cargo build --release
+```
+
+编译后的二进制文件位于：
+- `target/release/ruminac` - 编译器
+- `target/release/rmvm` - 虚拟机
+
+### 编译器 (ruminac)
+
+将 `.lm` 源文件编译为 `.rmc` 字节码文件：
+
+```bash
+# 编译到相同目录
+ruminac test.lm
+
+# 指定输出路径
+ruminac test.lm output.rmc
+```
+
+### 虚拟机 (rmvm)
+
+执行 `.rmc` 字节码文件：
+
+```bash
+rmvm test.rmc
+```
+
+### 完整工作流示例
+
+```bash
+# 1. 编写 Lamina 代码
+echo 'var x = 10; var y = 20; x + y;' > example.lm
+
+# 2. 编译为字节码
+ruminac example.lm
+
+# 3. 运行字节码
+rmvm example.rmc
+# 输出: 30
+```
 
 ## 在 JavaScript 中使用
 
-## 安装
+### 安装
 
 ```bash
 npm install rumina
@@ -68,6 +128,32 @@ if (result4.startsWith("Error:")) {
   console.error("语法错误:", result4);
 }
 ```
+
+## 字节码格式
+
+`.rmc` 文件使用纯文本格式，既便于人类阅读也便于机器解析：
+
+```
+# Rumina Bytecode v1.0
+
+[CONSTANTS]
+2
+INT:10
+INT:20
+
+[INSTRUCTIONS]
+4
+:PushConstPooled 0
+:PushConstPooled 1
+:Add
+:Halt
+```
+
+这种格式的优势：
+- **人类可读** - 可以直接查看和理解编译后的字节码
+- **调试友好** - 便于诊断编译问题
+- **版本控制** - 可以在 Git 中进行 diff 和 merge
+- **跨平台** - 纯文本格式确保不同平台间的兼容性
 
 ## 内置函数
 
