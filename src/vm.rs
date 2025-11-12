@@ -17,6 +17,10 @@ pub enum OpCode {
     /// Similar to: PUSH imm
     PushConst(Value),
 
+    /// Push a constant from the constant pool onto the stack
+    /// Similar to: PUSH [constant_pool + index]
+    PushConstPooled(usize),
+
     /// Push a variable value onto the stack
     /// Similar to: MOV reg, [addr]
     PushVar(String),
@@ -239,6 +243,38 @@ impl ByteCode {
             _ => panic!("Attempted to patch non-jump instruction at {}", address),
         }
     }
+
+    /// Add a constant to the pool or return existing index
+    /// This deduplicates constants to reduce memory usage
+    pub fn add_constant(&mut self, value: Value) -> usize {
+        // Check if constant already exists in the pool
+        for (i, existing) in self.constants.iter().enumerate() {
+            if Self::values_equal(existing, &value) {
+                return i;
+            }
+        }
+        
+        // Add new constant
+        let index = self.constants.len();
+        self.constants.push(value);
+        index
+    }
+
+    /// Helper to check if two values are equal for pooling purposes
+    fn values_equal(a: &Value, b: &Value) -> bool {
+        match (a, b) {
+            (Value::Int(a), Value::Int(b)) => a == b,
+            (Value::Float(a), Value::Float(b)) => {
+                // For floats, use exact bit comparison to avoid floating point issues
+                a.to_bits() == b.to_bits()
+            }
+            (Value::Bool(a), Value::Bool(b)) => a == b,
+            (Value::String(a), Value::String(b)) => a == b,
+            (Value::Null, Value::Null) => true,
+            // For complex types, don't pool them (conservative approach)
+            _ => false,
+        }
+    }
 }
 
 /// Function metadata for user-defined functions
@@ -350,6 +386,18 @@ impl VM {
     fn execute_instruction(&mut self, op: OpCode) -> Result<(), RuminaError> {
         match op {
             OpCode::PushConst(value) => {
+                self.stack.push(value);
+            }
+
+            OpCode::PushConstPooled(index) => {
+                let value = self
+                    .bytecode
+                    .constants
+                    .get(index)
+                    .ok_or_else(|| {
+                        RuminaError::runtime(format!("Invalid constant pool index: {}", index))
+                    })?
+                    .clone();
                 self.stack.push(value);
             }
 
@@ -1216,5 +1264,87 @@ mod tests {
             Some(Value::Int(n)) => assert_eq!(n, 55), // fib(10) = 55
             other => panic!("Expected Int(55), got {:?}", other),
         }
+    }
+
+    #[test]
+    fn test_constant_pooling() {
+        let mut bytecode = ByteCode::new();
+        
+        // Add the same constant multiple times
+        let idx1 = bytecode.add_constant(Value::Int(42));
+        let idx2 = bytecode.add_constant(Value::Int(42));
+        let idx3 = bytecode.add_constant(Value::Int(100));
+        let idx4 = bytecode.add_constant(Value::Int(42));
+        
+        // First two should be the same index (deduplicated)
+        assert_eq!(idx1, idx2);
+        assert_eq!(idx1, idx4);
+        // Third should be different
+        assert_ne!(idx1, idx3);
+        
+        // Pool should only have 2 constants
+        assert_eq!(bytecode.constants.len(), 2);
+    }
+
+    #[test]
+    fn test_constant_pooling_strings() {
+        let mut bytecode = ByteCode::new();
+        
+        // Add the same string multiple times
+        let idx1 = bytecode.add_constant(Value::String("hello".to_string()));
+        let idx2 = bytecode.add_constant(Value::String("hello".to_string()));
+        let idx3 = bytecode.add_constant(Value::String("world".to_string()));
+        
+        // First two should be the same index
+        assert_eq!(idx1, idx2);
+        // Third should be different
+        assert_ne!(idx1, idx3);
+        
+        // Pool should only have 2 constants
+        assert_eq!(bytecode.constants.len(), 2);
+    }
+
+    #[test]
+    fn test_push_const_pooled() {
+        let globals = Rc::new(RefCell::new(HashMap::new()));
+        let mut vm = VM::new(globals);
+
+        let mut bytecode = ByteCode::new();
+        
+        // Add constants to pool
+        let idx1 = bytecode.add_constant(Value::Int(10));
+        let idx2 = bytecode.add_constant(Value::Int(20));
+        
+        // Use pooled constants
+        bytecode.emit(OpCode::PushConstPooled(idx1), None);
+        bytecode.emit(OpCode::PushConstPooled(idx2), None);
+        bytecode.emit(OpCode::Add, None);
+        bytecode.emit(OpCode::Halt, None);
+
+        vm.load(bytecode);
+        let result = vm.run().unwrap();
+
+        match result {
+            Some(Value::Int(n)) => assert_eq!(n, 30),
+            _ => panic!("Expected Int(30)"),
+        }
+    }
+
+    #[test]
+    fn test_constant_pooling_floats() {
+        let mut bytecode = ByteCode::new();
+        
+        // Add the same float multiple times
+        let idx1 = bytecode.add_constant(Value::Float(3.14));
+        let idx2 = bytecode.add_constant(Value::Float(3.14));
+        let idx3 = bytecode.add_constant(Value::Float(2.71));
+        
+        // First two should be the same index
+        assert_eq!(idx1, idx2);
+        // Third should be different
+        assert_ne!(idx1, idx3);
+        
+        // Pool should only have 2 constants
+        assert_eq!(bytecode.constants.len(), 2);
     }
 }
