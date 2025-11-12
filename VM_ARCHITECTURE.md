@@ -206,9 +206,12 @@ Built-in functions are integrated through the interpreter's globals:
 ### Future Enhancements 🔮
 - Constant folding optimization
 - Dead code elimination
-- Register allocation simulation
-- JIT compilation possibilities
-- Performance benchmarking
+- Inline caching for property access
+- Type specialization for hot paths
+- Performance profiling tools
+- Built-in function optimization
+
+**Note on JIT Compilation**: See [JIT_ANALYSIS.md](JIT_ANALYSIS.md) for a comprehensive analysis of why JIT compilation is not recommended for this project.
 
 ## Examples
 
@@ -290,7 +293,7 @@ The VM is designed for:
 - **Performance**: Optimized operation implementations without overhead
 - **Simplicity**: Easy to understand and maintain
 - **Compatibility**: Falls back to existing interpreter logic for complex types
-- **Future optimization**: Foundation for JIT or AOT compilation
+- **WASM-first**: Designed for WebAssembly deployment with excellent browser integration
 
 ### Performance Optimizations Implemented
 
@@ -319,14 +322,32 @@ Current design choices:
 
 ## Future Directions
 
-1. **Further Performance Optimizations**: 
+1. **Bytecode Optimizations** (High Priority):
+   - Constant folding during compilation
+   - Dead code elimination
+   - Peephole optimization for common patterns
+   
+2. **Performance Improvements** (Medium Priority):
    - Constant pooling to reduce memory allocations
    - Inline caching for property access
    - Type specialization for hot paths
-2. **Optimization Pass**: Add compiler optimization phase (constant folding, dead code elimination)
-3. **JIT Compilation**: Explore runtime compilation for hot loops
-4. **WASM Integration**: Ensure VM works efficiently in WASM environment
-5. **Profiling Tools**: Add built-in profiling support for identifying bottlenecks
+   
+3. **Built-in Function Optimization** (High Impact):
+   - Optimize symbolic math algorithms
+   - Cache integration/differentiation results
+   - Faster numerical methods
+   
+4. **Development Tools** (Medium Priority):
+   - Built-in profiling support for identifying bottlenecks
+   - Performance regression testing
+   - Optimization verification tools
+
+5. **WASM Integration** (Ongoing):
+   - Ensure VM works efficiently in WASM environment
+   - Optimize for browser JIT compilation of WASM
+   - Memory usage optimization
+
+**Note**: For analysis of why JIT compilation is not included in this roadmap, see [JIT_ANALYSIS.md](JIT_ANALYSIS.md).
 
 ## References
 
