@@ -14,3 +14,9 @@ src/bindings.ts
 .pnp.cjs
 .pnp.loader.mjs
 LSR-main
+
+# Backup files
+*.backup
+
+# Bytecode files (for testing)
+*.rmc

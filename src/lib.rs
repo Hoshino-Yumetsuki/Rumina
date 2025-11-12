@@ -23,7 +23,7 @@ pub use lexer::Lexer;
 pub use optimizer::ASTOptimizer;
 pub use parser::Parser;
 pub use value::Value;
-pub use vm::VM;
+pub use vm::{ByteCode, VM};
 
 /// Run Lamina code using the VM
 ///
