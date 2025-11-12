@@ -5,10 +5,6 @@ edition = "2024"
 description = "Rumina compiler - compiles .lm files to .rmc bytecode"
 license = "LGPL-2.1"
 
-[lib]
-name = "ruminac"
-path = "src/lib.rs"
-
 [[bin]]
 name = "ruminac"
 path = "src/main.rs"
