@@ -783,6 +783,7 @@ dependencies = [
  "mathcore",
  "num",
  "rand",
+ "rayon",
  "rustc-hash",
  "wasm-bindgen",
 ]
