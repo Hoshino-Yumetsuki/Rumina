@@ -912,7 +912,16 @@ impl VM {
     /// Execute loaded bytecode
     pub fn run(&mut self) -> Result<Option<Value>, RuminaError> {
         while !self.halted && self.ip < self.bytecode.instructions.len() {
-            let op = self.bytecode.instructions[self.ip].clone();
+            // SAFETY: We use unsafe here to avoid cloning 32-byte OpCode on every instruction.
+            // This is safe because:
+            // 1. We check bounds with self.ip < self.bytecode.instructions.len()
+            // 2. The bytecode is never modified during execution (immutable after load)
+            // 3. We only read the instruction, never write to it
+            // 4. The instruction lives as long as self.bytecode which outlives this loop
+            let op_ptr = unsafe {
+                self.bytecode.instructions.as_ptr().add(self.ip)
+            };
+            let op = unsafe { &*op_ptr };
             self.ip += 1;
 
             self.execute_instruction(op)?;
@@ -923,17 +932,17 @@ impl VM {
     }
 
     /// Execute a single instruction
-    fn execute_instruction(&mut self, op: OpCode) -> Result<(), RuminaError> {
+    fn execute_instruction(&mut self, op: &OpCode) -> Result<(), RuminaError> {
         match op {
             OpCode::PushConst(value) => {
-                self.stack.push(value);
+                self.stack.push(value.clone());
             }
 
             OpCode::PushConstPooled(index) => {
                 let value = self
                     .bytecode
                     .constants
-                    .get(index)
+                    .get(*index)
                     .ok_or_else(|| {
                         RuminaError::runtime(format!("Invalid constant pool index: {}", index))
                     })?
@@ -942,7 +951,7 @@ impl VM {
             }
 
             OpCode::PushVar(name) => {
-                let value = self.get_variable(&name)?;
+                let value = self.get_variable(name)?;
                 self.stack.push(value);
             }
 
@@ -951,7 +960,7 @@ impl VM {
                     .stack
                     .pop()
                     .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
-                self.set_variable(name, value);
+                self.set_variable(name.clone(), value);
             }
 
             OpCode::Dup => {
@@ -1205,7 +1214,7 @@ impl VM {
 
             // Control flow
             OpCode::Jump(addr) => {
-                self.ip = addr;
+                self.ip = *addr;
             }
 
             OpCode::JumpIfFalse(addr) => {
@@ -1214,7 +1223,7 @@ impl VM {
                     .pop()
                     .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
                 if !condition.is_truthy() {
-                    self.ip = addr;
+                    self.ip = *addr;
                 }
             }
 
@@ -1224,14 +1233,14 @@ impl VM {
                     .pop()
                     .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
                 if condition.is_truthy() {
-                    self.ip = addr;
+                    self.ip = *addr;
                 }
             }
 
             // Array/Struct operations
             OpCode::MakeArray(count) => {
                 let mut elements = Vec::new();
-                for _ in 0..count {
+                for _ in 0..*count {
                     let elem = self
                         .stack
                         .pop()
@@ -1322,7 +1331,7 @@ impl VM {
                 match &object {
                     Value::Struct(s) => {
                         let s_ref = s.borrow();
-                        if let Some(value) = s_ref.get(&member_name) {
+                        if let Some(value) = s_ref.get(member_name) {
                             // Check if we have a cache entry for this instruction
                             if let Some(cache) = self.member_cache.get_mut(&cache_addr) {
                                 // Cache exists - increment hits
@@ -1428,11 +1437,11 @@ impl VM {
 
             OpCode::CallVar(func_name, arg_count) => {
                 // Get the function
-                let func = self.get_variable(&func_name)?;
+                let func = self.get_variable(func_name)?;
 
                 // Pop arguments from stack (pre-allocate to avoid reallocation)
-                let mut args = Vec::with_capacity(arg_count);
-                for _ in 0..arg_count {
+                let mut args = Vec::with_capacity(*arg_count);
+                for _ in 0..*arg_count {
                     let arg = self
                         .stack
                         .pop()
@@ -1453,7 +1462,7 @@ impl VM {
                     Value::Function { .. } => {
                         // Check if we have the function in our function table
                         // Use get() instead of cloned() to avoid cloning FunctionInfo
-                        if let Some(func_info) = self.functions.get(&func_name) {
+                        if let Some(func_info) = self.functions.get(func_name.as_str()) {
                             // Check recursion depth
                             if self.recursion_depth >= self.max_recursion_depth {
                                 return Err(RuminaError::runtime(format!(
@@ -1586,7 +1595,7 @@ impl VM {
 
             OpCode::MakeStruct(field_count) => {
                 let mut fields = HashMap::new();
-                for _ in 0..field_count {
+                for _ in 0..*field_count {
                     // Pop value
                     let value = self
                         .stack
