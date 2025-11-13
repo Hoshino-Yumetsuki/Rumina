@@ -6,9 +6,32 @@ use crate::ast::DeclaredType;
 use crate::error::RuminaError;
 use crate::value::Value;
 use crate::vm_ops::VMOperations;
+use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+
+// Const error messages to avoid allocations
+const ERR_STACK_UNDERFLOW: &str = "Stack underflow";
+const _ERR_INVALID_CONST_INDEX: &str = "Invalid constant pool index";
+
+/// Function definition information (boxed in OpCode to reduce size)
+#[derive(Debug, Clone, PartialEq)]
+pub struct FuncDefInfo {
+    pub name: String,
+    pub params: Vec<String>,
+    pub body_start: usize,
+    pub body_end: usize,
+    pub decorators: Vec<String>,
+}
+
+/// Lambda information (boxed in OpCode to reduce size)
+#[derive(Debug, Clone, PartialEq)]
+pub struct LambdaInfo {
+    pub params: Vec<String>,
+    pub body_start: usize,
+    pub body_end: usize,
+}
 
 /// VM Instruction Set (x86_64-inspired CISC design)
 #[derive(Debug, Clone, PartialEq)]
@@ -147,10 +170,6 @@ pub enum OpCode {
     /// Similar to: TEST + JNZ
     JumpIfTrue(usize),
 
-    /// Call function (address to jump to)
-    /// Similar to: CALL addr
-    Call(usize),
-
     /// Call function by name/variable
     /// Similar to: CALL [addr]
     CallVar(String, usize), // (function name, argument count)
@@ -182,38 +201,13 @@ pub enum OpCode {
     MemberAssign(String),
 
     // ===== Function Definition Instructions =====
-    /// Define a function
-    DefineFunc {
-        name: String,
-        params: Vec<String>,
-        body_start: usize,
-        body_end: usize,
-        decorators: Vec<String>,
-    },
+    /// Define a function (boxed to reduce OpCode size)
+    DefineFunc(Box<FuncDefInfo>),
 
-    /// Create lambda/closure
-    MakeLambda {
-        params: Vec<String>,
-        body_start: usize,
-        body_end: usize,
-    },
-
-    // ===== Scope Management =====
-    /// Enter new local scope
-    /// Similar to: PUSH rbp; MOV rbp, rsp
-    EnterScope,
-
-    /// Exit local scope
-    /// Similar to: MOV rsp, rbp; POP rbp
-    ExitScope,
+    /// Create lambda/closure (boxed to reduce OpCode size)
+    MakeLambda(Box<LambdaInfo>),
 
     // ===== Control Structures =====
-    /// Begin loop (mark position for continue)
-    LoopBegin,
-
-    /// End loop (mark position for break)
-    LoopEnd,
-
     /// Break from loop
     Break,
 
@@ -221,10 +215,6 @@ pub enum OpCode {
     Continue,
 
     // ===== Special Instructions =====
-    /// No operation
-    /// Similar to: NOP
-    Nop,
-
     /// Halt execution
     /// Similar to: HLT
     Halt,
@@ -514,7 +504,6 @@ impl ByteCode {
             OpCode::Jump(addr) => format!("Jump({})", addr),
             OpCode::JumpIfFalse(addr) => format!("JumpIfFalse({})", addr),
             OpCode::JumpIfTrue(addr) => format!("JumpIfTrue({})", addr),
-            OpCode::Call(addr) => format!("Call({})", addr),
             OpCode::CallVar(name, argc) => format!("CallVar({}, {})", name, argc),
             OpCode::Return => "Return".to_string(),
             OpCode::MakeArray(size) => format!("MakeArray({})", size),
@@ -523,40 +512,25 @@ impl ByteCode {
             OpCode::Member(name) => format!("Member({})", name),
             OpCode::IndexAssign => "IndexAssign".to_string(),
             OpCode::MemberAssign(name) => format!("MemberAssign({})", name),
-            OpCode::EnterScope => "EnterScope".to_string(),
-            OpCode::ExitScope => "ExitScope".to_string(),
-            OpCode::LoopBegin => "LoopBegin".to_string(),
-            OpCode::LoopEnd => "LoopEnd".to_string(),
             OpCode::Break => "Break".to_string(),
             OpCode::Continue => "Continue".to_string(),
-            OpCode::Nop => "Nop".to_string(),
             OpCode::Halt => "Halt".to_string(),
-            OpCode::DefineFunc {
-                name,
-                params,
-                body_start,
-                body_end,
-                decorators,
-            } => {
+            OpCode::DefineFunc(info) => {
                 format!(
                     "DefineFunc({}, [{}], {}, {}, [{}])",
-                    name,
-                    params.join(","),
-                    body_start,
-                    body_end,
-                    decorators.join(",")
+                    info.name,
+                    info.params.join(","),
+                    info.body_start,
+                    info.body_end,
+                    info.decorators.join(",")
                 )
             }
-            OpCode::MakeLambda {
-                params,
-                body_start,
-                body_end,
-            } => {
+            OpCode::MakeLambda(info) => {
                 format!(
                     "MakeLambda([{}], {}, {})",
-                    params.join(","),
-                    body_start,
-                    body_end
+                    info.params.join(","),
+                    info.body_start,
+                    info.body_end
                 )
             }
             OpCode::ConvertType(dtype) => format!("ConvertType({:?})", dtype),
@@ -657,26 +631,11 @@ impl ByteCode {
         if s == "IndexAssign" {
             return Ok(OpCode::IndexAssign);
         }
-        if s == "EnterScope" {
-            return Ok(OpCode::EnterScope);
-        }
-        if s == "ExitScope" {
-            return Ok(OpCode::ExitScope);
-        }
-        if s == "LoopBegin" {
-            return Ok(OpCode::LoopBegin);
-        }
-        if s == "LoopEnd" {
-            return Ok(OpCode::LoopEnd);
-        }
         if s == "Break" {
             return Ok(OpCode::Break);
         }
         if s == "Continue" {
             return Ok(OpCode::Continue);
-        }
-        if s == "Nop" {
-            return Ok(OpCode::Nop);
         }
         if s == "Halt" {
             return Ok(OpCode::Halt);
@@ -720,9 +679,6 @@ impl ByteCode {
             return Ok(OpCode::JumpIfTrue(
                 addr.parse().map_err(|_| "Invalid address")?,
             ));
-        }
-        if let Some(addr) = s.strip_prefix("Call(").and_then(|s| s.strip_suffix(")")) {
-            return Ok(OpCode::Call(addr.parse().map_err(|_| "Invalid address")?));
         }
         if let Some(args) = s.strip_prefix("CallVar(").and_then(|s| s.strip_suffix(")")) {
             let parts: Vec<&str> = args.splitn(2, ", ").collect();
@@ -781,13 +737,13 @@ impl ByteCode {
                 } else {
                     vec![]
                 };
-                return Ok(OpCode::DefineFunc {
+                return Ok(OpCode::DefineFunc(Box::new(FuncDefInfo {
                     name,
                     params,
                     body_start,
                     body_end,
                     decorators,
-                });
+                })));
             }
         }
         if let Some(args) = s
@@ -805,11 +761,11 @@ impl ByteCode {
                 };
                 let body_start = parts[1].parse().map_err(|_| "Invalid body_start")?;
                 let body_end = parts[2].parse().map_err(|_| "Invalid body_end")?;
-                return Ok(OpCode::MakeLambda {
+                return Ok(OpCode::MakeLambda(Box::new(LambdaInfo {
                     params,
                     body_start,
                     body_end,
-                });
+                })));
             }
         }
         if let Some(dtype_str) = s
@@ -864,8 +820,8 @@ struct CallFrame {
     #[allow(dead_code)]
     function_name: String,
 
-    /// Local variables in this frame
-    locals: HashMap<String, Value>,
+    /// Local variables in this frame (FxHashMap for faster access)
+    locals: FxHashMap<String, Value>,
 }
 
 /// Inline cache entry for member access
@@ -903,7 +859,7 @@ pub struct VM {
     /// Instruction pointer
     ip: usize,
 
-    /// Data stack
+    /// Data stack (pre-allocated for better performance)
     stack: Vec<Value>,
 
     /// Call stack (for function calls)
@@ -912,17 +868,17 @@ pub struct VM {
     /// Global variables
     globals: Rc<RefCell<HashMap<String, Value>>>,
 
-    /// Current local variables (top of call stack)
-    locals: HashMap<String, Value>,
+    /// Current local variables (FxHashMap for faster hashing)
+    locals: FxHashMap<String, Value>,
 
     /// Loop break/continue targets
     loop_stack: Vec<(usize, usize)>, // (continue_target, break_target)
 
-    /// Function table: maps function names to their bytecode locations
-    functions: HashMap<String, FunctionInfo>,
+    /// Function table: maps function names to their bytecode locations (FxHashMap for speed)
+    functions: FxHashMap<String, FunctionInfo>,
 
     /// Inline cache for member access (maps instruction address to cache)
-    member_cache: HashMap<usize, InlineCache>,
+    member_cache: FxHashMap<usize, InlineCache>,
 
     /// Halt flag
     halted: bool,
@@ -938,13 +894,15 @@ impl VM {
         VM {
             bytecode: ByteCode::new(),
             ip: 0,
-            stack: Vec::new(),
-            call_stack: Vec::new(),
+            // Pre-allocate stack for better performance (typical recursive depth)
+            stack: Vec::with_capacity(256),
+            call_stack: Vec::with_capacity(64),
             globals,
-            locals: HashMap::new(),
+            // Use FxHashMap for faster string hashing
+            locals: FxHashMap::default(),
             loop_stack: Vec::new(),
-            functions: HashMap::new(),
-            member_cache: HashMap::new(),
+            functions: FxHashMap::default(),
+            member_cache: FxHashMap::default(),
             halted: false,
             recursion_depth: 0,
             max_recursion_depth: 4000,
@@ -960,29 +918,36 @@ impl VM {
 
     /// Execute loaded bytecode
     pub fn run(&mut self) -> Result<Option<Value>, RuminaError> {
+        // Safe alternative to unsafe pointer: Use index-based access with immutable borrow
+        // This avoids cloning by borrowing the instruction for pattern matching only
         while !self.halted && self.ip < self.bytecode.instructions.len() {
-            let op = self.bytecode.instructions[self.ip].clone();
+            // Get current instruction index
+            let current_ip = self.ip;
             self.ip += 1;
 
-            self.execute_instruction(op)?;
+            // Execute by matching on the instruction at current index
+            // This is safe and doesn't require cloning the entire OpCode
+            self.execute_instruction_at(current_ip)?;
         }
 
         // Return top of stack if present, otherwise None
         Ok(self.stack.pop())
     }
 
-    /// Execute a single instruction
-    fn execute_instruction(&mut self, op: OpCode) -> Result<(), RuminaError> {
-        match op {
+    /// Execute a single instruction at the given index (safe, no cloning)
+    fn execute_instruction_at(&mut self, ip: usize) -> Result<(), RuminaError> {
+        // Pattern match directly on the instruction reference
+        // The borrow checker allows this because we only need immutable access for matching
+        match &self.bytecode.instructions[ip] {
             OpCode::PushConst(value) => {
-                self.stack.push(value);
+                self.stack.push(value.clone());
             }
 
             OpCode::PushConstPooled(index) => {
                 let value = self
                     .bytecode
                     .constants
-                    .get(index)
+                    .get(*index)
                     .ok_or_else(|| {
                         RuminaError::runtime(format!("Invalid constant pool index: {}", index))
                     })?
@@ -991,7 +956,7 @@ impl VM {
             }
 
             OpCode::PushVar(name) => {
-                let value = self.get_variable(&name)?;
+                let value = self.get_variable(name)?;
                 self.stack.push(value);
             }
 
@@ -999,15 +964,15 @@ impl VM {
                 let value = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
-                self.set_variable(name, value);
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                self.set_variable(name.clone(), value);
             }
 
             OpCode::Dup => {
                 let value = self
                     .stack
                     .last()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?
                     .clone();
                 self.stack.push(value);
             }
@@ -1015,7 +980,7 @@ impl VM {
             OpCode::Pop => {
                 self.stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
             }
 
             OpCode::Add => self.binary_op(|a, b| a.vm_add(b))?,
@@ -1024,11 +989,11 @@ impl VM {
                 let right = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let left = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 match (&left, &right) {
                     (Value::Int(a), Value::Int(b)) => {
@@ -1047,11 +1012,11 @@ impl VM {
                 let right = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let left = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 match (&left, &right) {
                     (Value::Int(a), Value::Int(b)) => {
@@ -1070,11 +1035,11 @@ impl VM {
                 let right = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let left = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 match (&left, &right) {
                     (Value::Int(a), Value::Int(b)) => {
@@ -1095,7 +1060,7 @@ impl VM {
                 let value = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let result = value.vm_neg().map_err(|e| RuminaError::runtime(e))?;
                 self.stack.push(result);
             }
@@ -1104,7 +1069,7 @@ impl VM {
                 let value = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let result = value.vm_not().map_err(|e| RuminaError::runtime(e))?;
                 self.stack.push(result);
             }
@@ -1113,7 +1078,7 @@ impl VM {
                 let value = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let result = value.vm_factorial().map_err(|e| RuminaError::runtime(e))?;
                 self.stack.push(result);
             }
@@ -1131,11 +1096,11 @@ impl VM {
                 let right = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let left = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 match (&left, &right) {
                     (Value::Int(a), Value::Int(b)) => {
@@ -1151,11 +1116,11 @@ impl VM {
                 let right = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let left = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 match (&left, &right) {
                     (Value::Int(a), Value::Int(b)) => {
@@ -1171,11 +1136,11 @@ impl VM {
                 let right = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let left = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 match (&left, &right) {
                     (Value::Int(a), Value::Int(b)) => {
@@ -1191,11 +1156,11 @@ impl VM {
                 let right = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let left = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 match (&left, &right) {
                     (Value::Int(a), Value::Int(b)) => {
@@ -1211,11 +1176,11 @@ impl VM {
                 let right = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let left = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 match (&left, &right) {
                     (Value::Int(a), Value::Int(b)) => {
@@ -1231,11 +1196,11 @@ impl VM {
                 let right = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let left = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 match (&left, &right) {
                     (Value::Int(a), Value::Int(b)) => {
@@ -1254,16 +1219,16 @@ impl VM {
 
             // Control flow
             OpCode::Jump(addr) => {
-                self.ip = addr;
+                self.ip = *addr;
             }
 
             OpCode::JumpIfFalse(addr) => {
                 let condition = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 if !condition.is_truthy() {
-                    self.ip = addr;
+                    self.ip = *addr;
                 }
             }
 
@@ -1271,20 +1236,20 @@ impl VM {
                 let condition = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 if condition.is_truthy() {
-                    self.ip = addr;
+                    self.ip = *addr;
                 }
             }
 
             // Array/Struct operations
             OpCode::MakeArray(count) => {
                 let mut elements = Vec::new();
-                for _ in 0..count {
+                for _ in 0..*count {
                     let elem = self
                         .stack
                         .pop()
-                        .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                        .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                     elements.push(elem);
                 }
                 elements.reverse(); // Restore original order
@@ -1296,11 +1261,11 @@ impl VM {
                 let index = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let array = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 match &array {
                     Value::Array(arr) => {
@@ -1366,12 +1331,12 @@ impl VM {
                 let object = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 match &object {
                     Value::Struct(s) => {
                         let s_ref = s.borrow();
-                        if let Some(value) = s_ref.get(&member_name) {
+                        if let Some(value) = s_ref.get(member_name) {
                             // Check if we have a cache entry for this instruction
                             if let Some(cache) = self.member_cache.get_mut(&cache_addr) {
                                 // Cache exists - increment hits
@@ -1419,17 +1384,6 @@ impl VM {
                 }
             }
 
-            OpCode::EnterScope => {
-                // Push a new local scope frame
-                // For now, we'll handle this with the existing locals HashMap
-                // In a full implementation, we'd push a new scope onto a scope stack
-            }
-
-            OpCode::ExitScope => {
-                // Pop the local scope frame
-                // For now, this is a no-op as we clear locals on function return
-            }
-
             OpCode::Return => {
                 // Pop the call frame and jump back
                 if let Some(frame) = self.call_stack.pop() {
@@ -1464,53 +1418,41 @@ impl VM {
                 }
             }
 
-            OpCode::LoopBegin => {
-                // Mark loop begin - will be set by compiler
-            }
-
-            OpCode::LoopEnd => {
-                // Mark loop end - will be set by compiler
-            }
-
-            OpCode::DefineFunc {
-                name,
-                params,
-                body_start,
-                body_end,
-                decorators,
-            } => {
+            OpCode::DefineFunc(info) => {
                 // Store function metadata in function table
                 self.functions.insert(
-                    name.clone(),
+                    info.name.clone(),
                     FunctionInfo {
-                        name: name.clone(),
-                        params: params.clone(),
-                        body_start,
-                        body_end,
+                        name: info.name.clone(),
+                        params: info.params.clone(),
+                        body_start: info.body_start,
+                        body_end: info.body_end,
                     },
                 );
 
                 // Store function in globals as well (for compatibility)
                 let func_value = Value::Function {
-                    name: name.clone(),
-                    params: params.clone(),
+                    name: info.name.clone(),
+                    params: info.params.clone(),
                     body: Box::new(crate::ast::Stmt::Block(vec![])), // Placeholder
-                    decorators: decorators.clone(),
+                    decorators: info.decorators.clone(),
                 };
-                self.globals.borrow_mut().insert(name, func_value);
+                self.globals
+                    .borrow_mut()
+                    .insert(info.name.clone(), func_value);
             }
 
             OpCode::CallVar(func_name, arg_count) => {
                 // Get the function
-                let func = self.get_variable(&func_name)?;
+                let func = self.get_variable(func_name)?;
 
-                // Pop arguments from stack
-                let mut args = Vec::new();
-                for _ in 0..arg_count {
+                // Pop arguments from stack (pre-allocate to avoid reallocation)
+                let mut args = Vec::with_capacity(*arg_count);
+                for _ in 0..*arg_count {
                     let arg = self
                         .stack
                         .pop()
-                        .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                        .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                     args.push(arg);
                 }
                 args.reverse(); // Restore original order
@@ -1527,7 +1469,7 @@ impl VM {
                     Value::Function { .. } => {
                         // Check if we have the function in our function table
                         // Use get() instead of cloned() to avoid cloning FunctionInfo
-                        if let Some(func_info) = self.functions.get(&func_name) {
+                        if let Some(func_info) = self.functions.get(func_name.as_str()) {
                             // Check recursion depth
                             if self.recursion_depth >= self.max_recursion_depth {
                                 return Err(RuminaError::runtime(format!(
@@ -1563,7 +1505,9 @@ impl VM {
                             self.recursion_depth += 1;
 
                             // Set up parameters as local variables
+                            // Reserve capacity to avoid reallocations
                             self.locals.clear();
+                            self.locals.reserve(params.len());
                             for (param_name, arg_value) in params.iter().zip(args.into_iter()) {
                                 self.locals.insert(param_name.clone(), arg_value);
                             }
@@ -1640,8 +1584,12 @@ impl VM {
                         self.recursion_depth += 1;
 
                         // Set up parameters as local variables
-                        // Start with the closure environment
-                        self.locals = closure.borrow().clone();
+                        // Start with the closure environment (convert HashMap to FxHashMap)
+                        self.locals = closure
+                            .borrow()
+                            .iter()
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect();
                         for (param_name, arg_value) in params.iter().zip(args.into_iter()) {
                             self.locals.insert(param_name.clone(), arg_value);
                         }
@@ -1660,17 +1608,17 @@ impl VM {
 
             OpCode::MakeStruct(field_count) => {
                 let mut fields = HashMap::new();
-                for _ in 0..field_count {
+                for _ in 0..*field_count {
                     // Pop value
                     let value = self
                         .stack
                         .pop()
-                        .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                        .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                     // Pop key (should be a string)
                     let key = self
                         .stack
                         .pop()
-                        .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                        .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                     if let Value::String(key_str) = key {
                         fields.insert(key_str, value);
@@ -1684,16 +1632,12 @@ impl VM {
                     .push(Value::Struct(Rc::new(RefCell::new(fields))));
             }
 
-            OpCode::MakeLambda {
-                params,
-                body_start: _,
-                body_end: _,
-            } => {
+            OpCode::MakeLambda(info) => {
                 // Pop the lambda_id from the stack
                 let lambda_id_value = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 let lambda_id = match lambda_id_value {
                     Value::String(id) => id,
@@ -1706,8 +1650,13 @@ impl VM {
 
                 // Create a lambda value with current locals as closure
                 let closure = if !self.locals.is_empty() {
-                    // Clone current locals for the closure
-                    Rc::new(RefCell::new(self.locals.clone()))
+                    // Clone current locals for the closure (convert FxHashMap to HashMap)
+                    let locals_hashmap: HashMap<String, Value> = self
+                        .locals
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect();
+                    Rc::new(RefCell::new(locals_hashmap))
                 } else {
                     // Use globals as closure
                     Rc::clone(&self.globals)
@@ -1718,7 +1667,7 @@ impl VM {
                 let marker_body = Box::new(crate::ast::Stmt::Include(lambda_id.clone()));
 
                 let lambda_value = Value::Lambda {
-                    params: params.clone(),
+                    params: info.params.clone(),
                     body: marker_body,
                     closure,
                 };
@@ -1728,7 +1677,7 @@ impl VM {
                 self.stack.push(lambda_value);
             }
 
-            OpCode::MemberAssign(_) | OpCode::IndexAssign | OpCode::Call(_) => {
+            OpCode::MemberAssign(_) | OpCode::IndexAssign => {
                 return Err(RuminaError::runtime(
                     "Opcode not yet implemented".to_string(),
                 ));
@@ -1738,17 +1687,13 @@ impl VM {
                 let val = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let converted = self.convert_to_type(val, &dtype)?;
                 self.stack.push(converted);
             }
 
             OpCode::Halt => {
                 self.halted = true;
-            }
-
-            OpCode::Nop => {
-                // Do nothing
             }
         }
 
@@ -1763,11 +1708,11 @@ impl VM {
         let right = self
             .stack
             .pop()
-            .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+            .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
         let left = self
             .stack
             .pop()
-            .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+            .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
         let result = f(&left, &right).map_err(|e| RuminaError::runtime(e))?;
 
@@ -2004,13 +1949,13 @@ mod tests {
 
         // Define the function
         bytecode.emit(
-            OpCode::DefineFunc {
+            OpCode::DefineFunc(Box::new(FuncDefInfo {
                 name: "add".to_string(),
                 params: vec!["a".to_string(), "b".to_string()],
                 body_start,
                 body_end,
                 decorators: vec![],
-            },
+            })),
             None,
         );
 
@@ -2086,13 +2031,13 @@ mod tests {
 
         // Define the function
         bytecode.emit(
-            OpCode::DefineFunc {
+            OpCode::DefineFunc(Box::new(FuncDefInfo {
                 name: "fib".to_string(),
                 params: vec!["n".to_string()],
                 body_start,
                 body_end,
                 decorators: vec![],
-            },
+            })),
             None,
         );
 
