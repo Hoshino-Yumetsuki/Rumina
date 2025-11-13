@@ -13,7 +13,7 @@ use std::rc::Rc;
 
 // Const error messages to avoid allocations
 const ERR_STACK_UNDERFLOW: &str = "Stack underflow";
-const ERR_INVALID_CONST_INDEX: &str = "Invalid constant pool index";
+const _ERR_INVALID_CONST_INDEX: &str = "Invalid constant pool index";
 
 /// Function definition information (boxed in OpCode to reduce size)
 #[derive(Debug, Clone, PartialEq)]
@@ -924,7 +924,7 @@ impl VM {
             // Get current instruction index
             let current_ip = self.ip;
             self.ip += 1;
-            
+
             // Execute by matching on the instruction at current index
             // This is safe and doesn't require cloning the entire OpCode
             self.execute_instruction_at(current_ip)?;
@@ -933,7 +933,7 @@ impl VM {
         // Return top of stack if present, otherwise None
         Ok(self.stack.pop())
     }
-    
+
     /// Execute a single instruction at the given index (safe, no cloning)
     fn execute_instruction_at(&mut self, ip: usize) -> Result<(), RuminaError> {
         // Pattern match directly on the instruction reference
@@ -1437,7 +1437,9 @@ impl VM {
                     body: Box::new(crate::ast::Stmt::Block(vec![])), // Placeholder
                     decorators: info.decorators.clone(),
                 };
-                self.globals.borrow_mut().insert(info.name.clone(), func_value);
+                self.globals
+                    .borrow_mut()
+                    .insert(info.name.clone(), func_value);
             }
 
             OpCode::CallVar(func_name, arg_count) => {
@@ -1583,7 +1585,9 @@ impl VM {
 
                         // Set up parameters as local variables
                         // Start with the closure environment (convert HashMap to FxHashMap)
-                        self.locals = closure.borrow().iter()
+                        self.locals = closure
+                            .borrow()
+                            .iter()
                             .map(|(k, v)| (k.clone(), v.clone()))
                             .collect();
                         for (param_name, arg_value) in params.iter().zip(args.into_iter()) {
@@ -1647,7 +1651,9 @@ impl VM {
                 // Create a lambda value with current locals as closure
                 let closure = if !self.locals.is_empty() {
                     // Clone current locals for the closure (convert FxHashMap to HashMap)
-                    let locals_hashmap: HashMap<String, Value> = self.locals.iter()
+                    let locals_hashmap: HashMap<String, Value> = self
+                        .locals
+                        .iter()
                         .map(|(k, v)| (k.clone(), v.clone()))
                         .collect();
                     Rc::new(RefCell::new(locals_hashmap))

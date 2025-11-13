@@ -453,7 +453,7 @@ impl ASTOptimizer {
     ) -> Option<Vec<Stmt>> {
         // Check if this is a simple counting loop: for (i = 0; i < N; i = i + 1)
         // where N is a small constant (< 5)
-        
+
         // Extract init: var i = start_value
         let (loop_var, start_val) = if let Some(init_stmt) = init {
             match init_stmt.as_ref() {
@@ -473,7 +473,11 @@ impl ASTOptimizer {
         // Extract condition: i < end_value
         let end_val = if let Some(cond) = condition {
             match cond {
-                Expr::Binary { left, op: BinOp::Less, right } => {
+                Expr::Binary {
+                    left,
+                    op: BinOp::Less,
+                    right,
+                } => {
                     if let (Expr::Ident(var), Expr::Int(end)) = (left.as_ref(), right.as_ref()) {
                         if var == &loop_var {
                             *end
@@ -505,8 +509,14 @@ impl ASTOptimizer {
                         return None;
                     }
                     match value {
-                        Expr::Binary { left, op: BinOp::Add, right } => {
-                            if let (Expr::Ident(var), Expr::Int(1)) = (left.as_ref(), right.as_ref()) {
+                        Expr::Binary {
+                            left,
+                            op: BinOp::Add,
+                            right,
+                        } => {
+                            if let (Expr::Ident(var), Expr::Int(1)) =
+                                (left.as_ref(), right.as_ref())
+                            {
                                 if var != &loop_var {
                                     return None;
                                 }
@@ -525,7 +535,7 @@ impl ASTOptimizer {
 
         // Unroll the loop
         let mut unrolled = Vec::new();
-        
+
         // Add init
         unrolled.push(Stmt::VarDecl {
             name: loop_var.clone(),
