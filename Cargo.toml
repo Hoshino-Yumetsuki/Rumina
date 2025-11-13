@@ -33,3 +33,7 @@ getrandom = { version = "^0.3", features = ["wasm_js"] }
 
 [dev-dependencies]
 criterion = "^0.7"
+
+[[bench]]
+name = "vm_benchmark"
+harness = false

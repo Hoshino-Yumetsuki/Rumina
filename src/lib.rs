@@ -1,5 +1,6 @@
 pub mod ast;
 pub mod builtin;
+pub mod bytecode_optimizer;
 pub mod compiler;
 pub mod error;
 pub mod interpreter;
@@ -16,6 +17,7 @@ pub mod vm_ops;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
 
+pub use bytecode_optimizer::BytecodeOptimizer;
 pub use compiler::Compiler;
 pub use error::{ErrorType, RuminaError, StackFrame};
 pub use interpreter::Interpreter;
@@ -44,12 +46,17 @@ pub fn run_rumina(source: &str) -> Result<Option<Value>, RuminaError> {
     let mut parser = Parser::new(tokens);
     let ast = parser.parse().map_err(|e| RuminaError::runtime(e))?;
 
-    // Apply optimization passes
+    // Apply AST optimization passes
     let mut optimizer = ASTOptimizer::new();
     let optimized_ast = optimizer.optimize(ast)?;
 
+    // Compile to bytecode
     let mut compiler = Compiler::new();
-    let bytecode = compiler.compile(optimized_ast)?;
+    let mut bytecode = compiler.compile(optimized_ast)?;
+
+    // Apply bytecode optimization passes
+    let mut bytecode_optimizer = BytecodeOptimizer::new();
+    bytecode_optimizer.optimize(&mut bytecode);
 
     let interpreter = Interpreter::new();
     let globals = interpreter.get_globals();
