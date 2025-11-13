@@ -165,10 +165,6 @@ pub enum OpCode {
     /// Similar to: TEST + JNZ
     JumpIfTrue(usize),
 
-    /// Call function (address to jump to)
-    /// Similar to: CALL addr
-    Call(usize),
-
     /// Call function by name/variable
     /// Similar to: CALL [addr]
     CallVar(String, usize), // (function name, argument count)
@@ -206,22 +202,7 @@ pub enum OpCode {
     /// Create lambda/closure (boxed to reduce OpCode size)
     MakeLambda(Box<LambdaInfo>),
 
-    // ===== Scope Management =====
-    /// Enter new local scope
-    /// Similar to: PUSH rbp; MOV rbp, rsp
-    EnterScope,
-
-    /// Exit local scope
-    /// Similar to: MOV rsp, rbp; POP rbp
-    ExitScope,
-
     // ===== Control Structures =====
-    /// Begin loop (mark position for continue)
-    LoopBegin,
-
-    /// End loop (mark position for break)
-    LoopEnd,
-
     /// Break from loop
     Break,
 
@@ -229,10 +210,6 @@ pub enum OpCode {
     Continue,
 
     // ===== Special Instructions =====
-    /// No operation
-    /// Similar to: NOP
-    Nop,
-
     /// Halt execution
     /// Similar to: HLT
     Halt,
@@ -522,7 +499,6 @@ impl ByteCode {
             OpCode::Jump(addr) => format!("Jump({})", addr),
             OpCode::JumpIfFalse(addr) => format!("JumpIfFalse({})", addr),
             OpCode::JumpIfTrue(addr) => format!("JumpIfTrue({})", addr),
-            OpCode::Call(addr) => format!("Call({})", addr),
             OpCode::CallVar(name, argc) => format!("CallVar({}, {})", name, argc),
             OpCode::Return => "Return".to_string(),
             OpCode::MakeArray(size) => format!("MakeArray({})", size),
@@ -531,13 +507,8 @@ impl ByteCode {
             OpCode::Member(name) => format!("Member({})", name),
             OpCode::IndexAssign => "IndexAssign".to_string(),
             OpCode::MemberAssign(name) => format!("MemberAssign({})", name),
-            OpCode::EnterScope => "EnterScope".to_string(),
-            OpCode::ExitScope => "ExitScope".to_string(),
-            OpCode::LoopBegin => "LoopBegin".to_string(),
-            OpCode::LoopEnd => "LoopEnd".to_string(),
             OpCode::Break => "Break".to_string(),
             OpCode::Continue => "Continue".to_string(),
-            OpCode::Nop => "Nop".to_string(),
             OpCode::Halt => "Halt".to_string(),
             OpCode::DefineFunc(info) => {
                 format!(
@@ -655,26 +626,11 @@ impl ByteCode {
         if s == "IndexAssign" {
             return Ok(OpCode::IndexAssign);
         }
-        if s == "EnterScope" {
-            return Ok(OpCode::EnterScope);
-        }
-        if s == "ExitScope" {
-            return Ok(OpCode::ExitScope);
-        }
-        if s == "LoopBegin" {
-            return Ok(OpCode::LoopBegin);
-        }
-        if s == "LoopEnd" {
-            return Ok(OpCode::LoopEnd);
-        }
         if s == "Break" {
             return Ok(OpCode::Break);
         }
         if s == "Continue" {
             return Ok(OpCode::Continue);
-        }
-        if s == "Nop" {
-            return Ok(OpCode::Nop);
         }
         if s == "Halt" {
             return Ok(OpCode::Halt);
@@ -718,9 +674,6 @@ impl ByteCode {
             return Ok(OpCode::JumpIfTrue(
                 addr.parse().map_err(|_| "Invalid address")?,
             ));
-        }
-        if let Some(addr) = s.strip_prefix("Call(").and_then(|s| s.strip_suffix(")")) {
-            return Ok(OpCode::Call(addr.parse().map_err(|_| "Invalid address")?));
         }
         if let Some(args) = s.strip_prefix("CallVar(").and_then(|s| s.strip_suffix(")")) {
             let parts: Vec<&str> = args.splitn(2, ", ").collect();
@@ -1417,17 +1370,6 @@ impl VM {
                 }
             }
 
-            OpCode::EnterScope => {
-                // Push a new local scope frame
-                // For now, we'll handle this with the existing locals HashMap
-                // In a full implementation, we'd push a new scope onto a scope stack
-            }
-
-            OpCode::ExitScope => {
-                // Pop the local scope frame
-                // For now, this is a no-op as we clear locals on function return
-            }
-
             OpCode::Return => {
                 // Pop the call frame and jump back
                 if let Some(frame) = self.call_stack.pop() {
@@ -1460,14 +1402,6 @@ impl VM {
                 } else {
                     return Err(RuminaError::runtime("Continue outside of loop".to_string()));
                 }
-            }
-
-            OpCode::LoopBegin => {
-                // Mark loop begin - will be set by compiler
-            }
-
-            OpCode::LoopEnd => {
-                // Mark loop end - will be set by compiler
             }
 
             OpCode::DefineFunc(info) => {
@@ -1716,7 +1650,7 @@ impl VM {
                 self.stack.push(lambda_value);
             }
 
-            OpCode::MemberAssign(_) | OpCode::IndexAssign | OpCode::Call(_) => {
+            OpCode::MemberAssign(_) | OpCode::IndexAssign => {
                 return Err(RuminaError::runtime(
                     "Opcode not yet implemented".to_string(),
                 ));
@@ -1733,10 +1667,6 @@ impl VM {
 
             OpCode::Halt => {
                 self.halted = true;
-            }
-
-            OpCode::Nop => {
-                // Do nothing
             }
         }
 
