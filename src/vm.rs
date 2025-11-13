@@ -911,29 +911,27 @@ impl VM {
 
     /// Execute loaded bytecode
     pub fn run(&mut self) -> Result<Option<Value>, RuminaError> {
+        // Safe alternative to unsafe pointer: Use index-based access with immutable borrow
+        // This avoids cloning by borrowing the instruction for pattern matching only
         while !self.halted && self.ip < self.bytecode.instructions.len() {
-            // SAFETY: We use unsafe here to avoid cloning 32-byte OpCode on every instruction.
-            // This is safe because:
-            // 1. We check bounds with self.ip < self.bytecode.instructions.len()
-            // 2. The bytecode is never modified during execution (immutable after load)
-            // 3. We only read the instruction, never write to it
-            // 4. The instruction lives as long as self.bytecode which outlives this loop
-            let op_ptr = unsafe {
-                self.bytecode.instructions.as_ptr().add(self.ip)
-            };
-            let op = unsafe { &*op_ptr };
+            // Get current instruction index
+            let current_ip = self.ip;
             self.ip += 1;
-
-            self.execute_instruction(op)?;
+            
+            // Execute by matching on the instruction at current index
+            // This is safe and doesn't require cloning the entire OpCode
+            self.execute_instruction_at(current_ip)?;
         }
 
         // Return top of stack if present, otherwise None
         Ok(self.stack.pop())
     }
-
-    /// Execute a single instruction
-    fn execute_instruction(&mut self, op: &OpCode) -> Result<(), RuminaError> {
-        match op {
+    
+    /// Execute a single instruction at the given index (safe, no cloning)
+    fn execute_instruction_at(&mut self, ip: usize) -> Result<(), RuminaError> {
+        // Pattern match directly on the instruction reference
+        // The borrow checker allows this because we only need immutable access for matching
+        match &self.bytecode.instructions[ip] {
             OpCode::PushConst(value) => {
                 self.stack.push(value.clone());
             }
