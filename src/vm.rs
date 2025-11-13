@@ -174,6 +174,11 @@ pub enum OpCode {
     /// Similar to: CALL [addr]
     CallVar(String, usize), // (function name, argument count)
 
+    /// Call function from stack (dynamic call)
+    /// Similar to: CALL rax
+    /// Stack: [func, arg1, arg2, ...] -> [result]
+    Call(usize), // (argument count)
+
     /// Return from function
     /// Similar to: RET
     Return,
@@ -539,6 +544,7 @@ impl ByteCode {
             OpCode::JumpIfFalse(addr) => format!("JumpIfFalse({})", addr),
             OpCode::JumpIfTrue(addr) => format!("JumpIfTrue({})", addr),
             OpCode::CallVar(name, argc) => format!("CallVar({}, {})", name, argc),
+            OpCode::Call(argc) => format!("Call({})", argc),
             OpCode::Return => "Return".to_string(),
             OpCode::MakeArray(size) => format!("MakeArray({})", size),
             OpCode::MakeStruct(size) => format!("MakeStruct({})", size),
@@ -721,6 +727,9 @@ impl ByteCode {
                 let argc = parts[1].parse().map_err(|_| "Invalid arg count")?;
                 return Ok(OpCode::CallVar(name, argc));
             }
+        }
+        if let Some(argc) = s.strip_prefix("Call(").and_then(|s| s.strip_suffix(")")) {
+            return Ok(OpCode::Call(argc.parse().map_err(|_| "Invalid arg count")?));
         }
         if let Some(size) = s
             .strip_prefix("MakeArray(")
@@ -1640,6 +1649,171 @@ impl VM {
                 }
             }
 
+            OpCode::Call(arg_count) => {
+                // Pop arguments from stack (in reverse order)
+                let mut args = Vec::with_capacity(*arg_count);
+                for _ in 0..*arg_count {
+                    let arg = self
+                        .stack
+                        .pop()
+                        .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                    args.push(arg);
+                }
+                args.reverse(); // Restore original order
+
+                // Pop the function from the stack
+                let func = self
+                    .stack
+                    .pop()
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+
+                // Call the function
+                match func {
+                    Value::NativeFunction {
+                        func: native_fn, ..
+                    } => {
+                        // Call native function
+                        let result = native_fn(&args).map_err(|e| RuminaError::runtime(e))?;
+                        self.stack.push(result);
+                    }
+                    Value::Function { name, .. } => {
+                        // Check if we have the function in our function table
+                        if let Some(func_info) = self.functions.get(&name) {
+                            // Check recursion depth
+                            if self.recursion_depth >= self.max_recursion_depth {
+                                return Err(RuminaError::runtime(format!(
+                                    "Maximum recursion depth ({}) exceeded",
+                                    self.max_recursion_depth
+                                )));
+                            }
+
+                            // Check parameter count
+                            if args.len() != func_info.params.len() {
+                                return Err(RuminaError::runtime(format!(
+                                    "Function '{}' expects {} arguments, got {}",
+                                    name,
+                                    func_info.params.len(),
+                                    args.len()
+                                )));
+                            }
+
+                            // Get body_start before creating frame (avoid borrow issues)
+                            let body_start = func_info.body_start;
+                            let params = func_info.params.clone();
+
+                            // Create new call frame
+                            let frame = CallFrame {
+                                return_address: self.ip,
+                                base_pointer: self.stack.len(),
+                                function_name: name.clone(),
+                                locals: std::mem::take(&mut self.locals),
+                            };
+
+                            // Push call frame
+                            self.call_stack.push(frame);
+                            self.recursion_depth += 1;
+
+                            // Set up parameters as local variables
+                            self.locals.clear();
+                            self.locals.reserve(params.len());
+                            for (param_name, arg_value) in params.iter().zip(args.into_iter()) {
+                                self.locals.insert(param_name.clone(), arg_value);
+                            }
+
+                            // Jump to function body
+                            self.ip = body_start;
+                        } else {
+                            return Err(RuminaError::runtime(format!(
+                                "Function '{}' not found in function table",
+                                name
+                            )));
+                        }
+                    }
+                    Value::Lambda {
+                        params,
+                        body,
+                        closure,
+                        ..
+                    } => {
+                        // Check recursion depth
+                        if self.recursion_depth >= self.max_recursion_depth {
+                            return Err(RuminaError::runtime(format!(
+                                "Maximum recursion depth ({}) exceeded",
+                                self.max_recursion_depth
+                            )));
+                        }
+
+                        // Check parameter count
+                        if args.len() != params.len() {
+                            return Err(RuminaError::runtime(format!(
+                                "Lambda expects {} arguments, got {}",
+                                params.len(),
+                                args.len()
+                            )));
+                        }
+
+                        // Extract lambda_id from the body marker
+                        let lambda_id = match body.as_ref() {
+                            crate::ast::Stmt::Include(id) => id.clone(),
+                            _ => {
+                                // Fallback: try to find by params (less reliable)
+                                let mut found_id = None;
+                                for (name, _) in &self.functions {
+                                    if name.starts_with("__lambda_") {
+                                        found_id = Some(name.clone());
+                                        break;
+                                    }
+                                }
+                                found_id.ok_or_else(|| {
+                                    RuminaError::runtime("Lambda ID not found".to_string())
+                                })?
+                            }
+                        };
+
+                        // Look up the lambda function info
+                        let func_info = self
+                            .functions
+                            .get(&lambda_id)
+                            .ok_or_else(|| {
+                                RuminaError::runtime(format!("Lambda '{}' not found", lambda_id))
+                            })?
+                            .clone();
+
+                        // Create new call frame
+                        let frame = CallFrame {
+                            return_address: self.ip,
+                            base_pointer: self.stack.len(),
+                            function_name: lambda_id.clone(),
+                            locals: std::mem::take(&mut self.locals),
+                        };
+
+                        // Push call frame
+                        self.call_stack.push(frame);
+                        self.recursion_depth += 1;
+
+                        // Set up parameters as local variables
+                        // Start with the closure environment
+                        self.locals = closure
+                            .borrow()
+                            .iter()
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect();
+                        for (param_name, arg_value) in params.iter().zip(args.into_iter()) {
+                            self.locals.insert(param_name.clone(), arg_value);
+                        }
+
+                        // Jump to lambda body
+                        self.ip = func_info.body_start;
+                    }
+                    _ => {
+                        return Err(RuminaError::runtime(format!(
+                            "Cannot call type {}",
+                            func.type_name()
+                        )));
+                    }
+                }
+            }
+
             OpCode::MakeStruct(field_count) => {
                 let mut fields = HashMap::new();
                 for _ in 0..*field_count {
@@ -1711,7 +1885,32 @@ impl VM {
                 self.stack.push(lambda_value);
             }
 
-            OpCode::MemberAssign(_) | OpCode::IndexAssign => {
+            OpCode::MemberAssign(member_name) => {
+                // Pop value to assign
+                let value = self
+                    .stack
+                    .pop()
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+
+                // Pop object
+                let object = self
+                    .stack
+                    .pop()
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+
+                match object {
+                    Value::Struct(s) => {
+                        s.borrow_mut().insert(member_name.clone(), value);
+                    }
+                    _ => {
+                        return Err(RuminaError::runtime(
+                            "Cannot assign member to non-struct value".to_string(),
+                        ));
+                    }
+                }
+            }
+
+            OpCode::IndexAssign => {
                 return Err(RuminaError::runtime(
                     "Opcode not yet implemented".to_string(),
                 ));
