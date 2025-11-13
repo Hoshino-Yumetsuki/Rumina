@@ -3,9 +3,13 @@
 /// This module compiles AST to bytecode instructions for the VM.
 use crate::ast::*;
 use crate::error::RuminaError;
+use crate::lexer::Lexer;
+use crate::parser::Parser;
 use crate::value::Value;
 use crate::vm::{ByteCode, OpCode};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::fs;
+use std::path::Path;
 
 /// Symbol table for variable resolution
 #[derive(Debug, Clone)]
@@ -85,6 +89,15 @@ pub struct Compiler {
 
     /// Lambda counter for unique IDs
     lambda_counter: usize,
+
+    /// Set of already included files to prevent circular includes
+    included_files: HashSet<String>,
+
+    /// Current working directory for resolving relative includes
+    current_dir: Option<String>,
+
+    /// Module namespace mappings (module_name -> prefix for variables)
+    module_namespaces: HashMap<String, String>,
 }
 
 impl Compiler {
@@ -95,6 +108,23 @@ impl Compiler {
             loop_stack: Vec::new(),
             current_line: None,
             lambda_counter: 0,
+            included_files: HashSet::new(),
+            current_dir: None,
+            module_namespaces: HashMap::new(),
+        }
+    }
+
+    /// Create a new compiler with a specific working directory
+    pub fn with_current_dir(current_dir: String) -> Self {
+        Compiler {
+            bytecode: ByteCode::new(),
+            symbols: SymbolTable::new(),
+            loop_stack: Vec::new(),
+            current_line: None,
+            lambda_counter: 0,
+            included_files: HashSet::new(),
+            current_dir: Some(current_dir),
+            module_namespaces: HashMap::new(),
         }
     }
 
@@ -444,6 +474,11 @@ impl Compiler {
                 self.symbols.define(name.clone());
             }
 
+            Stmt::Include(path) => {
+                // Resolve include at compile time
+                self.compile_include(path)?;
+            }
+
             _ => {
                 return Err(RuminaError::runtime(format!(
                     "Unimplemented statement compilation: {:?}",
@@ -453,6 +488,213 @@ impl Compiler {
         }
 
         Ok(())
+    }
+
+    /// Compile an include statement by reading and inlining the included file
+    fn compile_include(&mut self, path: &str) -> Result<(), RuminaError> {
+        // Construct file path
+        let mut file_path = path.to_string();
+
+        // Add .lm extension if not present
+        if !file_path.ends_with(".lm") {
+            file_path.push_str(".lm");
+        }
+
+        // Resolve relative path based on current directory
+        let resolved_path = if let Some(ref current_dir) = self.current_dir {
+            Path::new(current_dir).join(&file_path)
+        } else {
+            Path::new(&file_path).to_path_buf()
+        };
+
+        // Convert to canonical string for duplicate checking
+        let canonical_path = resolved_path
+            .canonicalize()
+            .unwrap_or_else(|_| resolved_path.clone())
+            .to_string_lossy()
+            .to_string();
+
+        // Check if already included to prevent circular includes
+        if self.included_files.contains(&canonical_path) {
+            return Ok(()); // Already included, skip
+        }
+
+        // Mark as included
+        self.included_files.insert(canonical_path.clone());
+
+        // Read the file
+        let contents = fs::read_to_string(&resolved_path).map_err(|e| {
+            RuminaError::runtime(format!(
+                "Cannot read included file '{}': {}",
+                resolved_path.display(),
+                e
+            ))
+        })?;
+
+        // Parse the included file
+        let mut lexer = Lexer::new(contents.clone());
+        let tokens = lexer.tokenize();
+        let mut parser = Parser::new(tokens);
+        let statements = parser.parse().map_err(|e| {
+            RuminaError::runtime(format!(
+                "Error parsing included file '{}': {}",
+                resolved_path.display(),
+                e
+            ))
+        })?;
+
+        // Extract module name from the included file
+        // Look for: define module_name = "..."
+        let module_name = self.extract_module_name(&statements, &contents, path);
+
+        // Store the module namespace mapping
+        self.module_namespaces
+            .insert(module_name.clone(), module_name.clone());
+
+        // Compile each statement from the included file with namespace prefix
+        for stmt in statements {
+            self.compile_stmt_with_namespace(&stmt, &module_name)?;
+        }
+
+        Ok(())
+    }
+
+    /// Extract module name from statements or derive from file path
+    fn extract_module_name(&self, statements: &[Stmt], _contents: &str, path: &str) -> String {
+        // Look for: define module_name = "..." or var module_name = "..."
+        for stmt in statements {
+            match stmt {
+                Stmt::VarDecl { name, value, .. } if name == "module_name" => {
+                    if let Expr::String(s) = value {
+                        return s.clone();
+                    }
+                }
+                Stmt::Assign { name, value } if name == "module_name" => {
+                    if let Expr::String(s) = value {
+                        return s.clone();
+                    }
+                }
+                // Also check expression statements that might be assignments
+                Stmt::Expr(expr) => {
+                    // Check for: define module_name = "..." (which is parsed as a call expression)
+                    if let Expr::Call { func, args } = expr {
+                        if let Expr::Ident(fn_name) = &**func {
+                            if fn_name == "define" && args.len() == 2 {
+                                if let Expr::Ident(var_name) = &args[0] {
+                                    if var_name == "module_name" {
+                                        if let Expr::String(s) = &args[1] {
+                                            return s.clone();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Fallback: use filename without extension
+        path.split('/')
+            .last()
+            .or_else(|| path.split('\\').last())
+            .unwrap_or(path)
+            .trim_end_matches(".lm")
+            .to_string()
+    }
+
+    /// Compile a statement with namespace prefix for top-level items
+    fn compile_stmt_with_namespace(
+        &mut self,
+        stmt: &Stmt,
+        namespace: &str,
+    ) -> Result<(), RuminaError> {
+        match stmt {
+            // Skip module_name variable declaration or assignment
+            Stmt::VarDecl { name, .. } if name == "module_name" => Ok(()),
+            Stmt::Assign { name, .. } if name == "module_name" => Ok(()),
+
+            // Skip standalone "define" expression (which precedes module_name assignment)
+            Stmt::Expr(Expr::Ident(name)) if name == "define" => Ok(()),
+
+            // Prefix top-level variable declarations
+            Stmt::VarDecl {
+                name,
+                value,
+                is_bigint,
+                declared_type,
+            } => {
+                let prefixed_name = format!("{}::{}", namespace, name);
+
+                // Compile the value expression
+                self.compile_expr(value)?;
+
+                // Apply type conversion if declared_type is specified
+                if let Some(dtype) = declared_type {
+                    self.emit(OpCode::ConvertType(dtype.clone()));
+                } else if *is_bigint {
+                    self.emit(OpCode::ConvertType(DeclaredType::BigInt));
+                }
+
+                // Store in prefixed variable
+                self.emit(OpCode::PopVar(prefixed_name.clone()));
+                self.symbols.define(prefixed_name);
+                Ok(())
+            }
+
+            // Prefix top-level function definitions
+            Stmt::FuncDef {
+                name,
+                params,
+                body,
+                decorators,
+            } => {
+                let prefixed_name = format!("{}::{}", namespace, name);
+
+                // Store function definition
+                let skip_jump = self.emit_jump(OpCode::Jump(0));
+
+                let body_start = self.current_address();
+
+                // Compile function body
+                self.symbols.enter_scope();
+                for param in params {
+                    self.symbols.define(param.clone());
+                }
+
+                for stmt in body {
+                    self.compile_stmt(stmt)?;
+                }
+
+                // Implicit return null if no explicit return
+                let index = self.bytecode.add_constant(Value::Null);
+                self.emit(OpCode::PushConstPooled(index));
+                self.emit(OpCode::Return);
+
+                self.symbols.exit_scope();
+
+                let body_end = self.current_address();
+
+                // Patch skip jump
+                self.patch_jump(skip_jump);
+
+                // Define the function with prefixed name
+                self.emit(OpCode::DefineFunc(Box::new(crate::vm::FuncDefInfo {
+                    name: prefixed_name.clone(),
+                    params: params.clone(),
+                    body_start,
+                    body_end,
+                    decorators: decorators.clone(),
+                })));
+
+                self.symbols.define(prefixed_name);
+                Ok(())
+            }
+
+            // Other statements compile normally
+            _ => self.compile_stmt(stmt),
+        }
     }
 
     /// Compile an expression
@@ -614,6 +856,13 @@ impl Compiler {
                         self.compile_expr(arg)?;
                     }
                     self.emit(OpCode::CallVar(name.clone(), args.len()));
+                } else if let Expr::Namespace { module, name } = &**func {
+                    // Namespace function call: module::function(args)
+                    for arg in args {
+                        self.compile_expr(arg)?;
+                    }
+                    let prefixed_name = format!("{}::{}", module, name);
+                    self.emit(OpCode::CallVar(prefixed_name, args.len()));
                 } else {
                     // Dynamic function call (e.g., obj.method() or (expr)())
                     // First compile the function expression
@@ -686,6 +935,13 @@ impl Compiler {
                     body_start,
                     body_end,
                 })));
+            }
+
+            Expr::Namespace { module, name } => {
+                // Namespace access: module::name
+                // We compile this as a regular variable access with :: separator
+                let prefixed_name = format!("{}::{}", module, name);
+                self.emit(OpCode::PushVar(prefixed_name));
             }
 
             _ => {
