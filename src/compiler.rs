@@ -201,6 +201,21 @@ impl Compiler {
                 self.emit(OpCode::PopVar(name.clone()));
             }
 
+            Stmt::MemberAssign {
+                object,
+                member,
+                value,
+            } => {
+                // Compile the object expression
+                self.compile_expr(object)?;
+
+                // Compile the value expression
+                self.compile_expr(value)?;
+
+                // Emit member assignment
+                self.emit(OpCode::MemberAssign(member.clone()));
+            }
+
             Stmt::Block(statements) => {
                 self.symbols.enter_scope();
                 // EnterScope and ExitScope opcodes are no-ops, so we omit them for performance
@@ -577,22 +592,38 @@ impl Compiler {
                 self.emit(OpCode::MakeArray(elements.len()));
             }
 
-            Expr::Call { func, args } => {
-                // Compile arguments
-                for arg in args {
-                    self.compile_expr(arg)?;
+            Expr::Struct(fields) => {
+                // Compile each field (key, value) pair
+                for (key, value) in fields {
+                    // Push key as string constant
+                    let key_index = self.bytecode.add_constant(Value::String(key.clone()));
+                    self.emit(OpCode::PushConstPooled(key_index));
+                    // Push value
+                    self.compile_expr(value)?;
                 }
 
+                // Create struct from N field pairs
+                self.emit(OpCode::MakeStruct(fields.len()));
+            }
+
+            Expr::Call { func, args } => {
                 // Check if it's a simple function call
                 if let Expr::Ident(name) = &**func {
+                    // Compile arguments
+                    for arg in args {
+                        self.compile_expr(arg)?;
+                    }
                     self.emit(OpCode::CallVar(name.clone(), args.len()));
                 } else {
-                    // Complex expression as function
+                    // Dynamic function call (e.g., obj.method() or (expr)())
+                    // First compile the function expression
                     self.compile_expr(func)?;
-                    // TODO: Implement dynamic call
-                    return Err(RuminaError::runtime(
-                        "Dynamic function calls not yet implemented".to_string(),
-                    ));
+                    // Then compile arguments
+                    for arg in args {
+                        self.compile_expr(arg)?;
+                    }
+                    // Emit dynamic call
+                    self.emit(OpCode::Call(args.len()));
                 }
             }
 
