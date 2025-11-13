@@ -203,13 +203,13 @@ impl Compiler {
 
             Stmt::Block(statements) => {
                 self.symbols.enter_scope();
-                self.emit(OpCode::EnterScope);
+                // EnterScope and ExitScope opcodes are no-ops, so we omit them for performance
 
                 for stmt in statements {
                     self.compile_stmt(stmt)?;
                 }
 
-                self.emit(OpCode::ExitScope);
+                // ExitScope is also a no-op
                 self.symbols.exit_scope();
             }
 
@@ -418,13 +418,13 @@ impl Compiler {
                 self.patch_jump(skip_jump);
 
                 // Define the function
-                self.emit(OpCode::DefineFunc {
+                self.emit(OpCode::DefineFunc(Box::new(crate::vm::FuncDefInfo {
                     name: name.clone(),
                     params: params.clone(),
                     body_start,
                     body_end,
                     decorators: decorators.clone(),
-                });
+                })));
 
                 self.symbols.define(name.clone());
             }
@@ -639,22 +639,22 @@ impl Compiler {
 
                 // Create the lambda value and push it on stack
                 // Store lambda_id in the bytecode so VM can register it
-                self.emit(OpCode::DefineFunc {
+                self.emit(OpCode::DefineFunc(Box::new(crate::vm::FuncDefInfo {
                     name: lambda_id.clone(),
                     params: params.clone(),
                     body_start,
                     body_end,
                     decorators: vec![],
-                });
+                })));
 
                 // Now push a marker that tells VM this is a lambda with this ID
                 let index = self.bytecode.add_constant(Value::String(lambda_id.clone()));
                 self.emit(OpCode::PushConstPooled(index));
-                self.emit(OpCode::MakeLambda {
+                self.emit(OpCode::MakeLambda(Box::new(crate::vm::LambdaInfo {
                     params: params.clone(),
                     body_start,
                     body_end,
-                });
+                })));
             }
 
             _ => {

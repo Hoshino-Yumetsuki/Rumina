@@ -28,10 +28,92 @@ use num::complex::Complex64;
 /// With these optimizations, the VM is now **1.8-2x faster** than the AST interpreter:
 /// - fib(30) in release mode: VM 1.93s vs Interpreter 3.45s
 /// - fib(20) in debug mode: VM 90ms vs Interpreter 185ms
+///
+/// ## Parallel BigInt Power Operations
+///
+/// For large exponent power operations, we use parallel binary exponentiation:
+/// - Threshold: exponents >= 10000 use parallelization
+/// - Uses rayon for parallel chunk processing
+/// - Improves CPU utilization on multi-core systems
 use num::{BigInt, BigRational};
+use rayon::prelude::*;
 
 use crate::ast::{BinOp, UnaryOp};
 use crate::value::{IrrationalValue, Value};
+
+/// Threshold for using parallel BigInt power computation
+const PARALLEL_POW_THRESHOLD: u32 = 10000;
+
+/// Compute BigInt power operation with optional parallelization for large exponents
+///
+/// For exponents >= PARALLEL_POW_THRESHOLD, uses parallel divide-and-conquer
+/// to improve CPU utilization on multi-core systems.
+fn bigint_pow_optimized(base: &BigInt, exponent: u32) -> BigInt {
+    // For small exponents, use the standard sequential algorithm
+    if exponent < PARALLEL_POW_THRESHOLD {
+        return base.pow(exponent);
+    }
+
+    // For large exponents, use parallel divide-and-conquer approach
+    // This splits the computation: base^exp = (base^(exp/2))^2 or (base^(exp/2))^2 * base
+    bigint_pow_parallel(base, exponent)
+}
+
+/// Parallel power computation using divide-and-conquer
+fn bigint_pow_parallel(base: &BigInt, exponent: u32) -> BigInt {
+    if exponent == 0 {
+        return BigInt::from(1);
+    }
+    if exponent == 1 {
+        return base.clone();
+    }
+
+    // Use sequential for small exponents
+    if exponent < 500 {
+        return base.pow(exponent);
+    }
+
+    // For large exponents, split into chunks that can be computed independently
+    // then multiplied together. This allows parallel computation.
+    // Strategy: base^exp = base^(chunk_size) * base^(chunk_size) * ... * base^(remainder)
+
+    // Choose chunk size based on exponent to create parallelizable work
+    let num_chunks = if exponent >= 100000 {
+        8 // More chunks for very large exponents
+    } else if exponent >= 10000 {
+        4
+    } else {
+        2
+    };
+
+    let chunk_size = exponent / num_chunks;
+    let remainder = exponent % num_chunks;
+
+    if chunk_size < 100 {
+        // Chunks too small, just use sequential
+        return base.pow(exponent);
+    }
+
+    // Compute all chunks in parallel
+    let chunk_results: Vec<BigInt> = (0..num_chunks)
+        .into_par_iter()
+        .map(|_| bigint_pow_parallel(base, chunk_size))
+        .collect();
+
+    // Multiply all chunk results together
+    let mut result = BigInt::from(1);
+    for chunk_result in chunk_results {
+        result = result * chunk_result;
+    }
+
+    // Handle remainder
+    if remainder > 0 {
+        let remainder_result = base.pow(remainder);
+        result = result * remainder_result;
+    }
+
+    result
+}
 
 /// Compute power operation with symbolic handling
 #[allow(dead_code)]
@@ -198,9 +280,9 @@ pub fn value_binary_op(left: &Value, op: BinOp, right: &Value) -> Result<Value, 
                         match a.checked_pow(*b as u32) {
                             Some(result) => Ok(Value::Int(result)),
                             None => {
-                                // Overflow: promote to BigInt
+                                // Overflow: promote to BigInt and use optimized version
                                 let a_big = BigInt::from(*a);
-                                Ok(Value::BigInt(a_big.pow(*b as u32)))
+                                Ok(Value::BigInt(bigint_pow_optimized(&a_big, *b as u32)))
                             }
                         }
                     }
@@ -235,7 +317,7 @@ pub fn value_binary_op(left: &Value, op: BinOp, right: &Value) -> Result<Value, 
             }
             BinOp::Pow => {
                 if let Ok(exp) = b.to_string().parse::<u32>() {
-                    Ok(Value::BigInt(a.pow(exp)))
+                    Ok(Value::BigInt(bigint_pow_optimized(a, exp)))
                 } else {
                     let a_float = a.to_string().parse::<f64>().unwrap_or(0.0);
                     let b_float = b.to_string().parse::<f64>().unwrap_or(0.0);
