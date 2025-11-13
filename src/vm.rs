@@ -11,6 +11,10 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+// Const error messages to avoid allocations
+const ERR_STACK_UNDERFLOW: &str = "Stack underflow";
+const ERR_INVALID_CONST_INDEX: &str = "Invalid constant pool index";
+
 /// Function definition information (boxed in OpCode to reduce size)
 #[derive(Debug, Clone, PartialEq)]
 pub struct FuncDefInfo {
@@ -960,7 +964,7 @@ impl VM {
                 let value = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 self.set_variable(name.clone(), value);
             }
 
@@ -968,7 +972,7 @@ impl VM {
                 let value = self
                     .stack
                     .last()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?
                     .clone();
                 self.stack.push(value);
             }
@@ -976,7 +980,7 @@ impl VM {
             OpCode::Pop => {
                 self.stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
             }
 
             OpCode::Add => self.binary_op(|a, b| a.vm_add(b))?,
@@ -985,11 +989,11 @@ impl VM {
                 let right = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let left = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 match (&left, &right) {
                     (Value::Int(a), Value::Int(b)) => {
@@ -1008,11 +1012,11 @@ impl VM {
                 let right = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let left = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 match (&left, &right) {
                     (Value::Int(a), Value::Int(b)) => {
@@ -1031,11 +1035,11 @@ impl VM {
                 let right = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let left = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 match (&left, &right) {
                     (Value::Int(a), Value::Int(b)) => {
@@ -1056,7 +1060,7 @@ impl VM {
                 let value = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let result = value.vm_neg().map_err(|e| RuminaError::runtime(e))?;
                 self.stack.push(result);
             }
@@ -1065,7 +1069,7 @@ impl VM {
                 let value = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let result = value.vm_not().map_err(|e| RuminaError::runtime(e))?;
                 self.stack.push(result);
             }
@@ -1074,7 +1078,7 @@ impl VM {
                 let value = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let result = value.vm_factorial().map_err(|e| RuminaError::runtime(e))?;
                 self.stack.push(result);
             }
@@ -1092,11 +1096,11 @@ impl VM {
                 let right = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let left = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 match (&left, &right) {
                     (Value::Int(a), Value::Int(b)) => {
@@ -1112,11 +1116,11 @@ impl VM {
                 let right = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let left = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 match (&left, &right) {
                     (Value::Int(a), Value::Int(b)) => {
@@ -1132,11 +1136,11 @@ impl VM {
                 let right = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let left = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 match (&left, &right) {
                     (Value::Int(a), Value::Int(b)) => {
@@ -1152,11 +1156,11 @@ impl VM {
                 let right = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let left = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 match (&left, &right) {
                     (Value::Int(a), Value::Int(b)) => {
@@ -1172,11 +1176,11 @@ impl VM {
                 let right = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let left = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 match (&left, &right) {
                     (Value::Int(a), Value::Int(b)) => {
@@ -1192,11 +1196,11 @@ impl VM {
                 let right = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let left = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 match (&left, &right) {
                     (Value::Int(a), Value::Int(b)) => {
@@ -1222,7 +1226,7 @@ impl VM {
                 let condition = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 if !condition.is_truthy() {
                     self.ip = *addr;
                 }
@@ -1232,7 +1236,7 @@ impl VM {
                 let condition = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 if condition.is_truthy() {
                     self.ip = *addr;
                 }
@@ -1245,7 +1249,7 @@ impl VM {
                     let elem = self
                         .stack
                         .pop()
-                        .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                        .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                     elements.push(elem);
                 }
                 elements.reverse(); // Restore original order
@@ -1257,11 +1261,11 @@ impl VM {
                 let index = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let array = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 match &array {
                     Value::Array(arr) => {
@@ -1327,7 +1331,7 @@ impl VM {
                 let object = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 match &object {
                     Value::Struct(s) => {
@@ -1446,7 +1450,7 @@ impl VM {
                     let arg = self
                         .stack
                         .pop()
-                        .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                        .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                     args.push(arg);
                 }
                 args.reverse(); // Restore original order
@@ -1605,12 +1609,12 @@ impl VM {
                     let value = self
                         .stack
                         .pop()
-                        .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                        .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                     // Pop key (should be a string)
                     let key = self
                         .stack
                         .pop()
-                        .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                        .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                     if let Value::String(key_str) = key {
                         fields.insert(key_str, value);
@@ -1629,7 +1633,7 @@ impl VM {
                 let lambda_id_value = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
                 let lambda_id = match lambda_id_value {
                     Value::String(id) => id,
@@ -1677,7 +1681,7 @@ impl VM {
                 let val = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
                 let converted = self.convert_to_type(val, &dtype)?;
                 self.stack.push(converted);
             }
@@ -1698,11 +1702,11 @@ impl VM {
         let right = self
             .stack
             .pop()
-            .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+            .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
         let left = self
             .stack
             .pop()
-            .ok_or_else(|| RuminaError::runtime("Stack underflow".to_string()))?;
+            .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
 
         let result = f(&left, &right).map_err(|e| RuminaError::runtime(e))?;
 
