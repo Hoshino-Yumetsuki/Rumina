@@ -36,6 +36,7 @@ use num::complex::Complex64;
 /// - Uses rayon for parallel chunk processing
 /// - Improves CPU utilization on multi-core systems
 use num::{BigInt, BigRational};
+use rayon::prelude::*;
 
 use crate::ast::{BinOp, UnaryOp};
 use crate::value::{IrrationalValue, Value};
@@ -68,27 +69,50 @@ fn bigint_pow_parallel(base: &BigInt, exponent: u32) -> BigInt {
     }
     
     // Use sequential for small exponents
-    if exponent < 100 {
+    if exponent < 500 {
         return base.pow(exponent);
     }
     
-    let half_exp = exponent / 2;
-    let is_odd = exponent % 2 == 1;
+    // For large exponents, split into chunks that can be computed independently
+    // then multiplied together. This allows parallel computation.
+    // Strategy: base^exp = base^(chunk_size) * base^(chunk_size) * ... * base^(remainder)
     
-    // For large exponents, compute the two halves in parallel
-    // This allows better CPU utilization
-    let (half_result, extra) = rayon::join(
-        || bigint_pow_parallel(base, half_exp),
-        || if is_odd { base.clone() } else { BigInt::from(1) }
-    );
-    
-    // Combine: result = (base^(exp/2))^2 * extra
-    let squared = &half_result * &half_result;
-    if is_odd {
-        &squared * &extra
+    // Choose chunk size based on exponent to create parallelizable work
+    let num_chunks = if exponent >= 100000 {
+        8 // More chunks for very large exponents
+    } else if exponent >= 10000 {
+        4
     } else {
-        squared
+        2
+    };
+    
+    let chunk_size = exponent / num_chunks;
+    let remainder = exponent % num_chunks;
+    
+    if chunk_size < 100 {
+        // Chunks too small, just use sequential
+        return base.pow(exponent);
     }
+    
+    // Compute all chunks in parallel
+    let chunk_results: Vec<BigInt> = (0..num_chunks)
+        .into_par_iter()
+        .map(|_| bigint_pow_parallel(base, chunk_size))
+        .collect();
+    
+    // Multiply all chunk results together
+    let mut result = BigInt::from(1);
+    for chunk_result in chunk_results {
+        result = result * chunk_result;
+    }
+    
+    // Handle remainder
+    if remainder > 0 {
+        let remainder_result = base.pow(remainder);
+        result = result * remainder_result;
+    }
+    
+    result
 }
 
 /// Compute power operation with symbolic handling
