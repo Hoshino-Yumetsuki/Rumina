@@ -6,6 +6,7 @@ use crate::ast::DeclaredType;
 use crate::error::RuminaError;
 use crate::value::Value;
 use crate::vm_ops::VMOperations;
+use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -815,8 +816,8 @@ struct CallFrame {
     #[allow(dead_code)]
     function_name: String,
 
-    /// Local variables in this frame
-    locals: HashMap<String, Value>,
+    /// Local variables in this frame (FxHashMap for faster access)
+    locals: FxHashMap<String, Value>,
 }
 
 /// Inline cache entry for member access
@@ -854,7 +855,7 @@ pub struct VM {
     /// Instruction pointer
     ip: usize,
 
-    /// Data stack
+    /// Data stack (pre-allocated for better performance)
     stack: Vec<Value>,
 
     /// Call stack (for function calls)
@@ -863,17 +864,17 @@ pub struct VM {
     /// Global variables
     globals: Rc<RefCell<HashMap<String, Value>>>,
 
-    /// Current local variables (top of call stack)
-    locals: HashMap<String, Value>,
+    /// Current local variables (FxHashMap for faster hashing)
+    locals: FxHashMap<String, Value>,
 
     /// Loop break/continue targets
     loop_stack: Vec<(usize, usize)>, // (continue_target, break_target)
 
-    /// Function table: maps function names to their bytecode locations
-    functions: HashMap<String, FunctionInfo>,
+    /// Function table: maps function names to their bytecode locations (FxHashMap for speed)
+    functions: FxHashMap<String, FunctionInfo>,
 
     /// Inline cache for member access (maps instruction address to cache)
-    member_cache: HashMap<usize, InlineCache>,
+    member_cache: FxHashMap<usize, InlineCache>,
 
     /// Halt flag
     halted: bool,
@@ -889,13 +890,15 @@ impl VM {
         VM {
             bytecode: ByteCode::new(),
             ip: 0,
-            stack: Vec::new(),
-            call_stack: Vec::new(),
+            // Pre-allocate stack for better performance (typical recursive depth)
+            stack: Vec::with_capacity(256),
+            call_stack: Vec::with_capacity(64),
             globals,
-            locals: HashMap::new(),
+            // Use FxHashMap for faster string hashing
+            locals: FxHashMap::default(),
             loop_stack: Vec::new(),
-            functions: HashMap::new(),
-            member_cache: HashMap::new(),
+            functions: FxHashMap::default(),
+            member_cache: FxHashMap::default(),
             halted: false,
             recursion_depth: 0,
             max_recursion_depth: 4000,
@@ -1573,8 +1576,10 @@ impl VM {
                         self.recursion_depth += 1;
 
                         // Set up parameters as local variables
-                        // Start with the closure environment
-                        self.locals = closure.borrow().clone();
+                        // Start with the closure environment (convert HashMap to FxHashMap)
+                        self.locals = closure.borrow().iter()
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect();
                         for (param_name, arg_value) in params.iter().zip(args.into_iter()) {
                             self.locals.insert(param_name.clone(), arg_value);
                         }
@@ -1635,8 +1640,11 @@ impl VM {
 
                 // Create a lambda value with current locals as closure
                 let closure = if !self.locals.is_empty() {
-                    // Clone current locals for the closure
-                    Rc::new(RefCell::new(self.locals.clone()))
+                    // Clone current locals for the closure (convert FxHashMap to HashMap)
+                    let locals_hashmap: HashMap<String, Value> = self.locals.iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect();
+                    Rc::new(RefCell::new(locals_hashmap))
                 } else {
                     // Use globals as closure
                     Rc::clone(&self.globals)
