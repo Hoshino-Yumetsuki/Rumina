@@ -3,6 +3,7 @@
 /// This module implements various optimization techniques:
 /// - Constant folding: Evaluate constant expressions at compile time
 /// - Dead code elimination: Remove unreachable code
+/// - Loop unrolling: Unroll small fixed-iteration loops
 use crate::ast::*;
 use crate::error::RuminaError;
 
@@ -437,6 +438,142 @@ impl ASTOptimizer {
 
             // Literals are already optimized
             expr => Ok(expr),
+        }
+    }
+
+    /// Try to unroll a simple for loop with constant bounds
+    /// Only unrolls very small loops (< 5 iterations) to avoid code bloat
+    #[allow(dead_code)]
+    fn try_unroll_for_loop(
+        &mut self,
+        init: &Option<Box<Stmt>>,
+        condition: &Option<Expr>,
+        update: &Option<Box<Stmt>>,
+        body: &[Stmt],
+    ) -> Option<Vec<Stmt>> {
+        // Check if this is a simple counting loop: for (i = 0; i < N; i = i + 1)
+        // where N is a small constant (< 5)
+        
+        // Extract init: var i = start_value
+        let (loop_var, start_val) = if let Some(init_stmt) = init {
+            match init_stmt.as_ref() {
+                Stmt::VarDecl { name, value, .. } => {
+                    if let Expr::Int(start) = value {
+                        (name.clone(), *start)
+                    } else {
+                        return None;
+                    }
+                }
+                _ => return None,
+            }
+        } else {
+            return None;
+        };
+
+        // Extract condition: i < end_value
+        let end_val = if let Some(cond) = condition {
+            match cond {
+                Expr::Binary { left, op: BinOp::Less, right } => {
+                    if let (Expr::Ident(var), Expr::Int(end)) = (left.as_ref(), right.as_ref()) {
+                        if var == &loop_var {
+                            *end
+                        } else {
+                            return None;
+                        }
+                    } else {
+                        return None;
+                    }
+                }
+                _ => return None,
+            }
+        } else {
+            return None;
+        };
+
+        // Check iteration count
+        let iterations = end_val - start_val;
+        if iterations <= 0 || iterations >= 5 {
+            // Don't unroll loops with too many or invalid iterations
+            return None;
+        }
+
+        // Verify update is i = i + 1
+        if let Some(update_stmt) = update {
+            match update_stmt.as_ref() {
+                Stmt::Assign { name, value } => {
+                    if name != &loop_var {
+                        return None;
+                    }
+                    match value {
+                        Expr::Binary { left, op: BinOp::Add, right } => {
+                            if let (Expr::Ident(var), Expr::Int(1)) = (left.as_ref(), right.as_ref()) {
+                                if var != &loop_var {
+                                    return None;
+                                }
+                            } else {
+                                return None;
+                            }
+                        }
+                        _ => return None,
+                    }
+                }
+                _ => return None,
+            }
+        } else {
+            return None;
+        }
+
+        // Unroll the loop
+        let mut unrolled = Vec::new();
+        
+        // Add init
+        unrolled.push(Stmt::VarDecl {
+            name: loop_var.clone(),
+            value: Expr::Int(start_val),
+            is_bigint: false,
+            declared_type: None,
+        });
+
+        // Unroll body for each iteration
+        for i in start_val..end_val {
+            // Clone and substitute loop variable with constant
+            for stmt in body {
+                let substituted = self.substitute_var_in_stmt(stmt, &loop_var, i);
+                unrolled.push(substituted);
+            }
+        }
+
+        self.modified = true;
+        Some(unrolled)
+    }
+
+    /// Substitute variable references with constant value in a statement
+    #[allow(dead_code)]
+    fn substitute_var_in_stmt(&self, stmt: &Stmt, var: &str, val: i64) -> Stmt {
+        match stmt {
+            Stmt::Expr(expr) => Stmt::Expr(self.substitute_var_in_expr(expr, var, val)),
+            Stmt::Assign { name, value } => Stmt::Assign {
+                name: name.clone(),
+                value: self.substitute_var_in_expr(value, var, val),
+            },
+            stmt => stmt.clone(), // For complex statements, just clone
+        }
+    }
+
+    /// Substitute variable references with constant value in an expression
+    fn substitute_var_in_expr(&self, expr: &Expr, var: &str, val: i64) -> Expr {
+        match expr {
+            Expr::Ident(name) if name == var => Expr::Int(val),
+            Expr::Binary { left, op, right } => Expr::Binary {
+                left: Box::new(self.substitute_var_in_expr(left, var, val)),
+                op: *op,
+                right: Box::new(self.substitute_var_in_expr(right, var, val)),
+            },
+            Expr::Unary { op, expr: inner } => Expr::Unary {
+                op: *op,
+                expr: Box::new(self.substitute_var_in_expr(inner, var, val)),
+            },
+            expr => expr.clone(),
         }
     }
 }
