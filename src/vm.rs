@@ -420,7 +420,16 @@ impl ByteCode {
             Value::Int(n) => format!("Int({})", n),
             Value::Float(f) => format!("Float({})", f),
             Value::Bool(b) => format!("Bool({})", b),
-            Value::String(s) => format!("String(\"{}\")", s.replace('"', "\\\"")),
+            Value::String(s) => {
+                // Properly escape special characters
+                let escaped = s
+                    .replace('\\', "\\\\")
+                    .replace('"', "\\\"")
+                    .replace('\n', "\\n")
+                    .replace('\r', "\\r")
+                    .replace('\t', "\\t");
+                format!("String(\"{}\")", escaped)
+            }
             Value::Null => "Null".to_string(),
             Value::Array(arr) => {
                 let items: Vec<String> = arr
@@ -459,7 +468,32 @@ impl ByteCode {
             .strip_prefix("String(\"")
             .and_then(|s| s.strip_suffix("\")"))
         {
-            return Ok(Value::String(str_val.replace("\\\"", "\"")));
+            // Properly unescape special characters
+            let mut unescaped = String::new();
+            let mut chars = str_val.chars();
+            while let Some(ch) = chars.next() {
+                if ch == '\\' {
+                    if let Some(next_ch) = chars.next() {
+                        match next_ch {
+                            'n' => unescaped.push('\n'),
+                            'r' => unescaped.push('\r'),
+                            't' => unescaped.push('\t'),
+                            '\\' => unescaped.push('\\'),
+                            '"' => unescaped.push('"'),
+                            _ => {
+                                // Unknown escape sequence, keep as is
+                                unescaped.push('\\');
+                                unescaped.push(next_ch);
+                            }
+                        }
+                    } else {
+                        unescaped.push('\\');
+                    }
+                } else {
+                    unescaped.push(ch);
+                }
+            }
+            return Ok(Value::String(unescaped));
         }
         if s == "Null" {
             return Ok(Value::Null);
