@@ -69,7 +69,14 @@ fn run_file(filename: &str) -> i32 {
     // 检查每一行是否缺少分号
     check_semicolons(&contents, filename);
 
-    if let Err(err) = rumina::run(&contents) {
+    // Get the directory of the file for resolving includes
+    let file_path = std::path::Path::new(filename);
+    let file_dir = file_path
+        .parent()
+        .and_then(|p| p.to_str())
+        .map(|s| s.to_string());
+
+    if let Err(err) = rumina::run_rumina_with_dir(&contents, file_dir) {
         // Use formatted error output with stack trace
         eprint!("{}", err.format_error());
         return 1;

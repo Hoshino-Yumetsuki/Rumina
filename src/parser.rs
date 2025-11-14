@@ -58,10 +58,36 @@ impl Parser {
             Token::Var => self.parse_var_decl_with_type(None),
             Token::BigInt => self.parse_var_decl_with_type(Some(DeclaredType::BigInt)),
             // LSR-005: Type declaration support
+            // But also check for namespace access (type::member)
             Token::TypeInt => self.parse_var_decl_with_type(Some(DeclaredType::Int)),
             Token::TypeFloat => self.parse_var_decl_with_type(Some(DeclaredType::Float)),
             Token::TypeBool => self.parse_var_decl_with_type(Some(DeclaredType::Bool)),
-            Token::TypeString => self.parse_var_decl_with_type(Some(DeclaredType::String)),
+            Token::TypeString => {
+                // Check if this is namespace access (string::func) or type declaration (string x = ...)
+                if self.tokens.get(self.current + 1) == Some(&Token::DoubleColon) {
+                    // It's an expression statement like string::cat(...)
+                    let expr = self.parse_expression()?;
+                    if self.match_token(&Token::Equal) {
+                        let value = self.parse_expression()?;
+                        self.match_token(&Token::Semicolon);
+                        match expr {
+                            Expr::Ident(name) => Ok(Stmt::Assign { name, value }),
+                            Expr::Member { object, member } => Ok(Stmt::MemberAssign {
+                                object: *object,
+                                member,
+                                value,
+                            }),
+                            Expr::Namespace { .. } => Err("Cannot assign to namespace".to_string()),
+                            _ => Err("Invalid assignment target".to_string()),
+                        }
+                    } else {
+                        self.match_token(&Token::Semicolon);
+                        Ok(Stmt::Expr(expr))
+                    }
+                } else {
+                    self.parse_var_decl_with_type(Some(DeclaredType::String))
+                }
+            }
             Token::TypeRational => self.parse_var_decl_with_type(Some(DeclaredType::Rational)),
             Token::TypeIrrational => self.parse_var_decl_with_type(Some(DeclaredType::Irrational)),
             Token::TypeComplex => self.parse_var_decl_with_type(Some(DeclaredType::Complex)),
@@ -739,7 +765,24 @@ impl Parser {
             }
             Token::TypeString => {
                 self.advance();
-                Ok(Expr::Ident("string".to_string()))
+                // 检查是否是命名空间访问
+                if self.match_token(&Token::DoubleColon) {
+                    if let Token::Ident(member) = self.current_token() {
+                        let member = member.clone();
+                        self.advance();
+                        Ok(Expr::Namespace {
+                            module: "string".to_string(),
+                            name: member,
+                        })
+                    } else {
+                        Err(format!(
+                            "Expected identifier after '::', found {:?}",
+                            self.current_token()
+                        ))
+                    }
+                } else {
+                    Ok(Expr::Ident("string".to_string()))
+                }
             }
             Token::TypeRational => {
                 self.advance();

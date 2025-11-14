@@ -16,7 +16,7 @@ Rumina 采用 Cargo workspace 结构，包含以下组件：
 
 ### rumina-cli - Rumina 主程序
 
-主程序保持原有功能不变，支持 REPL 和执行 `.lm` 文件。
+ Rumina 主程序，支持 REPL 和执行 `.lm` 文件。
 
 **使用方法：**
 ```bash
@@ -58,12 +58,6 @@ ruminac test.lm
 ```bash
 # 执行字节码文件
 rmvm file.rmc
-
-# 直接执行 .lm 文件
-rmvm file.lm
-
-# 启动 REPL 交互模式
-rmvm
 ```
 
 **示例：**
@@ -71,14 +65,6 @@ rmvm
 # 执行字节码
 rmvm test.rmc
 # 输出: 30
-
-# 直接执行源代码
-rmvm test.lm
-# 输出: 30
-
-# REPL 模式
-rmvm
-# 进入交互式环境
 ```
 
 ### 字节码格式 (.rmc)
@@ -112,11 +98,6 @@ INSTRUCTIONS:
 ```bash
 # 构建整个工作空间（包括 rumina-cli、ruminac 和 rmvm）
 cargo build --workspace --release
-
-# 或者单独构建某个二进制文件
-cargo build --release --bin rumina-cli
-cargo build --release --bin ruminac
-cargo build --release --bin rmvm
 ```
 
 ### 构建 WASM 包
@@ -249,72 +230,6 @@ console.log(result2); // "2.718281828459045" (e)
 
 const result3 = await rumina('exp(2);');
 console.log(result3); // "7.38905609893065" (e^2)
-```
-
-### 微分
-
-#### `differentiate(expr, var)`
-
-对表达式进行符号微分（求导）。
-
-- **参数**:
-  - `expr` - 要微分的数学表达式（字符串或函数对象）
-  - `var` - 微分变量（字符串）
-- **返回值**: 导数表达式（字符串）
-
-```javascript
-const result = await rumina('differentiate("x^2", "x");');
-console.log(result); // "(2 * x)"
-
-const result2 = await rumina('differentiate("sin(x)", "x");');
-console.log(result2); // "cos(x)"
-
-const result3 = await rumina('differentiate("x^3 + 2*x^2 + x", "x");');
-console.log(result3); // "((3 * (x ^ 2)) + ((2 * 2) * x) + 1)"
-```
-
-### 积分
-
-#### `integrate(expr, var)`
-
-对表达式进行符号积分（不定积分）。
-
-- **参数**:
-  - `expr` - 要积分的数学表达式（字符串或函数对象）
-  - `var` - 积分变量（字符串）
-- **返回值**: 积分结果表达式（字符串，不含常数项）
-
-```javascript
-const result = await rumina('integrate("x", "x");');
-console.log(result); // "((x ^ 2) / 2)"
-
-const result2 = await rumina('integrate("x^2", "x");');
-console.log(result2); // "((x ^ 3) / 3)"
-
-const result3 = await rumina('integrate("2*x + 1", "x");');
-console.log(result3); // "(((2 * (x ^ 2)) / 2) + x)"
-```
-
-#### `definite_integral(expr, var, lower, upper)`
-
-计算定积分（数值积分）。
-
-- **参数**:
-  - `expr` - 要积分的数学表达式（字符串或函数对象）
-  - `var` - 积分变量（字符串）
-  - `lower` - 下限（数值）
-  - `upper` - 上限（数值）
-- **返回值**: 定积分的数值结果
-
-```javascript
-const result = await rumina('definite_integral("x", "x", 0, 1);');
-console.log(result); // "0.49999999999999983" (约等于 0.5)
-
-const result2 = await rumina('definite_integral("x^2", "x", 0, 2);');
-console.log(result2); // "2.666666666666667" (约等于 8/3)
-
-const result3 = await rumina('definite_integral("sin(x)", "x", 0, 3.14159265);');
-console.log(result3); // "1.9999999..." (约等于 2)
 ```
 
 ## 文档

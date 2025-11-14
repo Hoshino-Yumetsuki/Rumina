@@ -40,6 +40,25 @@ pub use vm::{ByteCode, VM};
 /// * `Ok(None)` - No expression result
 /// * `Err(RuminaError)` - Compilation or runtime error
 pub fn run_rumina(source: &str) -> Result<Option<Value>, RuminaError> {
+    run_rumina_with_dir(source, None)
+}
+
+/// Run Lamina code using the VM with a specific working directory
+///
+/// This allows proper resolution of include statements with relative paths.
+///
+/// # Arguments
+/// * `source` - Lamina source code string
+/// * `current_dir` - Optional current directory for resolving includes
+///
+/// # Returns
+/// * `Ok(Some(Value))` - The result of the last expression
+/// * `Ok(None)` - No expression result
+/// * `Err(RuminaError)` - Compilation or runtime error
+pub fn run_rumina_with_dir(
+    source: &str,
+    current_dir: Option<String>,
+) -> Result<Option<Value>, RuminaError> {
     let mut lexer = Lexer::new(source.to_string());
     let tokens = lexer.tokenize();
 
@@ -50,8 +69,12 @@ pub fn run_rumina(source: &str) -> Result<Option<Value>, RuminaError> {
     let mut optimizer = ASTOptimizer::new();
     let optimized_ast = optimizer.optimize(ast)?;
 
-    // Compile to bytecode
-    let mut compiler = Compiler::new();
+    // Compile to bytecode with directory context
+    let mut compiler = if let Some(dir) = current_dir {
+        Compiler::with_current_dir(dir)
+    } else {
+        Compiler::new()
+    };
     let mut bytecode = compiler.compile(optimized_ast)?;
 
     // Apply bytecode optimization passes
