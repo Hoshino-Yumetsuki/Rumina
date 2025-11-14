@@ -739,7 +739,24 @@ impl Parser {
             }
             Token::TypeString => {
                 self.advance();
-                Ok(Expr::Ident("string".to_string()))
+                // 检查是否是命名空间访问
+                if self.match_token(&Token::DoubleColon) {
+                    if let Token::Ident(member) = self.current_token() {
+                        let member = member.clone();
+                        self.advance();
+                        Ok(Expr::Namespace {
+                            module: "string".to_string(),
+                            name: member,
+                        })
+                    } else {
+                        Err(format!(
+                            "Expected identifier after '::', found {:?}",
+                            self.current_token()
+                        ))
+                    }
+                } else {
+                    Ok(Expr::Ident("string".to_string()))
+                }
             }
             Token::TypeRational => {
                 self.advance();

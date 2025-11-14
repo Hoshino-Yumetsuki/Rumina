@@ -136,6 +136,71 @@ pub fn register_builtins(globals: &mut HashMap<String, Value>) {
     register_fn(globals, "numerical_derivative", cas::numerical_derivative);
     register_fn(globals, "integrate", cas::integrate);
     register_fn(globals, "definite_integral", cas::definite_integral);
+
+    // CAS函数（带cas_前缀，用于向后兼容）
+    register_fn(globals, "cas_parse", cas::parse);
+    register_fn(globals, "cas_differentiate", cas::differentiate);
+    register_fn(globals, "cas_solve_linear", cas::solve_linear);
+    register_fn(globals, "cas_evaluate_at", cas::evaluate_at);
+    register_fn(globals, "cas_store", cas::store);
+    register_fn(globals, "cas_load", cas::load);
+    register_fn(globals, "cas_numerical_derivative", cas::numerical_derivative);
+
+    // 字符串命名空间
+    let mut string_ns = HashMap::new();
+    string_ns.insert(
+        "cat".to_string(),
+        Value::NativeFunction {
+            name: "string::cat".to_string(),
+            func: string::cat,
+        },
+    );
+    string_ns.insert(
+        "at".to_string(),
+        Value::NativeFunction {
+            name: "string::at".to_string(),
+            func: string::at,
+        },
+    );
+    string_ns.insert(
+        "find".to_string(),
+        Value::NativeFunction {
+            name: "string::find".to_string(),
+            func: string::find,
+        },
+    );
+    string_ns.insert(
+        "sub".to_string(),
+        Value::NativeFunction {
+            name: "string::sub".to_string(),
+            func: string::sub,
+        },
+    );
+    string_ns.insert(
+        "length".to_string(),
+        Value::NativeFunction {
+            name: "string::length".to_string(),
+            func: string::length,
+        },
+    );
+    string_ns.insert(
+        "char_at".to_string(),
+        Value::NativeFunction {
+            name: "string::char_at".to_string(),
+            func: string::char_at,
+        },
+    );
+    string_ns.insert(
+        "replace_by_index".to_string(),
+        Value::NativeFunction {
+            name: "string::replace_by_index".to_string(),
+            func: string::replace_by_index,
+        },
+    );
+    globals.insert(
+        "string".to_string(),
+        Value::Module(Rc::new(RefCell::new(string_ns))),
+    );
 }
 
 fn register_fn(
