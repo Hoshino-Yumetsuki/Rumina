@@ -943,13 +943,6 @@ impl Compiler {
                 let prefixed_name = format!("{}::{}", module, name);
                 self.emit(OpCode::PushVar(prefixed_name));
             }
-
-            _ => {
-                return Err(RuminaError::runtime(format!(
-                    "Unimplemented expression compilation: {:?}",
-                    expr
-                )));
-            }
         }
 
         Ok(())
