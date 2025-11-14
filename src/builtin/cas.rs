@@ -115,9 +115,9 @@ pub fn parse(args: &[Value]) -> Result<Value, String> {
 
     match &args[0] {
         Value::String(s) => {
-            // 解析表达式
+            // 解析表达式以验证语法
             match MathCore::parse(s) {
-                Ok(expr) => Ok(Value::String(format!("{:?}", expr))),
+                Ok(_expr) => Ok(Value::String(s.clone())),
                 Err(e) => Err(format!("Parse error: {}", e)),
             }
         }

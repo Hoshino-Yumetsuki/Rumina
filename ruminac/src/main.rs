@@ -18,6 +18,14 @@ fn main() {
 
     let input_file = &args[1];
 
+    // Get the directory of the input file for resolving relative includes
+    let input_path = Path::new(input_file);
+    let input_dir = input_path
+        .parent()
+        .and_then(|p| p.to_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| ".".to_string());
+
     // Determine output file
     let output_file = if args.len() >= 3 {
         args[2].clone()
@@ -41,7 +49,7 @@ fn main() {
     };
 
     // Compile to bytecode
-    match compile_to_bytecode(&source) {
+    match compile_to_bytecode(&source, &input_dir) {
         Ok(bytecode_text) => {
             // Write bytecode to output file
             if let Err(err) = fs::write(&output_file, bytecode_text) {
@@ -60,7 +68,7 @@ fn main() {
     }
 }
 
-fn compile_to_bytecode(source: &str) -> Result<String, RuminaError> {
+fn compile_to_bytecode(source: &str, current_dir: &str) -> Result<String, RuminaError> {
     // Tokenize
     let mut lexer = Lexer::new(source.to_string());
     let tokens = lexer.tokenize();
@@ -69,8 +77,8 @@ fn compile_to_bytecode(source: &str) -> Result<String, RuminaError> {
     let mut parser = Parser::new(tokens);
     let ast = parser.parse().map_err(|e| RuminaError::runtime(e))?;
 
-    // Compile to bytecode
-    let mut compiler = Compiler::new();
+    // Compile to bytecode with current directory context for includes
+    let mut compiler = Compiler::with_current_dir(current_dir.to_string());
     let bytecode = compiler.compile(ast)?;
 
     // Serialize to text format
