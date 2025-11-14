@@ -863,8 +863,22 @@ impl Compiler {
                     }
                     let prefixed_name = format!("{}::{}", module, name);
                     self.emit(OpCode::CallVar(prefixed_name, args.len()));
+                } else if let Expr::Member { object, member } = &**func {
+                    // Method call: obj.method(args)
+                    // Compile the object
+                    self.compile_expr(object)?;
+                    // Duplicate it (one for self, one for getting the method)
+                    self.emit(OpCode::Dup);
+                    // Get the method value (consumes the top copy)
+                    self.emit(OpCode::Member(member.clone()));
+                    // Compile arguments
+                    for arg in args {
+                        self.compile_expr(arg)?;
+                    }
+                    // Emit method call (expects stack: [object, method, args...])
+                    self.emit(OpCode::CallMethod(args.len()));
                 } else {
-                    // Dynamic function call (e.g., obj.method() or (expr)())
+                    // Dynamic function call (e.g., (expr)())
                     // First compile the function expression
                     self.compile_expr(func)?;
                     // Then compile arguments

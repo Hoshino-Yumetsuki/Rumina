@@ -201,6 +201,15 @@ pub fn register_builtins(globals: &mut HashMap<String, Value>) {
         "string".to_string(),
         Value::Module(Rc::new(RefCell::new(string_ns))),
     );
+
+    // Also register string functions with prefixed names for namespace calls
+    register_fn(globals, "string::cat", string::cat);
+    register_fn(globals, "string::at", string::at);
+    register_fn(globals, "string::find", string::find);
+    register_fn(globals, "string::sub", string::sub);
+    register_fn(globals, "string::length", string::length);
+    register_fn(globals, "string::char_at", string::char_at);
+    register_fn(globals, "string::replace_by_index", string::replace_by_index);
 }
 
 fn register_fn(
