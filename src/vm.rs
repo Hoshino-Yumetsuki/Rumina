@@ -901,7 +901,7 @@ impl VM {
             globals,
             // Use FxHashMap for faster string hashing
             locals: FxHashMap::default(),
-            loop_stack: Vec::new(),
+            loop_stack: Vec::with_capacity(8), // Pre-allocate for nested loops
             functions: FxHashMap::default(),
             member_cache: FxHashMap::default(),
             halted: false,
@@ -1314,12 +1314,15 @@ impl VM {
                             self.recursion_depth += 1;
 
                             // Set up parameters as local variables
-                            // Reserve capacity to avoid reallocations
-                            self.locals.clear();
-                            self.locals.reserve(params.len());
+                            // Create new HashMap with exact capacity to avoid reallocations
+                            let mut new_locals = FxHashMap::with_capacity_and_hasher(
+                                params.len(),
+                                Default::default(),
+                            );
                             for (param_name, arg_value) in params.iter().zip(args.into_iter()) {
-                                self.locals.insert(param_name.clone(), arg_value);
+                                new_locals.insert(param_name.clone(), arg_value);
                             }
+                            self.locals = new_locals;
 
                             // Jump to function body
                             self.ip = body_start;
@@ -1393,15 +1396,21 @@ impl VM {
                         self.recursion_depth += 1;
 
                         // Set up parameters as local variables
-                        // Start with the closure environment (convert HashMap to FxHashMap)
-                        self.locals = closure
-                            .borrow()
-                            .iter()
-                            .map(|(k, v)| (k.clone(), v.clone()))
-                            .collect();
-                        for (param_name, arg_value) in params.iter().zip(args.into_iter()) {
-                            self.locals.insert(param_name.clone(), arg_value);
+                        // Start with the closure environment with pre-allocated capacity
+                        let closure_ref = closure.borrow();
+                        let total_capacity = closure_ref.len() + params.len();
+                        let mut new_locals = FxHashMap::with_capacity_and_hasher(
+                            total_capacity,
+                            Default::default(),
+                        );
+                        for (k, v) in closure_ref.iter() {
+                            new_locals.insert(k.clone(), v.clone());
                         }
+                        drop(closure_ref); // Release borrow early
+                        for (param_name, arg_value) in params.iter().zip(args.into_iter()) {
+                            new_locals.insert(param_name.clone(), arg_value);
+                        }
+                        self.locals = new_locals;
 
                         // Jump to lambda body
                         self.ip = func_info.body_start;
@@ -1480,11 +1489,15 @@ impl VM {
                             self.recursion_depth += 1;
 
                             // Set up parameters as local variables
-                            self.locals.clear();
-                            self.locals.reserve(params.len());
+                            // Create new HashMap with exact capacity to avoid reallocations
+                            let mut new_locals = FxHashMap::with_capacity_and_hasher(
+                                params.len(),
+                                Default::default(),
+                            );
                             for (param_name, arg_value) in params.iter().zip(args.into_iter()) {
-                                self.locals.insert(param_name.clone(), arg_value);
+                                new_locals.insert(param_name.clone(), arg_value);
                             }
+                            self.locals = new_locals;
 
                             // Jump to function body
                             self.ip = body_start;
