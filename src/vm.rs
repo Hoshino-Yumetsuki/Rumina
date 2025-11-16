@@ -189,6 +189,19 @@ pub struct ByteCode {
 
     /// Constants pool (for optimization)
     pub constants: Vec<Value>,
+    
+    /// Cache for frequently used constants to speed up lookup
+    /// Maps common values to their indices
+    common_constants_cache: FxHashMap<CommonConstant, usize>,
+}
+
+/// Common constant types that can be efficiently cached
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+enum CommonConstant {
+    Int(i64),
+    Bool(bool),
+    Null,
+    String(String),
 }
 
 impl ByteCode {
@@ -197,6 +210,7 @@ impl ByteCode {
             instructions: Vec::new(),
             line_numbers: Vec::new(),
             constants: Vec::new(),
+            common_constants_cache: FxHashMap::default(),
         }
     }
 
@@ -224,16 +238,53 @@ impl ByteCode {
     /// Add a constant to the pool or return existing index
     /// This deduplicates constants to reduce memory usage
     pub fn add_constant(&mut self, value: Value) -> usize {
-        // Check if constant already exists in the pool
+        // Fast path: Check cache for common constant types (O(1) lookup)
+        let cache_key = match &value {
+            Value::Int(i) => Some(CommonConstant::Int(*i)),
+            Value::Bool(b) => Some(CommonConstant::Bool(*b)),
+            Value::Null => Some(CommonConstant::Null),
+            Value::String(s) => Some(CommonConstant::String(s.clone())),
+            _ => None,
+        };
+        
+        if let Some(key) = cache_key {
+            if let Some(&index) = self.common_constants_cache.get(&key) {
+                return index;
+            }
+        }
+        
+        // Slow path: Linear search for complex types or cache miss
         for (i, existing) in self.constants.iter().enumerate() {
             if Self::values_equal(existing, &value) {
+                // Update cache if this is a common type
+                if let Some(key) = match &value {
+                    Value::Int(i) => Some(CommonConstant::Int(*i)),
+                    Value::Bool(b) => Some(CommonConstant::Bool(*b)),
+                    Value::Null => Some(CommonConstant::Null),
+                    Value::String(s) => Some(CommonConstant::String(s.clone())),
+                    _ => None,
+                } {
+                    self.common_constants_cache.insert(key, i);
+                }
                 return i;
             }
         }
 
         // Add new constant
         let index = self.constants.len();
-        self.constants.push(value);
+        self.constants.push(value.clone());
+        
+        // Cache common constants for fast future lookups
+        if let Some(key) = match &value {
+            Value::Int(i) => Some(CommonConstant::Int(*i)),
+            Value::Bool(b) => Some(CommonConstant::Bool(*b)),
+            Value::Null => Some(CommonConstant::Null),
+            Value::String(s) => Some(CommonConstant::String(s.clone())),
+            _ => None,
+        } {
+            self.common_constants_cache.insert(key, index);
+        }
+        
         index
     }
 
