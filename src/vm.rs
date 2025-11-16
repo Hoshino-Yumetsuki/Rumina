@@ -1,7 +1,7 @@
 /// Virtual Machine implementation for Rumina
 ///
-/// This module implements a bytecode VM with an x86_64-inspired instruction set.
-/// The VM uses a stack-based execution model with register-like local variables.
+/// This module implements a bytecode VM with a clean, x86_64-inspired instruction set.
+/// The VM uses a stack-based execution model with orthogonal operations.
 use crate::ast::DeclaredType;
 use crate::error::RuminaError;
 use crate::value::Value;
@@ -33,7 +33,13 @@ pub struct LambdaInfo {
     pub body_end: usize,
 }
 
-/// VM Instruction Set (x86_64-inspired CISC design)
+/// VM Instruction Set (x86_64-inspired, clean CISC design)
+///
+/// Design principles:
+/// - Stack-based execution with orthogonal operations
+/// - Each instruction does one thing well
+/// - Type-agnostic operations (polymorphic at runtime)
+/// - Minimal instruction set with maximum expressiveness
 #[derive(Debug, Clone, PartialEq)]
 pub enum OpCode {
     // ===== Data Movement Instructions (MOV family) =====
@@ -66,23 +72,13 @@ pub enum OpCode {
     /// Similar to: ADD rax, rbx
     Add,
 
-    /// Specialized add for known integer types (hot path optimization)
-    /// Similar to: ADD rax, rbx (with type check)
-    AddInt,
-
     /// Subtract top two stack values (TOS-1 - TOS)
     /// Similar to: SUB rax, rbx
     Sub,
 
-    /// Specialized subtract for known integer types (hot path optimization)
-    SubInt,
-
     /// Multiply top two stack values
     /// Similar to: MUL rbx
     Mul,
-
-    /// Specialized multiply for known integer types (hot path optimization)
-    MulInt,
 
     /// Divide top two stack values (TOS-1 / TOS)
     /// Similar to: DIV rbx
@@ -138,24 +134,6 @@ pub enum OpCode {
     /// Compare less or equal
     /// Similar to: CMP + SETLE
     Lte,
-
-    /// Specialized less than for known integer types (hot path optimization)
-    LtInt,
-
-    /// Specialized less than or equal for known integer types (hot path optimization)
-    LteInt,
-
-    /// Specialized greater than for known integer types (hot path optimization)
-    GtInt,
-
-    /// Specialized greater than or equal for known integer types (hot path optimization)
-    GteInt,
-
-    /// Specialized equal for known integer types (hot path optimization)
-    EqInt,
-
-    /// Specialized not equal for known integer types (hot path optimization)
-    NeqInt,
 
     // ===== Control Flow Instructions (JMP, CALL, RET family) =====
     /// Unconditional jump to address
@@ -520,11 +498,8 @@ impl ByteCode {
             OpCode::Dup => "Dup".to_string(),
             OpCode::Pop => "Pop".to_string(),
             OpCode::Add => "Add".to_string(),
-            OpCode::AddInt => "AddInt".to_string(),
             OpCode::Sub => "Sub".to_string(),
-            OpCode::SubInt => "SubInt".to_string(),
             OpCode::Mul => "Mul".to_string(),
-            OpCode::MulInt => "MulInt".to_string(),
             OpCode::Div => "Div".to_string(),
             OpCode::Mod => "Mod".to_string(),
             OpCode::Pow => "Pow".to_string(),
@@ -539,12 +514,6 @@ impl ByteCode {
             OpCode::Gte => "Gte".to_string(),
             OpCode::Lt => "Lt".to_string(),
             OpCode::Lte => "Lte".to_string(),
-            OpCode::LtInt => "LtInt".to_string(),
-            OpCode::LteInt => "LteInt".to_string(),
-            OpCode::GtInt => "GtInt".to_string(),
-            OpCode::GteInt => "GteInt".to_string(),
-            OpCode::EqInt => "EqInt".to_string(),
-            OpCode::NeqInt => "NeqInt".to_string(),
             OpCode::Jump(addr) => format!("Jump({})", addr),
             OpCode::JumpIfFalse(addr) => format!("JumpIfFalse({})", addr),
             OpCode::JumpIfTrue(addr) => format!("JumpIfTrue({})", addr),
@@ -593,20 +562,11 @@ impl ByteCode {
         if s == "Add" {
             return Ok(OpCode::Add);
         }
-        if s == "AddInt" {
-            return Ok(OpCode::AddInt);
-        }
         if s == "Sub" {
             return Ok(OpCode::Sub);
         }
-        if s == "SubInt" {
-            return Ok(OpCode::SubInt);
-        }
         if s == "Mul" {
             return Ok(OpCode::Mul);
-        }
-        if s == "MulInt" {
-            return Ok(OpCode::MulInt);
         }
         if s == "Div" {
             return Ok(OpCode::Div);
@@ -649,24 +609,6 @@ impl ByteCode {
         }
         if s == "Lte" {
             return Ok(OpCode::Lte);
-        }
-        if s == "LtInt" {
-            return Ok(OpCode::LtInt);
-        }
-        if s == "LteInt" {
-            return Ok(OpCode::LteInt);
-        }
-        if s == "GtInt" {
-            return Ok(OpCode::GtInt);
-        }
-        if s == "GteInt" {
-            return Ok(OpCode::GteInt);
-        }
-        if s == "EqInt" {
-            return Ok(OpCode::EqInt);
-        }
-        if s == "NeqInt" {
-            return Ok(OpCode::NeqInt);
         }
         if s == "Return" {
             return Ok(OpCode::Return);
@@ -1036,74 +978,8 @@ impl VM {
             }
 
             OpCode::Add => self.binary_op(|a, b| a.vm_add(b))?,
-            OpCode::AddInt => {
-                // Fast path for integer addition
-                let right = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-                let left = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-
-                match (&left, &right) {
-                    (Value::Int(a), Value::Int(b)) => {
-                        self.stack.push(Value::Int(a + b));
-                    }
-                    _ => {
-                        // Fallback to generic add
-                        let result = left.vm_add(&right).map_err(|e| RuminaError::runtime(e))?;
-                        self.stack.push(result);
-                    }
-                }
-            }
             OpCode::Sub => self.binary_op(|a, b| a.vm_sub(b))?,
-            OpCode::SubInt => {
-                // Fast path for integer subtraction
-                let right = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-                let left = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-
-                match (&left, &right) {
-                    (Value::Int(a), Value::Int(b)) => {
-                        self.stack.push(Value::Int(a - b));
-                    }
-                    _ => {
-                        // Fallback to generic sub
-                        let result = left.vm_sub(&right).map_err(|e| RuminaError::runtime(e))?;
-                        self.stack.push(result);
-                    }
-                }
-            }
             OpCode::Mul => self.binary_op(|a, b| a.vm_mul(b))?,
-            OpCode::MulInt => {
-                // Fast path for integer multiplication
-                let right = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-                let left = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-
-                match (&left, &right) {
-                    (Value::Int(a), Value::Int(b)) => {
-                        self.stack.push(Value::Int(a * b));
-                    }
-                    _ => {
-                        // Fallback to generic mul
-                        let result = left.vm_mul(&right).map_err(|e| RuminaError::runtime(e))?;
-                        self.stack.push(result);
-                    }
-                }
-            }
             OpCode::Div => self.binary_op(|a, b| a.vm_div(b))?,
             OpCode::Mod => self.binary_op(|a, b| a.vm_mod(b))?,
             OpCode::Pow => self.binary_op(|a, b| a.vm_pow(b))?,
@@ -1142,128 +1018,6 @@ impl VM {
             OpCode::Gte => self.binary_op(|a, b| a.vm_gte(b))?,
             OpCode::Lt => self.binary_op(|a, b| a.vm_lt(b))?,
             OpCode::Lte => self.binary_op(|a, b| a.vm_lte(b))?,
-
-            // Specialized integer comparisons
-            OpCode::LtInt => {
-                let right = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-                let left = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-
-                match (&left, &right) {
-                    (Value::Int(a), Value::Int(b)) => {
-                        self.stack.push(Value::Bool(a < b));
-                    }
-                    _ => {
-                        let result = left.vm_lt(&right).map_err(|e| RuminaError::runtime(e))?;
-                        self.stack.push(result);
-                    }
-                }
-            }
-            OpCode::LteInt => {
-                let right = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-                let left = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-
-                match (&left, &right) {
-                    (Value::Int(a), Value::Int(b)) => {
-                        self.stack.push(Value::Bool(a <= b));
-                    }
-                    _ => {
-                        let result = left.vm_lte(&right).map_err(|e| RuminaError::runtime(e))?;
-                        self.stack.push(result);
-                    }
-                }
-            }
-            OpCode::GtInt => {
-                let right = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-                let left = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-
-                match (&left, &right) {
-                    (Value::Int(a), Value::Int(b)) => {
-                        self.stack.push(Value::Bool(a > b));
-                    }
-                    _ => {
-                        let result = left.vm_gt(&right).map_err(|e| RuminaError::runtime(e))?;
-                        self.stack.push(result);
-                    }
-                }
-            }
-            OpCode::GteInt => {
-                let right = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-                let left = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-
-                match (&left, &right) {
-                    (Value::Int(a), Value::Int(b)) => {
-                        self.stack.push(Value::Bool(a >= b));
-                    }
-                    _ => {
-                        let result = left.vm_gte(&right).map_err(|e| RuminaError::runtime(e))?;
-                        self.stack.push(result);
-                    }
-                }
-            }
-            OpCode::EqInt => {
-                let right = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-                let left = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-
-                match (&left, &right) {
-                    (Value::Int(a), Value::Int(b)) => {
-                        self.stack.push(Value::Bool(a == b));
-                    }
-                    _ => {
-                        let result = left.vm_eq(&right).map_err(|e| RuminaError::runtime(e))?;
-                        self.stack.push(result);
-                    }
-                }
-            }
-            OpCode::NeqInt => {
-                let right = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-                let left = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-
-                match (&left, &right) {
-                    (Value::Int(a), Value::Int(b)) => {
-                        self.stack.push(Value::Bool(a != b));
-                    }
-                    _ => {
-                        let result = left.vm_neq(&right).map_err(|e| RuminaError::runtime(e))?;
-                        self.stack.push(result);
-                    }
-                }
-            }
 
             // Logical operations
             OpCode::And => self.binary_op(|a, b| a.vm_and(b))?,
@@ -2659,106 +2413,6 @@ mod tests {
         // Verify cache miss was tracked
         let (_hits, misses) = vm.get_cache_stats();
         assert_eq!(misses, 1, "Cache should have recorded exactly one miss");
-    }
-
-    #[test]
-    fn test_specialized_int_add() {
-        let globals = Rc::new(RefCell::new(HashMap::new()));
-        let mut vm = VM::new(globals);
-
-        let mut bytecode = ByteCode::new();
-
-        // Add constants to pool
-        let idx1 = bytecode.add_constant(Value::Int(15));
-        let idx2 = bytecode.add_constant(Value::Int(27));
-
-        // Use specialized integer add
-        bytecode.emit(OpCode::PushConstPooled(idx1), None);
-        bytecode.emit(OpCode::PushConstPooled(idx2), None);
-        bytecode.emit(OpCode::AddInt, None);
-        bytecode.emit(OpCode::Halt, None);
-
-        vm.load(bytecode);
-        let result = vm.run().unwrap();
-
-        match result {
-            Some(Value::Int(n)) => assert_eq!(n, 42),
-            _ => panic!("Expected Int(42)"),
-        }
-    }
-
-    #[test]
-    fn test_specialized_int_sub() {
-        let globals = Rc::new(RefCell::new(HashMap::new()));
-        let mut vm = VM::new(globals);
-
-        let mut bytecode = ByteCode::new();
-
-        let idx1 = bytecode.add_constant(Value::Int(100));
-        let idx2 = bytecode.add_constant(Value::Int(42));
-
-        bytecode.emit(OpCode::PushConstPooled(idx1), None);
-        bytecode.emit(OpCode::PushConstPooled(idx2), None);
-        bytecode.emit(OpCode::SubInt, None);
-        bytecode.emit(OpCode::Halt, None);
-
-        vm.load(bytecode);
-        let result = vm.run().unwrap();
-
-        match result {
-            Some(Value::Int(n)) => assert_eq!(n, 58),
-            _ => panic!("Expected Int(58)"),
-        }
-    }
-
-    #[test]
-    fn test_specialized_int_mul() {
-        let globals = Rc::new(RefCell::new(HashMap::new()));
-        let mut vm = VM::new(globals);
-
-        let mut bytecode = ByteCode::new();
-
-        let idx1 = bytecode.add_constant(Value::Int(6));
-        let idx2 = bytecode.add_constant(Value::Int(7));
-
-        bytecode.emit(OpCode::PushConstPooled(idx1), None);
-        bytecode.emit(OpCode::PushConstPooled(idx2), None);
-        bytecode.emit(OpCode::MulInt, None);
-        bytecode.emit(OpCode::Halt, None);
-
-        vm.load(bytecode);
-        let result = vm.run().unwrap();
-
-        match result {
-            Some(Value::Int(n)) => assert_eq!(n, 42),
-            _ => panic!("Expected Int(42)"),
-        }
-    }
-
-    #[test]
-    fn test_specialized_int_fallback_to_generic() {
-        let globals = Rc::new(RefCell::new(HashMap::new()));
-        let mut vm = VM::new(globals);
-
-        let mut bytecode = ByteCode::new();
-
-        // Mix int and float - should fallback to generic add
-        let idx1 = bytecode.add_constant(Value::Int(10));
-        let idx2 = bytecode.add_constant(Value::Float(3.14));
-
-        bytecode.emit(OpCode::PushConstPooled(idx1), None);
-        bytecode.emit(OpCode::PushConstPooled(idx2), None);
-        bytecode.emit(OpCode::AddInt, None);
-        bytecode.emit(OpCode::Halt, None);
-
-        vm.load(bytecode);
-        let result = vm.run().unwrap();
-
-        // Result should be a float
-        match result {
-            Some(Value::Float(f)) => assert!((f - 13.14).abs() < 0.01),
-            _ => panic!("Expected Float(13.14)"),
-        }
     }
 
     #[test]
