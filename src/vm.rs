@@ -1,7 +1,4 @@
 /// Virtual Machine implementation for Rumina
-///
-/// This module implements a bytecode VM with a clean, x86_64-inspired instruction set.
-/// The VM uses a stack-based execution model with orthogonal operations.
 use crate::ast::DeclaredType;
 use crate::error::RuminaError;
 use crate::value::Value;
@@ -40,153 +37,116 @@ pub struct LambdaInfo {
     pub body_end: usize,
 }
 
-/// VM Instruction Set (x86_64-inspired, clean CISC design)
-///
-/// Design principles:
-/// - Stack-based execution with orthogonal operations
-/// - Each instruction does one thing well
-/// - Type-agnostic operations (polymorphic at runtime)
-/// - Minimal instruction set with maximum expressiveness
+/// VM Instruction Set
 #[derive(Debug, Clone, PartialEq)]
 pub enum OpCode {
     // ===== Data Movement Instructions (MOV family) =====
     /// Push a constant value onto the stack
-    /// Similar to: PUSH imm
     PushConst(Value),
 
     /// Push a constant from the constant pool onto the stack
-    /// Similar to: PUSH [constant_pool + index]
     PushConstPooled(usize),
 
     /// Push a variable value onto the stack
-    /// Similar to: MOV reg, [addr]
     PushVar(String),
 
     /// Pop value from stack and store in variable
-    /// Similar to: MOV [addr], reg
     PopVar(String),
 
     /// Duplicate top stack value
-    /// Similar to: PUSH [rsp]
     Dup,
 
     /// Pop and discard top stack value
-    /// Similar to: ADD rsp, 8
     Pop,
 
     // ===== Arithmetic Instructions (ADD, SUB, MUL, DIV family) =====
     /// Add top two stack values
-    /// Similar to: ADD rax, rbx
     Add,
 
     /// Subtract top two stack values (TOS-1 - TOS)
-    /// Similar to: SUB rax, rbx
     Sub,
 
     /// Multiply top two stack values
-    /// Similar to: MUL rbx
     Mul,
 
     /// Divide top two stack values (TOS-1 / TOS)
-    /// Similar to: DIV rbx
     Div,
 
     /// Modulo operation
-    /// Similar to: IDIV (with remainder in rdx)
     Mod,
 
     /// Power operation (TOS-1 ^ TOS)
     Pow,
 
     /// Negate top stack value
-    /// Similar to: NEG rax
     Neg,
 
     /// Factorial operation (postfix !)
     Factorial,
 
-    // ===== Logical Instructions (CMP, TEST, AND, OR family) =====
+    // ===== Logical Instructions =====
     /// Logical NOT
-    /// Similar to: NOT rax
     Not,
 
     /// Logical AND
-    /// Similar to: AND rax, rbx
     And,
 
     /// Logical OR
-    /// Similar to: OR rax, rbx
     Or,
 
     /// Compare equal
-    /// Similar to: CMP + SETE
     Eq,
 
     /// Compare not equal
-    /// Similar to: CMP + SETNE
     Neq,
 
     /// Compare greater than
-    /// Similar to: CMP + SETG
     Gt,
 
     /// Compare greater or equal
-    /// Similar to: CMP + SETGE
     Gte,
 
     /// Compare less than
-    /// Similar to: CMP + SETL
     Lt,
 
     /// Compare less or equal
-    /// Similar to: CMP + SETLE
     Lte,
 
-    // ===== Control Flow Instructions (JMP, CALL, RET family) =====
+    // ===== Control Flow Instructions =====
     /// Unconditional jump to address
-    /// Similar to: JMP addr
     Jump(usize),
 
     /// Jump if false (pop condition from stack)
-    /// Similar to: TEST + JZ
     JumpIfFalse(usize),
 
     /// Jump if true (pop condition from stack)
-    /// Similar to: TEST + JNZ
     JumpIfTrue(usize),
 
     /// Call function by name/variable
-    /// Similar to: CALL [addr]
     CallVar(String, usize), // (function name, argument count)
 
     /// Call function from stack (dynamic call)
-    /// Similar to: CALL rax
     /// Stack: [func, arg1, arg2, ...] -> [result]
     Call(usize), // (argument count)
 
     /// Call method with self injection
-    /// Similar to: CALL rax (with this pointer)
     /// Stack: [object, method, arg1, arg2, ...] -> [result]
     CallMethod(usize), // (argument count)
 
     /// Return from function
-    /// Similar to: RET
     Return,
 
-    // ===== Array/Structure Instructions (LEA, MOV family) =====
+    // ===== Array/Structure Instructions =====
     /// Create array from N stack values
-    /// Similar to: MOV [addr], ... (repeated)
     MakeArray(usize),
 
     /// Create struct from N key-value pairs on stack
     MakeStruct(usize),
 
     /// Array index access (push array[index])
-    /// Similar to: MOV rax, [rbx + rcx*8]
     Index,
 
     /// Member access (push obj.member)
-    /// Similar to: MOV rax, [rbx + offset]
     Member(String),
 
     /// Assign to array element
@@ -211,7 +171,6 @@ pub enum OpCode {
 
     // ===== Special Instructions =====
     /// Halt execution
-    /// Similar to: HLT
     Halt,
 
     // ===== Type Conversion Instructions =====
