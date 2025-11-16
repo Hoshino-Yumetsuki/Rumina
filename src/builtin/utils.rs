@@ -63,7 +63,7 @@ fn float_to_rational(f: f64) -> Option<String> {
 }
 
 pub fn input(args: &[Value]) -> Result<Value, String> {
-    if args.len() > 0 {
+    if !args.is_empty() {
         print!("{}", args[0]);
         io::stdout().flush().unwrap();
     }
@@ -117,7 +117,7 @@ pub fn to_string(args: &[Value]) -> Result<Value, String> {
 }
 
 pub fn exit(args: &[Value]) -> Result<Value, String> {
-    let code = if args.len() > 0 {
+    let code = if !args.is_empty() {
         args[0].to_int().unwrap_or(0)
     } else {
         0

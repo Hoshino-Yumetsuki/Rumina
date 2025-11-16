@@ -234,6 +234,12 @@ impl BytecodeOptimizer {
     }
 }
 
+impl Default for BytecodeOptimizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
