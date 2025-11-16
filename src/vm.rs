@@ -2222,6 +2222,56 @@ mod tests {
     }
 
     #[test]
+    fn test_polymorphic_operations_mixed_types() {
+        let globals = Rc::new(RefCell::new(HashMap::new()));
+        let mut vm = VM::new(globals);
+
+        let mut bytecode = ByteCode::new();
+
+        // Test: 10 (int) + 3.14 (float) = 13.14 (float)
+        let idx_int = bytecode.add_constant(Value::Int(10));
+        let idx_float = bytecode.add_constant(Value::Float(3.14));
+
+        bytecode.emit(OpCode::PushConstPooled(idx_int), None);
+        bytecode.emit(OpCode::PushConstPooled(idx_float), None);
+        bytecode.emit(OpCode::Add, None); // Generic Add handles mixed types
+        bytecode.emit(OpCode::Halt, None);
+
+        vm.load(bytecode);
+        let result = vm.run().unwrap();
+
+        match result {
+            Some(Value::Float(f)) => assert!((f - 13.14).abs() < 0.01),
+            other => panic!("Expected Float(13.14), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_polymorphic_comparison_same_types() {
+        let globals = Rc::new(RefCell::new(HashMap::new()));
+        let mut vm = VM::new(globals);
+
+        let mut bytecode = ByteCode::new();
+
+        // Test: 5 (int) < 10 (int) = true
+        let idx1 = bytecode.add_constant(Value::Int(5));
+        let idx2 = bytecode.add_constant(Value::Int(10));
+
+        bytecode.emit(OpCode::PushConstPooled(idx1), None);
+        bytecode.emit(OpCode::PushConstPooled(idx2), None);
+        bytecode.emit(OpCode::Lt, None); // Generic Lt handles int comparison
+        bytecode.emit(OpCode::Halt, None);
+
+        vm.load(bytecode);
+        let result = vm.run().unwrap();
+
+        match result {
+            Some(Value::Bool(b)) => assert_eq!(b, true),
+            other => panic!("Expected Bool(true), got {:?}", other),
+        }
+    }
+
+    #[test]
     fn test_constant_pooling() {
         let mut bytecode = ByteCode::new();
 
