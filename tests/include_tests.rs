@@ -1,5 +1,5 @@
 /// Test include statement compilation
-use rumina::{run_rumina_with_dir, Compiler, Lexer, Parser};
+use rumina::{Compiler, Lexer, Parser, run_rumina_with_dir};
 use std::fs;
 
 #[test]

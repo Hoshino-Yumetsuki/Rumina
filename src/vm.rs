@@ -1,7 +1,4 @@
 /// Virtual Machine implementation for Rumina
-///
-/// This module implements a bytecode VM with an x86_64-inspired instruction set.
-/// The VM uses a stack-based execution model with register-like local variables.
 use crate::ast::DeclaredType;
 use crate::error::RuminaError;
 use crate::value::Value;
@@ -14,6 +11,13 @@ use std::rc::Rc;
 // Const error messages to avoid allocations
 const ERR_STACK_UNDERFLOW: &str = "Stack underflow";
 const _ERR_INVALID_CONST_INDEX: &str = "Invalid constant pool index";
+const ERR_ARRAY_INDEX_MUST_BE_INT: &str = "Array index must be an integer";
+const ERR_STRING_INDEX_MUST_BE_INT: &str = "String index must be an integer";
+const _ERR_CANNOT_INDEX_TYPE: &str = "Cannot index type";
+const _ERR_CANNOT_CALL_TYPE: &str = "Cannot call type";
+const ERR_BREAK_OUTSIDE_LOOP: &str = "Break outside of loop";
+const ERR_CONTINUE_OUTSIDE_LOOP: &str = "Continue outside of loop";
+const ERR_LAMBDA_ID_NOT_FOUND: &str = "Lambda ID not found";
 
 /// Function definition information (boxed in OpCode to reduce size)
 #[derive(Debug, Clone, PartialEq)]
@@ -33,175 +37,116 @@ pub struct LambdaInfo {
     pub body_end: usize,
 }
 
-/// VM Instruction Set (x86_64-inspired CISC design)
+/// VM Instruction Set
 #[derive(Debug, Clone, PartialEq)]
 pub enum OpCode {
     // ===== Data Movement Instructions (MOV family) =====
     /// Push a constant value onto the stack
-    /// Similar to: PUSH imm
     PushConst(Value),
 
     /// Push a constant from the constant pool onto the stack
-    /// Similar to: PUSH [constant_pool + index]
     PushConstPooled(usize),
 
     /// Push a variable value onto the stack
-    /// Similar to: MOV reg, [addr]
     PushVar(String),
 
     /// Pop value from stack and store in variable
-    /// Similar to: MOV [addr], reg
     PopVar(String),
 
     /// Duplicate top stack value
-    /// Similar to: PUSH [rsp]
     Dup,
 
     /// Pop and discard top stack value
-    /// Similar to: ADD rsp, 8
     Pop,
 
     // ===== Arithmetic Instructions (ADD, SUB, MUL, DIV family) =====
     /// Add top two stack values
-    /// Similar to: ADD rax, rbx
     Add,
 
-    /// Specialized add for known integer types (hot path optimization)
-    /// Similar to: ADD rax, rbx (with type check)
-    AddInt,
-
     /// Subtract top two stack values (TOS-1 - TOS)
-    /// Similar to: SUB rax, rbx
     Sub,
 
-    /// Specialized subtract for known integer types (hot path optimization)
-    SubInt,
-
     /// Multiply top two stack values
-    /// Similar to: MUL rbx
     Mul,
 
-    /// Specialized multiply for known integer types (hot path optimization)
-    MulInt,
-
     /// Divide top two stack values (TOS-1 / TOS)
-    /// Similar to: DIV rbx
     Div,
 
     /// Modulo operation
-    /// Similar to: IDIV (with remainder in rdx)
     Mod,
 
     /// Power operation (TOS-1 ^ TOS)
     Pow,
 
     /// Negate top stack value
-    /// Similar to: NEG rax
     Neg,
 
     /// Factorial operation (postfix !)
     Factorial,
 
-    // ===== Logical Instructions (CMP, TEST, AND, OR family) =====
+    // ===== Logical Instructions =====
     /// Logical NOT
-    /// Similar to: NOT rax
     Not,
 
     /// Logical AND
-    /// Similar to: AND rax, rbx
     And,
 
     /// Logical OR
-    /// Similar to: OR rax, rbx
     Or,
 
     /// Compare equal
-    /// Similar to: CMP + SETE
     Eq,
 
     /// Compare not equal
-    /// Similar to: CMP + SETNE
     Neq,
 
     /// Compare greater than
-    /// Similar to: CMP + SETG
     Gt,
 
     /// Compare greater or equal
-    /// Similar to: CMP + SETGE
     Gte,
 
     /// Compare less than
-    /// Similar to: CMP + SETL
     Lt,
 
     /// Compare less or equal
-    /// Similar to: CMP + SETLE
     Lte,
 
-    /// Specialized less than for known integer types (hot path optimization)
-    LtInt,
-
-    /// Specialized less than or equal for known integer types (hot path optimization)
-    LteInt,
-
-    /// Specialized greater than for known integer types (hot path optimization)
-    GtInt,
-
-    /// Specialized greater than or equal for known integer types (hot path optimization)
-    GteInt,
-
-    /// Specialized equal for known integer types (hot path optimization)
-    EqInt,
-
-    /// Specialized not equal for known integer types (hot path optimization)
-    NeqInt,
-
-    // ===== Control Flow Instructions (JMP, CALL, RET family) =====
+    // ===== Control Flow Instructions =====
     /// Unconditional jump to address
-    /// Similar to: JMP addr
     Jump(usize),
 
     /// Jump if false (pop condition from stack)
-    /// Similar to: TEST + JZ
     JumpIfFalse(usize),
 
     /// Jump if true (pop condition from stack)
-    /// Similar to: TEST + JNZ
     JumpIfTrue(usize),
 
     /// Call function by name/variable
-    /// Similar to: CALL [addr]
     CallVar(String, usize), // (function name, argument count)
 
     /// Call function from stack (dynamic call)
-    /// Similar to: CALL rax
     /// Stack: [func, arg1, arg2, ...] -> [result]
     Call(usize), // (argument count)
 
     /// Call method with self injection
-    /// Similar to: CALL rax (with this pointer)
     /// Stack: [object, method, arg1, arg2, ...] -> [result]
     CallMethod(usize), // (argument count)
 
     /// Return from function
-    /// Similar to: RET
     Return,
 
-    // ===== Array/Structure Instructions (LEA, MOV family) =====
+    // ===== Array/Structure Instructions =====
     /// Create array from N stack values
-    /// Similar to: MOV [addr], ... (repeated)
     MakeArray(usize),
 
     /// Create struct from N key-value pairs on stack
     MakeStruct(usize),
 
     /// Array index access (push array[index])
-    /// Similar to: MOV rax, [rbx + rcx*8]
     Index,
 
     /// Member access (push obj.member)
-    /// Similar to: MOV rax, [rbx + offset]
     Member(String),
 
     /// Assign to array element
@@ -226,7 +171,6 @@ pub enum OpCode {
 
     // ===== Special Instructions =====
     /// Halt execution
-    /// Similar to: HLT
     Halt,
 
     // ===== Type Conversion Instructions =====
@@ -245,6 +189,19 @@ pub struct ByteCode {
 
     /// Constants pool (for optimization)
     pub constants: Vec<Value>,
+
+    /// Cache for frequently used constants to speed up lookup
+    /// Maps common values to their indices
+    common_constants_cache: FxHashMap<CommonConstant, usize>,
+}
+
+/// Common constant types that can be efficiently cached
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+enum CommonConstant {
+    Int(i64),
+    Bool(bool),
+    Null,
+    String(String),
 }
 
 impl ByteCode {
@@ -253,6 +210,7 @@ impl ByteCode {
             instructions: Vec::new(),
             line_numbers: Vec::new(),
             constants: Vec::new(),
+            common_constants_cache: FxHashMap::default(),
         }
     }
 
@@ -280,16 +238,53 @@ impl ByteCode {
     /// Add a constant to the pool or return existing index
     /// This deduplicates constants to reduce memory usage
     pub fn add_constant(&mut self, value: Value) -> usize {
-        // Check if constant already exists in the pool
+        // Fast path: Check cache for common constant types (O(1) lookup)
+        let cache_key = match &value {
+            Value::Int(i) => Some(CommonConstant::Int(*i)),
+            Value::Bool(b) => Some(CommonConstant::Bool(*b)),
+            Value::Null => Some(CommonConstant::Null),
+            Value::String(s) => Some(CommonConstant::String(s.clone())),
+            _ => None,
+        };
+
+        if let Some(key) = cache_key {
+            if let Some(&index) = self.common_constants_cache.get(&key) {
+                return index;
+            }
+        }
+
+        // Slow path: Linear search for complex types or cache miss
         for (i, existing) in self.constants.iter().enumerate() {
             if Self::values_equal(existing, &value) {
+                // Update cache if this is a common type
+                if let Some(key) = match &value {
+                    Value::Int(i) => Some(CommonConstant::Int(*i)),
+                    Value::Bool(b) => Some(CommonConstant::Bool(*b)),
+                    Value::Null => Some(CommonConstant::Null),
+                    Value::String(s) => Some(CommonConstant::String(s.clone())),
+                    _ => None,
+                } {
+                    self.common_constants_cache.insert(key, i);
+                }
                 return i;
             }
         }
 
         // Add new constant
         let index = self.constants.len();
-        self.constants.push(value);
+        self.constants.push(value.clone());
+
+        // Cache common constants for fast future lookups
+        if let Some(key) = match &value {
+            Value::Int(i) => Some(CommonConstant::Int(*i)),
+            Value::Bool(b) => Some(CommonConstant::Bool(*b)),
+            Value::Null => Some(CommonConstant::Null),
+            Value::String(s) => Some(CommonConstant::String(s.clone())),
+            _ => None,
+        } {
+            self.common_constants_cache.insert(key, index);
+        }
+
         index
     }
 
@@ -517,50 +512,41 @@ impl ByteCode {
             OpCode::PushConstPooled(i) => format!("PushConstPooled({})", i),
             OpCode::PushVar(name) => format!("PushVar({})", name),
             OpCode::PopVar(name) => format!("PopVar({})", name),
-            OpCode::Dup => "Dup".to_string(),
-            OpCode::Pop => "Pop".to_string(),
-            OpCode::Add => "Add".to_string(),
-            OpCode::AddInt => "AddInt".to_string(),
-            OpCode::Sub => "Sub".to_string(),
-            OpCode::SubInt => "SubInt".to_string(),
-            OpCode::Mul => "Mul".to_string(),
-            OpCode::MulInt => "MulInt".to_string(),
-            OpCode::Div => "Div".to_string(),
-            OpCode::Mod => "Mod".to_string(),
-            OpCode::Pow => "Pow".to_string(),
-            OpCode::Neg => "Neg".to_string(),
-            OpCode::Factorial => "Factorial".to_string(),
-            OpCode::Not => "Not".to_string(),
-            OpCode::And => "And".to_string(),
-            OpCode::Or => "Or".to_string(),
-            OpCode::Eq => "Eq".to_string(),
-            OpCode::Neq => "Neq".to_string(),
-            OpCode::Gt => "Gt".to_string(),
-            OpCode::Gte => "Gte".to_string(),
-            OpCode::Lt => "Lt".to_string(),
-            OpCode::Lte => "Lte".to_string(),
-            OpCode::LtInt => "LtInt".to_string(),
-            OpCode::LteInt => "LteInt".to_string(),
-            OpCode::GtInt => "GtInt".to_string(),
-            OpCode::GteInt => "GteInt".to_string(),
-            OpCode::EqInt => "EqInt".to_string(),
-            OpCode::NeqInt => "NeqInt".to_string(),
+            OpCode::Dup => "Dup".into(),
+            OpCode::Pop => "Pop".into(),
+            OpCode::Add => "Add".into(),
+            OpCode::Sub => "Sub".into(),
+            OpCode::Mul => "Mul".into(),
+            OpCode::Div => "Div".into(),
+            OpCode::Mod => "Mod".into(),
+            OpCode::Pow => "Pow".into(),
+            OpCode::Neg => "Neg".into(),
+            OpCode::Factorial => "Factorial".into(),
+            OpCode::Not => "Not".into(),
+            OpCode::And => "And".into(),
+            OpCode::Or => "Or".into(),
+            OpCode::Eq => "Eq".into(),
+            OpCode::Neq => "Neq".into(),
+            OpCode::Gt => "Gt".into(),
+            OpCode::Gte => "Gte".into(),
+            OpCode::Lt => "Lt".into(),
+            OpCode::Lte => "Lte".into(),
             OpCode::Jump(addr) => format!("Jump({})", addr),
             OpCode::JumpIfFalse(addr) => format!("JumpIfFalse({})", addr),
             OpCode::JumpIfTrue(addr) => format!("JumpIfTrue({})", addr),
             OpCode::CallVar(name, argc) => format!("CallVar({}, {})", name, argc),
             OpCode::Call(argc) => format!("Call({})", argc),
             OpCode::CallMethod(argc) => format!("CallMethod({})", argc),
-            OpCode::Return => "Return".to_string(),
+            OpCode::Return => "Return".into(),
             OpCode::MakeArray(size) => format!("MakeArray({})", size),
             OpCode::MakeStruct(size) => format!("MakeStruct({})", size),
-            OpCode::Index => "Index".to_string(),
+            OpCode::Index => "Index".into(),
             OpCode::Member(name) => format!("Member({})", name),
-            OpCode::IndexAssign => "IndexAssign".to_string(),
+            OpCode::IndexAssign => "IndexAssign".into(),
             OpCode::MemberAssign(name) => format!("MemberAssign({})", name),
-            OpCode::Break => "Break".to_string(),
-            OpCode::Continue => "Continue".to_string(),
-            OpCode::Halt => "Halt".to_string(),
+            OpCode::Break => "Break".into(),
+            OpCode::Continue => "Continue".into(),
+            OpCode::Halt => "Halt".into(),
             OpCode::DefineFunc(info) => {
                 format!(
                     "DefineFunc({}, [{}], {}, {}, [{}])",
@@ -593,20 +579,11 @@ impl ByteCode {
         if s == "Add" {
             return Ok(OpCode::Add);
         }
-        if s == "AddInt" {
-            return Ok(OpCode::AddInt);
-        }
         if s == "Sub" {
             return Ok(OpCode::Sub);
         }
-        if s == "SubInt" {
-            return Ok(OpCode::SubInt);
-        }
         if s == "Mul" {
             return Ok(OpCode::Mul);
-        }
-        if s == "MulInt" {
-            return Ok(OpCode::MulInt);
         }
         if s == "Div" {
             return Ok(OpCode::Div);
@@ -649,24 +626,6 @@ impl ByteCode {
         }
         if s == "Lte" {
             return Ok(OpCode::Lte);
-        }
-        if s == "LtInt" {
-            return Ok(OpCode::LtInt);
-        }
-        if s == "LteInt" {
-            return Ok(OpCode::LteInt);
-        }
-        if s == "GtInt" {
-            return Ok(OpCode::GtInt);
-        }
-        if s == "GteInt" {
-            return Ok(OpCode::GteInt);
-        }
-        if s == "EqInt" {
-            return Ok(OpCode::EqInt);
-        }
-        if s == "NeqInt" {
-            return Ok(OpCode::NeqInt);
         }
         if s == "Return" {
             return Ok(OpCode::Return);
@@ -737,8 +696,13 @@ impl ByteCode {
         if let Some(argc) = s.strip_prefix("Call(").and_then(|s| s.strip_suffix(")")) {
             return Ok(OpCode::Call(argc.parse().map_err(|_| "Invalid arg count")?));
         }
-        if let Some(argc) = s.strip_prefix("CallMethod(").and_then(|s| s.strip_suffix(")")) {
-            return Ok(OpCode::CallMethod(argc.parse().map_err(|_| "Invalid arg count")?));
+        if let Some(argc) = s
+            .strip_prefix("CallMethod(")
+            .and_then(|s| s.strip_suffix(")"))
+        {
+            return Ok(OpCode::CallMethod(
+                argc.parse().map_err(|_| "Invalid arg count")?,
+            ));
         }
         if let Some(size) = s
             .strip_prefix("MakeArray(")
@@ -952,7 +916,7 @@ impl VM {
             globals,
             // Use FxHashMap for faster string hashing
             locals: FxHashMap::default(),
-            loop_stack: Vec::new(),
+            loop_stack: Vec::with_capacity(8), // Pre-allocate for nested loops
             functions: FxHashMap::default(),
             member_cache: FxHashMap::default(),
             halted: false,
@@ -1016,7 +980,7 @@ impl VM {
                 let value = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
                 self.set_variable(name.clone(), value);
             }
 
@@ -1024,7 +988,7 @@ impl VM {
                 let value = self
                     .stack
                     .last()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?
                     .clone();
                 self.stack.push(value);
             }
@@ -1032,78 +996,12 @@ impl VM {
             OpCode::Pop => {
                 self.stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
             }
 
             OpCode::Add => self.binary_op(|a, b| a.vm_add(b))?,
-            OpCode::AddInt => {
-                // Fast path for integer addition
-                let right = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-                let left = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-
-                match (&left, &right) {
-                    (Value::Int(a), Value::Int(b)) => {
-                        self.stack.push(Value::Int(a + b));
-                    }
-                    _ => {
-                        // Fallback to generic add
-                        let result = left.vm_add(&right).map_err(|e| RuminaError::runtime(e))?;
-                        self.stack.push(result);
-                    }
-                }
-            }
             OpCode::Sub => self.binary_op(|a, b| a.vm_sub(b))?,
-            OpCode::SubInt => {
-                // Fast path for integer subtraction
-                let right = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-                let left = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-
-                match (&left, &right) {
-                    (Value::Int(a), Value::Int(b)) => {
-                        self.stack.push(Value::Int(a - b));
-                    }
-                    _ => {
-                        // Fallback to generic sub
-                        let result = left.vm_sub(&right).map_err(|e| RuminaError::runtime(e))?;
-                        self.stack.push(result);
-                    }
-                }
-            }
             OpCode::Mul => self.binary_op(|a, b| a.vm_mul(b))?,
-            OpCode::MulInt => {
-                // Fast path for integer multiplication
-                let right = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-                let left = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-
-                match (&left, &right) {
-                    (Value::Int(a), Value::Int(b)) => {
-                        self.stack.push(Value::Int(a * b));
-                    }
-                    _ => {
-                        // Fallback to generic mul
-                        let result = left.vm_mul(&right).map_err(|e| RuminaError::runtime(e))?;
-                        self.stack.push(result);
-                    }
-                }
-            }
             OpCode::Div => self.binary_op(|a, b| a.vm_div(b))?,
             OpCode::Mod => self.binary_op(|a, b| a.vm_mod(b))?,
             OpCode::Pow => self.binary_op(|a, b| a.vm_pow(b))?,
@@ -1112,7 +1010,7 @@ impl VM {
                 let value = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
                 let result = value.vm_neg().map_err(|e| RuminaError::runtime(e))?;
                 self.stack.push(result);
             }
@@ -1121,7 +1019,7 @@ impl VM {
                 let value = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
                 let result = value.vm_not().map_err(|e| RuminaError::runtime(e))?;
                 self.stack.push(result);
             }
@@ -1130,7 +1028,7 @@ impl VM {
                 let value = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
                 let result = value.vm_factorial().map_err(|e| RuminaError::runtime(e))?;
                 self.stack.push(result);
             }
@@ -1142,128 +1040,6 @@ impl VM {
             OpCode::Gte => self.binary_op(|a, b| a.vm_gte(b))?,
             OpCode::Lt => self.binary_op(|a, b| a.vm_lt(b))?,
             OpCode::Lte => self.binary_op(|a, b| a.vm_lte(b))?,
-
-            // Specialized integer comparisons
-            OpCode::LtInt => {
-                let right = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-                let left = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-
-                match (&left, &right) {
-                    (Value::Int(a), Value::Int(b)) => {
-                        self.stack.push(Value::Bool(a < b));
-                    }
-                    _ => {
-                        let result = left.vm_lt(&right).map_err(|e| RuminaError::runtime(e))?;
-                        self.stack.push(result);
-                    }
-                }
-            }
-            OpCode::LteInt => {
-                let right = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-                let left = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-
-                match (&left, &right) {
-                    (Value::Int(a), Value::Int(b)) => {
-                        self.stack.push(Value::Bool(a <= b));
-                    }
-                    _ => {
-                        let result = left.vm_lte(&right).map_err(|e| RuminaError::runtime(e))?;
-                        self.stack.push(result);
-                    }
-                }
-            }
-            OpCode::GtInt => {
-                let right = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-                let left = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-
-                match (&left, &right) {
-                    (Value::Int(a), Value::Int(b)) => {
-                        self.stack.push(Value::Bool(a > b));
-                    }
-                    _ => {
-                        let result = left.vm_gt(&right).map_err(|e| RuminaError::runtime(e))?;
-                        self.stack.push(result);
-                    }
-                }
-            }
-            OpCode::GteInt => {
-                let right = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-                let left = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-
-                match (&left, &right) {
-                    (Value::Int(a), Value::Int(b)) => {
-                        self.stack.push(Value::Bool(a >= b));
-                    }
-                    _ => {
-                        let result = left.vm_gte(&right).map_err(|e| RuminaError::runtime(e))?;
-                        self.stack.push(result);
-                    }
-                }
-            }
-            OpCode::EqInt => {
-                let right = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-                let left = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-
-                match (&left, &right) {
-                    (Value::Int(a), Value::Int(b)) => {
-                        self.stack.push(Value::Bool(a == b));
-                    }
-                    _ => {
-                        let result = left.vm_eq(&right).map_err(|e| RuminaError::runtime(e))?;
-                        self.stack.push(result);
-                    }
-                }
-            }
-            OpCode::NeqInt => {
-                let right = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-                let left = self
-                    .stack
-                    .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
-
-                match (&left, &right) {
-                    (Value::Int(a), Value::Int(b)) => {
-                        self.stack.push(Value::Bool(a != b));
-                    }
-                    _ => {
-                        let result = left.vm_neq(&right).map_err(|e| RuminaError::runtime(e))?;
-                        self.stack.push(result);
-                    }
-                }
-            }
 
             // Logical operations
             OpCode::And => self.binary_op(|a, b| a.vm_and(b))?,
@@ -1278,7 +1054,7 @@ impl VM {
                 let condition = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
                 if !condition.is_truthy() {
                     self.ip = *addr;
                 }
@@ -1288,7 +1064,7 @@ impl VM {
                 let condition = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
                 if condition.is_truthy() {
                     self.ip = *addr;
                 }
@@ -1301,7 +1077,7 @@ impl VM {
                     let elem = self
                         .stack
                         .pop()
-                        .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                        .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
                     elements.push(elem);
                 }
                 elements.reverse(); // Restore original order
@@ -1313,11 +1089,11 @@ impl VM {
                 let index = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
                 let array = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
 
                 match &array {
                     Value::Array(arr) => {
@@ -1339,9 +1115,7 @@ impl VM {
                                 )));
                             }
                         } else {
-                            return Err(RuminaError::runtime(
-                                "Array index must be an integer".to_string(),
-                            ));
+                            return Err(RuminaError::runtime(ERR_ARRAY_INDEX_MUST_BE_INT));
                         }
                     }
                     Value::String(s) => {
@@ -1363,9 +1137,7 @@ impl VM {
                                 )));
                             }
                         } else {
-                            return Err(RuminaError::runtime(
-                                "String index must be an integer".to_string(),
-                            ));
+                            return Err(RuminaError::runtime(ERR_STRING_INDEX_MUST_BE_INT));
                         }
                     }
                     _ => {
@@ -1383,7 +1155,7 @@ impl VM {
                 let object = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
 
                 match &object {
                     Value::Struct(s) => {
@@ -1458,7 +1230,7 @@ impl VM {
                 if let Some((_, break_target)) = self.loop_stack.last() {
                     self.ip = *break_target;
                 } else {
-                    return Err(RuminaError::runtime("Break outside of loop".to_string()));
+                    return Err(RuminaError::runtime(ERR_BREAK_OUTSIDE_LOOP));
                 }
             }
 
@@ -1466,7 +1238,7 @@ impl VM {
                 if let Some((continue_target, _)) = self.loop_stack.last() {
                     self.ip = *continue_target;
                 } else {
-                    return Err(RuminaError::runtime("Continue outside of loop".to_string()));
+                    return Err(RuminaError::runtime(ERR_CONTINUE_OUTSIDE_LOOP));
                 }
             }
 
@@ -1504,7 +1276,7 @@ impl VM {
                     let arg = self
                         .stack
                         .pop()
-                        .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                        .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
                     args.push(arg);
                 }
                 args.reverse(); // Restore original order
@@ -1557,12 +1329,15 @@ impl VM {
                             self.recursion_depth += 1;
 
                             // Set up parameters as local variables
-                            // Reserve capacity to avoid reallocations
-                            self.locals.clear();
-                            self.locals.reserve(params.len());
+                            // Create new HashMap with exact capacity to avoid reallocations
+                            let mut new_locals = FxHashMap::with_capacity_and_hasher(
+                                params.len(),
+                                Default::default(),
+                            );
                             for (param_name, arg_value) in params.iter().zip(args.into_iter()) {
-                                self.locals.insert(param_name.clone(), arg_value);
+                                new_locals.insert(param_name.clone(), arg_value);
                             }
+                            self.locals = new_locals;
 
                             // Jump to function body
                             self.ip = body_start;
@@ -1608,9 +1383,8 @@ impl VM {
                                         break;
                                     }
                                 }
-                                found_id.ok_or_else(|| {
-                                    RuminaError::runtime("Lambda ID not found".to_string())
-                                })?
+                                found_id
+                                    .ok_or_else(|| RuminaError::runtime(ERR_LAMBDA_ID_NOT_FOUND))?
                             }
                         };
 
@@ -1636,15 +1410,19 @@ impl VM {
                         self.recursion_depth += 1;
 
                         // Set up parameters as local variables
-                        // Start with the closure environment (convert HashMap to FxHashMap)
-                        self.locals = closure
-                            .borrow()
-                            .iter()
-                            .map(|(k, v)| (k.clone(), v.clone()))
-                            .collect();
-                        for (param_name, arg_value) in params.iter().zip(args.into_iter()) {
-                            self.locals.insert(param_name.clone(), arg_value);
+                        // Start with the closure environment with pre-allocated capacity
+                        let closure_ref = closure.borrow();
+                        let total_capacity = closure_ref.len() + params.len();
+                        let mut new_locals =
+                            FxHashMap::with_capacity_and_hasher(total_capacity, Default::default());
+                        for (k, v) in closure_ref.iter() {
+                            new_locals.insert(k.clone(), v.clone());
                         }
+                        drop(closure_ref); // Release borrow early
+                        for (param_name, arg_value) in params.iter().zip(args.into_iter()) {
+                            new_locals.insert(param_name.clone(), arg_value);
+                        }
+                        self.locals = new_locals;
 
                         // Jump to lambda body
                         self.ip = func_info.body_start;
@@ -1665,7 +1443,7 @@ impl VM {
                     let arg = self
                         .stack
                         .pop()
-                        .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                        .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
                     args.push(arg);
                 }
                 args.reverse(); // Restore original order
@@ -1674,7 +1452,7 @@ impl VM {
                 let func = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
 
                 // Call the function
                 match func {
@@ -1723,11 +1501,15 @@ impl VM {
                             self.recursion_depth += 1;
 
                             // Set up parameters as local variables
-                            self.locals.clear();
-                            self.locals.reserve(params.len());
+                            // Create new HashMap with exact capacity to avoid reallocations
+                            let mut new_locals = FxHashMap::with_capacity_and_hasher(
+                                params.len(),
+                                Default::default(),
+                            );
                             for (param_name, arg_value) in params.iter().zip(args.into_iter()) {
-                                self.locals.insert(param_name.clone(), arg_value);
+                                new_locals.insert(param_name.clone(), arg_value);
                             }
+                            self.locals = new_locals;
 
                             // Jump to function body
                             self.ip = body_start;
@@ -1773,9 +1555,8 @@ impl VM {
                                         break;
                                     }
                                 }
-                                found_id.ok_or_else(|| {
-                                    RuminaError::runtime("Lambda ID not found".to_string())
-                                })?
+                                found_id
+                                    .ok_or_else(|| RuminaError::runtime(ERR_LAMBDA_ID_NOT_FOUND))?
                             }
                         };
 
@@ -1830,7 +1611,7 @@ impl VM {
                     let arg = self
                         .stack
                         .pop()
-                        .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                        .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
                     args.push(arg);
                 }
                 args.reverse(); // Restore original order
@@ -1839,13 +1620,13 @@ impl VM {
                 let method = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
 
                 // Pop the object from the stack
                 let object = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
 
                 // Call the method with self injection
                 match method {
@@ -1884,9 +1665,8 @@ impl VM {
                                         break;
                                     }
                                 }
-                                found_id.ok_or_else(|| {
-                                    RuminaError::runtime("Lambda ID not found".to_string())
-                                })?
+                                found_id
+                                    .ok_or_else(|| RuminaError::runtime(ERR_LAMBDA_ID_NOT_FOUND))?
                             }
                         };
 
@@ -2000,12 +1780,12 @@ impl VM {
                     let value = self
                         .stack
                         .pop()
-                        .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                        .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
                     // Pop key (should be a string)
                     let key = self
                         .stack
                         .pop()
-                        .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                        .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
 
                     if let Value::String(key_str) = key {
                         fields.insert(key_str, value);
@@ -2024,7 +1804,7 @@ impl VM {
                 let lambda_id_value = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
 
                 let lambda_id = match lambda_id_value {
                     Value::String(id) => id,
@@ -2069,13 +1849,13 @@ impl VM {
                 let value = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
 
                 // Pop object
                 let object = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
 
                 match object {
                     Value::Struct(s) => {
@@ -2099,7 +1879,7 @@ impl VM {
                 let val = self
                     .stack
                     .pop()
-                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
                 let converted = self.convert_to_type(val, &dtype)?;
                 self.stack.push(converted);
             }
@@ -2120,11 +1900,11 @@ impl VM {
         let right = self
             .stack
             .pop()
-            .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+            .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
         let left = self
             .stack
             .pop()
-            .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW.to_string()))?;
+            .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
 
         let result = f(&left, &right).map_err(|e| RuminaError::runtime(e))?;
 
@@ -2468,6 +2248,56 @@ mod tests {
     }
 
     #[test]
+    fn test_polymorphic_operations_mixed_types() {
+        let globals = Rc::new(RefCell::new(HashMap::new()));
+        let mut vm = VM::new(globals);
+
+        let mut bytecode = ByteCode::new();
+
+        // Test: 10 (int) + 3.14 (float) = 13.14 (float)
+        let idx_int = bytecode.add_constant(Value::Int(10));
+        let idx_float = bytecode.add_constant(Value::Float(3.14));
+
+        bytecode.emit(OpCode::PushConstPooled(idx_int), None);
+        bytecode.emit(OpCode::PushConstPooled(idx_float), None);
+        bytecode.emit(OpCode::Add, None); // Generic Add handles mixed types
+        bytecode.emit(OpCode::Halt, None);
+
+        vm.load(bytecode);
+        let result = vm.run().unwrap();
+
+        match result {
+            Some(Value::Float(f)) => assert!((f - 13.14).abs() < 0.01),
+            other => panic!("Expected Float(13.14), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_polymorphic_comparison_same_types() {
+        let globals = Rc::new(RefCell::new(HashMap::new()));
+        let mut vm = VM::new(globals);
+
+        let mut bytecode = ByteCode::new();
+
+        // Test: 5 (int) < 10 (int) = true
+        let idx1 = bytecode.add_constant(Value::Int(5));
+        let idx2 = bytecode.add_constant(Value::Int(10));
+
+        bytecode.emit(OpCode::PushConstPooled(idx1), None);
+        bytecode.emit(OpCode::PushConstPooled(idx2), None);
+        bytecode.emit(OpCode::Lt, None); // Generic Lt handles int comparison
+        bytecode.emit(OpCode::Halt, None);
+
+        vm.load(bytecode);
+        let result = vm.run().unwrap();
+
+        match result {
+            Some(Value::Bool(b)) => assert_eq!(b, true),
+            other => panic!("Expected Bool(true), got {:?}", other),
+        }
+    }
+
+    #[test]
     fn test_constant_pooling() {
         let mut bytecode = ByteCode::new();
 
@@ -2659,106 +2489,6 @@ mod tests {
         // Verify cache miss was tracked
         let (_hits, misses) = vm.get_cache_stats();
         assert_eq!(misses, 1, "Cache should have recorded exactly one miss");
-    }
-
-    #[test]
-    fn test_specialized_int_add() {
-        let globals = Rc::new(RefCell::new(HashMap::new()));
-        let mut vm = VM::new(globals);
-
-        let mut bytecode = ByteCode::new();
-
-        // Add constants to pool
-        let idx1 = bytecode.add_constant(Value::Int(15));
-        let idx2 = bytecode.add_constant(Value::Int(27));
-
-        // Use specialized integer add
-        bytecode.emit(OpCode::PushConstPooled(idx1), None);
-        bytecode.emit(OpCode::PushConstPooled(idx2), None);
-        bytecode.emit(OpCode::AddInt, None);
-        bytecode.emit(OpCode::Halt, None);
-
-        vm.load(bytecode);
-        let result = vm.run().unwrap();
-
-        match result {
-            Some(Value::Int(n)) => assert_eq!(n, 42),
-            _ => panic!("Expected Int(42)"),
-        }
-    }
-
-    #[test]
-    fn test_specialized_int_sub() {
-        let globals = Rc::new(RefCell::new(HashMap::new()));
-        let mut vm = VM::new(globals);
-
-        let mut bytecode = ByteCode::new();
-
-        let idx1 = bytecode.add_constant(Value::Int(100));
-        let idx2 = bytecode.add_constant(Value::Int(42));
-
-        bytecode.emit(OpCode::PushConstPooled(idx1), None);
-        bytecode.emit(OpCode::PushConstPooled(idx2), None);
-        bytecode.emit(OpCode::SubInt, None);
-        bytecode.emit(OpCode::Halt, None);
-
-        vm.load(bytecode);
-        let result = vm.run().unwrap();
-
-        match result {
-            Some(Value::Int(n)) => assert_eq!(n, 58),
-            _ => panic!("Expected Int(58)"),
-        }
-    }
-
-    #[test]
-    fn test_specialized_int_mul() {
-        let globals = Rc::new(RefCell::new(HashMap::new()));
-        let mut vm = VM::new(globals);
-
-        let mut bytecode = ByteCode::new();
-
-        let idx1 = bytecode.add_constant(Value::Int(6));
-        let idx2 = bytecode.add_constant(Value::Int(7));
-
-        bytecode.emit(OpCode::PushConstPooled(idx1), None);
-        bytecode.emit(OpCode::PushConstPooled(idx2), None);
-        bytecode.emit(OpCode::MulInt, None);
-        bytecode.emit(OpCode::Halt, None);
-
-        vm.load(bytecode);
-        let result = vm.run().unwrap();
-
-        match result {
-            Some(Value::Int(n)) => assert_eq!(n, 42),
-            _ => panic!("Expected Int(42)"),
-        }
-    }
-
-    #[test]
-    fn test_specialized_int_fallback_to_generic() {
-        let globals = Rc::new(RefCell::new(HashMap::new()));
-        let mut vm = VM::new(globals);
-
-        let mut bytecode = ByteCode::new();
-
-        // Mix int and float - should fallback to generic add
-        let idx1 = bytecode.add_constant(Value::Int(10));
-        let idx2 = bytecode.add_constant(Value::Float(3.14));
-
-        bytecode.emit(OpCode::PushConstPooled(idx1), None);
-        bytecode.emit(OpCode::PushConstPooled(idx2), None);
-        bytecode.emit(OpCode::AddInt, None);
-        bytecode.emit(OpCode::Halt, None);
-
-        vm.load(bytecode);
-        let result = vm.run().unwrap();
-
-        // Result should be a float
-        match result {
-            Some(Value::Float(f)) => assert!((f - 13.14).abs() < 0.01),
-            _ => panic!("Expected Float(13.14)"),
-        }
     }
 
     #[test]
