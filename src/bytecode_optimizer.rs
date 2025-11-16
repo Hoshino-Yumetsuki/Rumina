@@ -120,12 +120,7 @@ impl BytecodeOptimizer {
                 (
                     OpCode::PushConstPooled(idx1),
                     OpCode::PushConstPooled(idx2),
-                    OpCode::Add
-                    | OpCode::AddInt
-                    | OpCode::Sub
-                    | OpCode::SubInt
-                    | OpCode::Mul
-                    | OpCode::MulInt,
+                    OpCode::Add | OpCode::Sub | OpCode::Mul,
                 ) => {
                     // Check if both constants are integers
                     if let (Some(val1), Some(val2)) =
@@ -135,9 +130,9 @@ impl BytecodeOptimizer {
 
                         if let (Value::Int(a), Value::Int(b)) = (val1, val2) {
                             let result = match third {
-                                OpCode::Add | OpCode::AddInt => a + b,
-                                OpCode::Sub | OpCode::SubInt => a - b,
-                                OpCode::Mul | OpCode::MulInt => a * b,
+                                OpCode::Add => a + b,
+                                OpCode::Sub => a - b,
+                                OpCode::Mul => a * b,
                                 _ => {
                                     i += 1;
                                     continue;
@@ -237,6 +232,12 @@ impl BytecodeOptimizer {
     }
 }
 
+impl Default for BytecodeOptimizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -266,7 +267,7 @@ mod tests {
 
         bytecode.emit(OpCode::PushConstPooled(idx1), None);
         bytecode.emit(OpCode::PushConstPooled(idx2), None);
-        bytecode.emit(OpCode::AddInt, None);
+        bytecode.emit(OpCode::Add, None);
         bytecode.emit(OpCode::Halt, None);
 
         let mut optimizer = BytecodeOptimizer::new();

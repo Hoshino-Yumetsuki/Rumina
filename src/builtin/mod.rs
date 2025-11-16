@@ -144,7 +144,11 @@ pub fn register_builtins(globals: &mut HashMap<String, Value>) {
     register_fn(globals, "cas_evaluate_at", cas::evaluate_at);
     register_fn(globals, "cas_store", cas::store);
     register_fn(globals, "cas_load", cas::load);
-    register_fn(globals, "cas_numerical_derivative", cas::numerical_derivative);
+    register_fn(
+        globals,
+        "cas_numerical_derivative",
+        cas::numerical_derivative,
+    );
 
     // 字符串命名空间
     let mut string_ns = HashMap::new();
@@ -209,7 +213,11 @@ pub fn register_builtins(globals: &mut HashMap<String, Value>) {
     register_fn(globals, "string::sub", string::sub);
     register_fn(globals, "string::length", string::length);
     register_fn(globals, "string::char_at", string::char_at);
-    register_fn(globals, "string::replace_by_index", string::replace_by_index);
+    register_fn(
+        globals,
+        "string::replace_by_index",
+        string::replace_by_index,
+    );
 }
 
 fn register_fn(

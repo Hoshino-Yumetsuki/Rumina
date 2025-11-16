@@ -51,20 +51,20 @@ impl RuminaError {
         }
     }
 
-    pub fn runtime(message: String) -> Self {
-        Self::new(ErrorType::RuntimeError, message)
+    pub fn runtime(message: impl Into<String>) -> Self {
+        Self::new(ErrorType::RuntimeError, message.into())
     }
 
-    pub fn type_error(message: String) -> Self {
-        Self::new(ErrorType::TypeError, message)
+    pub fn type_error(message: impl Into<String>) -> Self {
+        Self::new(ErrorType::TypeError, message.into())
     }
 
-    pub fn index_error(message: String) -> Self {
-        Self::new(ErrorType::IndexError, message)
+    pub fn index_error(message: impl Into<String>) -> Self {
+        Self::new(ErrorType::IndexError, message.into())
     }
 
-    pub fn key_error(message: String) -> Self {
-        Self::new(ErrorType::KeyError, message)
+    pub fn key_error(message: impl Into<String>) -> Self {
+        Self::new(ErrorType::KeyError, message.into())
     }
 
     pub fn division_by_zero() -> Self {
