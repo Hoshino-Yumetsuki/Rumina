@@ -83,7 +83,7 @@ pub fn range(args: &[Value]) -> Result<Value, String> {
             if *n < 0 {
                 return Err("range expects non-negative integer".to_string());
             }
-            let arr: Vec<Value> = (0..*n).map(|i| Value::Int(i)).collect();
+            let arr: Vec<Value> = (0..*n).map(Value::Int).collect();
             Ok(Value::Array(Rc::new(RefCell::new(arr))))
         }
         _ => Err(format!(
@@ -240,7 +240,7 @@ pub fn det(args: &[Value]) -> Result<Value, String> {
     }
 }
 
-fn calculate_determinant(matrix: &Vec<Vec<f64>>) -> f64 {
+fn calculate_determinant(matrix: &[Vec<f64>]) -> f64 {
     let n = matrix.len();
 
     if n == 1 {
@@ -255,11 +255,11 @@ fn calculate_determinant(matrix: &Vec<Vec<f64>>) -> f64 {
     for col in 0..n {
         // Create submatrix
         let mut submatrix = Vec::new();
-        for row in 1..n {
+        for row_data in matrix.iter().skip(1) {
             let mut subrow = Vec::new();
-            for c in 0..n {
+            for (c, &val) in row_data.iter().enumerate() {
                 if c != col {
-                    subrow.push(matrix[row][c]);
+                    subrow.push(val);
                 }
             }
             submatrix.push(subrow);
