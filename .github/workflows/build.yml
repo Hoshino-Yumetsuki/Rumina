@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Windows MSVC
+          # Tier 1: Windows MSVC
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact_name: rumina-cli.exe
@@ -26,12 +26,24 @@ jobs:
             target: i686-pc-windows-msvc
             artifact_name: rumina-cli.exe
             asset_name: rumina-cli-windows-x86.exe
+
+          # Tier 1: Windows MinGW (cross-compiled from Linux)
+          - os: ubuntu-latest
+            target: x86_64-pc-windows-gnu
+            artifact_name: rumina-cli.exe
+            asset_name: rumina-cli-windows-x64-gnu.exe
+          - os: ubuntu-latest
+            target: i686-pc-windows-gnu
+            artifact_name: rumina-cli.exe
+            asset_name: rumina-cli-windows-x86-gnu.exe
+
+          # Tier 2: Windows ARM64 MSVC
           - os: windows-latest
             target: aarch64-pc-windows-msvc
             artifact_name: rumina-cli.exe
             asset_name: rumina-cli-windows-arm64.exe
 
-          # macOS
+          # Tier 1: macOS
           - os: macos-latest
             target: x86_64-apple-darwin
             artifact_name: rumina-cli
@@ -41,7 +53,7 @@ jobs:
             artifact_name: rumina-cli
             asset_name: rumina-cli-macos-arm64
 
-          # Linux x86/x64 (glibc)
+          # Tier 1: Linux x86/x64 (glibc)
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact_name: rumina-cli
@@ -51,25 +63,25 @@ jobs:
             artifact_name: rumina-cli
             asset_name: rumina-cli-linux-x86-gnu
 
-          # Linux x86/x64 (musl)
+          # Tier 2: Linux x86/x64 (musl)
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             artifact_name: rumina-cli
             asset_name: rumina-cli-linux-x64-musl
 
-          # Linux ARM64 (glibc)
+          # Tier 1: Linux ARM64 (glibc)
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             artifact_name: rumina-cli
             asset_name: rumina-cli-linux-arm64-gnu
 
-          # Linux ARM64 (musl)
+          # Tier 2: Linux ARM64 (musl)
           - os: ubuntu-latest
             target: aarch64-unknown-linux-musl
             artifact_name: rumina-cli
             asset_name: rumina-cli-linux-arm64-musl
 
-          # Linux ARM (glibc)
+          # Tier 2: Linux ARM (glibc)
           - os: ubuntu-latest
             target: arm-unknown-linux-gnueabi
             artifact_name: rumina-cli
@@ -83,29 +95,67 @@ jobs:
             artifact_name: rumina-cli
             asset_name: rumina-cli-linux-armv7-gnueabihf
 
-          # Linux RISC-V (glibc)
+          # Tier 2: Linux RISC-V (glibc)
           - os: ubuntu-latest
             target: riscv64gc-unknown-linux-gnu
             artifact_name: rumina-cli
             asset_name: rumina-cli-linux-riscv64-gnu
 
-          # Linux RISC-V (musl)
+          # Tier 2: Linux RISC-V (musl)
           - os: ubuntu-latest
             target: riscv64gc-unknown-linux-musl
             artifact_name: rumina-cli
             asset_name: rumina-cli-linux-riscv64-musl
 
-          # Linux LoongArch (glibc)
+          # Tier 2: Linux LoongArch (glibc)
           - os: ubuntu-latest
             target: loongarch64-unknown-linux-gnu
             artifact_name: rumina-cli
             asset_name: rumina-cli-linux-loongarch64-gnu
 
-          # Linux LoongArch (musl)
+          # Tier 2: Linux LoongArch (musl)
           - os: ubuntu-latest
             target: loongarch64-unknown-linux-musl
             artifact_name: rumina-cli
             asset_name: rumina-cli-linux-loongarch64-musl
+
+          # Tier 2: Linux PowerPC (glibc)
+          - os: ubuntu-latest
+            target: powerpc-unknown-linux-gnu
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-powerpc-gnu
+          - os: ubuntu-latest
+            target: powerpc64-unknown-linux-gnu
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-powerpc64-gnu
+          - os: ubuntu-latest
+            target: powerpc64le-unknown-linux-gnu
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-powerpc64le-gnu
+
+          # Tier 2: Linux S390x (glibc)
+          - os: ubuntu-latest
+            target: s390x-unknown-linux-gnu
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-s390x-gnu
+
+          # Tier 2: FreeBSD
+          - os: ubuntu-latest
+            target: x86_64-unknown-freebsd
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-freebsd-x64
+
+          # Tier 2: illumos
+          - os: ubuntu-latest
+            target: x86_64-unknown-illumos
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-illumos-x64
+
+          # Tier 2: NetBSD
+          - os: ubuntu-latest
+            target: x86_64-unknown-netbsd
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-netbsd-x64
 
     steps:
       - name: Checkout code
@@ -160,8 +210,9 @@ jobs:
           mkdir -p dist
           # Copy rumina-cli (main program)
           cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} dist/${{ matrix.asset_name }}
-          # Copy ruminac (compiler)
-          if [ "${{ runner.os }}" = "Windows" ]; then
+          # Copy ruminac (compiler) and rmvm (VM)
+          # Check if target is Windows (either native or cross-compiled)
+          if [[ "${{ matrix.target }}" == *"windows"* ]]; then
             cp target/${{ matrix.target }}/release/ruminac.exe dist/ruminac-${{ matrix.target }}.exe
             cp target/${{ matrix.target }}/release/rmvm.exe dist/rmvm-${{ matrix.target }}.exe
           else
