@@ -68,6 +68,14 @@ jobs:
             target: x86_64-unknown-linux-musl
             artifact_name: rumina-cli
             asset_name: rumina-cli-linux-x64-musl
+          - os: ubuntu-latest
+            target: i586-unknown-linux-gnu
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-i586-gnu
+          - os: ubuntu-latest
+            target: i586-unknown-linux-musl
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-i586-musl
 
           # Tier 1: Linux ARM64 (glibc)
           - os: ubuntu-latest
@@ -91,9 +99,43 @@ jobs:
             artifact_name: rumina-cli
             asset_name: rumina-cli-linux-arm-gnueabihf
           - os: ubuntu-latest
+            target: armv5te-unknown-linux-gnueabi
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-armv5te-gnueabi
+          - os: ubuntu-latest
+            target: armv7-unknown-linux-gnueabi
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-armv7-gnueabi
+          - os: ubuntu-latest
             target: armv7-unknown-linux-gnueabihf
             artifact_name: rumina-cli
             asset_name: rumina-cli-linux-armv7-gnueabihf
+          - os: ubuntu-latest
+            target: thumbv7neon-unknown-linux-gnueabihf
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-thumbv7neon-gnueabihf
+
+          # Tier 2: Linux ARM (musl)
+          - os: ubuntu-latest
+            target: arm-unknown-linux-musleabi
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-arm-musleabi
+          - os: ubuntu-latest
+            target: arm-unknown-linux-musleabihf
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-arm-musleabihf
+          - os: ubuntu-latest
+            target: armv5te-unknown-linux-musleabi
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-armv5te-musleabi
+          - os: ubuntu-latest
+            target: armv7-unknown-linux-musleabi
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-armv7-musleabi
+          - os: ubuntu-latest
+            target: armv7-unknown-linux-musleabihf
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-armv7-musleabihf
 
           # Tier 2: Linux RISC-V (glibc)
           - os: ubuntu-latest
@@ -139,11 +181,57 @@ jobs:
             artifact_name: rumina-cli
             asset_name: rumina-cli-linux-s390x-gnu
 
+          # Tier 2: Linux MIPS (glibc)
+          - os: ubuntu-latest
+            target: mips-unknown-linux-gnu
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-mips-gnu
+          - os: ubuntu-latest
+            target: mipsel-unknown-linux-gnu
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-mipsel-gnu
+          - os: ubuntu-latest
+            target: mips64-unknown-linux-gnuabi64
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-mips64-gnuabi64
+          - os: ubuntu-latest
+            target: mips64el-unknown-linux-gnuabi64
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-mips64el-gnuabi64
+
+          # Tier 2: Linux MIPS (musl)
+          - os: ubuntu-latest
+            target: mips-unknown-linux-musl
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-mips-musl
+          - os: ubuntu-latest
+            target: mipsel-unknown-linux-musl
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-mipsel-musl
+          - os: ubuntu-latest
+            target: mips64-unknown-linux-muslabi64
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-mips64-muslabi64
+          - os: ubuntu-latest
+            target: mips64el-unknown-linux-muslabi64
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-mips64el-muslabi64
+
+          # Tier 2: Linux SPARC64 (glibc)
+          - os: ubuntu-latest
+            target: sparc64-unknown-linux-gnu
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-linux-sparc64-gnu
+
           # Tier 2: FreeBSD
           - os: ubuntu-latest
             target: x86_64-unknown-freebsd
             artifact_name: rumina-cli
             asset_name: rumina-cli-freebsd-x64
+          - os: ubuntu-latest
+            target: i686-unknown-freebsd
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-freebsd-x86
 
           # Tier 2: illumos
           - os: ubuntu-latest
@@ -156,6 +244,12 @@ jobs:
             target: x86_64-unknown-netbsd
             artifact_name: rumina-cli
             asset_name: rumina-cli-netbsd-x64
+
+          # Tier 2: Android
+          - os: ubuntu-latest
+            target: x86_64-linux-android
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-android-x64
 
     steps:
       - name: Checkout code
