@@ -181,42 +181,6 @@ jobs:
             artifact_name: rumina-cli
             asset_name: rumina-cli-linux-s390x-gnu
 
-          # Tier 2: Linux MIPS (glibc)
-          - os: ubuntu-latest
-            target: mips-unknown-linux-gnu
-            artifact_name: rumina-cli
-            asset_name: rumina-cli-linux-mips-gnu
-          - os: ubuntu-latest
-            target: mipsel-unknown-linux-gnu
-            artifact_name: rumina-cli
-            asset_name: rumina-cli-linux-mipsel-gnu
-          - os: ubuntu-latest
-            target: mips64-unknown-linux-gnuabi64
-            artifact_name: rumina-cli
-            asset_name: rumina-cli-linux-mips64-gnuabi64
-          - os: ubuntu-latest
-            target: mips64el-unknown-linux-gnuabi64
-            artifact_name: rumina-cli
-            asset_name: rumina-cli-linux-mips64el-gnuabi64
-
-          # Tier 2: Linux MIPS (musl)
-          - os: ubuntu-latest
-            target: mips-unknown-linux-musl
-            artifact_name: rumina-cli
-            asset_name: rumina-cli-linux-mips-musl
-          - os: ubuntu-latest
-            target: mipsel-unknown-linux-musl
-            artifact_name: rumina-cli
-            asset_name: rumina-cli-linux-mipsel-musl
-          - os: ubuntu-latest
-            target: mips64-unknown-linux-muslabi64
-            artifact_name: rumina-cli
-            asset_name: rumina-cli-linux-mips64-muslabi64
-          - os: ubuntu-latest
-            target: mips64el-unknown-linux-muslabi64
-            artifact_name: rumina-cli
-            asset_name: rumina-cli-linux-mips64el-muslabi64
-
           # Tier 2: Linux SPARC64 (glibc)
           - os: ubuntu-latest
             target: sparc64-unknown-linux-gnu
