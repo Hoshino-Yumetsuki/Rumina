@@ -266,37 +266,39 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          # Copy rumina-cli (main program)
-          cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} dist/${{ matrix.asset_name }}
-          # Copy ruminac (compiler) and rmvm (VM)
+          # Copy all executables to a temporary directory
+          mkdir -p dist/package
+          
           # Check if target is Windows (either native or cross-compiled)
           if [[ "${{ matrix.target }}" == *"windows"* ]]; then
-            cp target/${{ matrix.target }}/release/ruminac.exe dist/ruminac-${{ matrix.target }}.exe
-            cp target/${{ matrix.target }}/release/rmvm.exe dist/rmvm-${{ matrix.target }}.exe
+            cp target/${{ matrix.target }}/release/rumina-cli.exe dist/package/
+            cp target/${{ matrix.target }}/release/ruminac.exe dist/package/
+            cp target/${{ matrix.target }}/release/rmvm.exe dist/package/
+            ARCHIVE_NAME="${{ matrix.asset_name }}.zip"
           else
-            cp target/${{ matrix.target }}/release/ruminac dist/ruminac-${{ matrix.target }}
-            cp target/${{ matrix.target }}/release/rmvm dist/rmvm-${{ matrix.target }}
+            cp target/${{ matrix.target }}/release/rumina-cli dist/package/
+            cp target/${{ matrix.target }}/release/ruminac dist/package/
+            cp target/${{ matrix.target }}/release/rmvm dist/package/
+            ARCHIVE_NAME="${{ matrix.asset_name }}.tar.gz"
           fi
+          
+          # Create archive
+          cd dist/package
+          if [[ "${{ matrix.target }}" == *"windows"* ]]; then
+            zip -q "../${ARCHIVE_NAME}" *
+          else
+            tar -czf "../${ARCHIVE_NAME}" *
+          fi
+          cd ../..
+          
+          # Clean up temporary directory
+          rm -rf dist/package
 
-      - name: Upload rumina-cli artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
-          path: dist/${{ matrix.asset_name }}
-          if-no-files-found: error
-
-      - name: Upload ruminac artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ruminac-${{ matrix.target }}
-          path: dist/ruminac-${{ matrix.target }}*
-          if-no-files-found: error
-
-      - name: Upload rmvm artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: rmvm-${{ matrix.target }}
-          path: dist/rmvm-${{ matrix.target }}*
+          path: dist/${{ matrix.asset_name }}.*
           if-no-files-found: error
 
   release:
