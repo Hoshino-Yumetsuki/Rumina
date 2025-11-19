@@ -54,6 +54,13 @@ pub fn sqrt(args: &[Value]) -> Result<Value, String> {
                 Ok(Value::Float(f.sqrt()))
             }
         }
+        Value::Irrational(irr) => {
+            // Keep sqrt of irrational in symbolic form
+            // sqrt(irrational) = sqrt(irrational)
+            Ok(Value::Irrational(IrrationalValue::Sqrt(Box::new(
+                Value::Irrational(irr.clone()),
+            ))))
+        }
         _ => Err(format!("sqrt expects number, got {}", args[0].type_name())),
     }
 }
@@ -116,6 +123,18 @@ pub fn abs_fn(args: &[Value]) -> Result<Value, String> {
     match &args[0] {
         Value::Int(n) => Ok(Value::Int(n.abs())),
         Value::Float(f) => Ok(Value::Float(f.abs())),
+        Value::Irrational(irr) => {
+            // abs of irrational: keep symbolic for positive values
+            // For now, we'll convert to float since we can't determine sign symbolically
+            use crate::value::irrational_to_float;
+            let val = irrational_to_float(irr);
+            if val < 0.0 {
+                Ok(Value::Float(-val))
+            } else {
+                // Keep as irrational if positive
+                Ok(Value::Irrational(irr.clone()))
+            }
+        }
         Value::Complex(re, im) => {
             // |a + bi| = sqrt(a^2 + b^2)
             let re_val = re.to_float().unwrap_or(0.0);

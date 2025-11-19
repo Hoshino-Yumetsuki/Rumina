@@ -157,6 +157,24 @@ jobs:
             artifact_name: rumina-cli
             asset_name: rumina-cli-netbsd-x64
 
+          # Android
+          - os: ubuntu-latest
+            target: aarch64-linux-android
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-android-arm64
+          - os: ubuntu-latest
+            target: armv7-linux-androideabi
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-android-armv7
+          - os: ubuntu-latest
+            target: x86_64-linux-android
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-android-x86_64
+          - os: ubuntu-latest
+            target: i686-linux-android
+            artifact_name: rumina-cli
+            asset_name: rumina-cli-android-i686
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
