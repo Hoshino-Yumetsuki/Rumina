@@ -347,17 +347,36 @@ fn format_irrational(irr: &IrrationalValue) -> String {
     }
 
     fn format_sqrt(n: &Value) -> String {
-        let (coef, remaining) = simplify_sqrt(n);
-        if remaining == 1 {
-            format!("{}", coef)
-        } else if coef == 1 {
-            format!("√{}", remaining)
-        } else {
-            format!("{}√{}", coef, remaining)
+        match n {
+            Value::Int(_) => {
+                let (coef, remaining) = simplify_sqrt(n);
+                if remaining == 1 {
+                    format!("{}", coef)
+                } else if coef == 1 {
+                    format!("√{}", remaining)
+                } else {
+                    format!("{}√{}", coef, remaining)
+                }
+            }
+            Value::Irrational(irr) => {
+                // For nested irrational like sqrt(irrational), format as √(...)
+                format!("√({})", format_irrational(irr))
+            }
+            other => {
+                // For other types, just show √(value)
+                format!("√({})", other)
+            }
         }
     }
 
     fn format_product(coef: &Value, irr: &IrrationalValue) -> String {
+        // Special case: Product(n, Sqrt(1)) = n
+        if let IrrationalValue::Sqrt(inner) = irr {
+            if let Value::Int(1) = inner.as_ref() {
+                return coef.to_string();
+            }
+        }
+        
         // Check if this is a square (e.g., π*π or e*e)
         if let Value::Irrational(coef_irr) = coef {
             match (coef_irr, irr) {

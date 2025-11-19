@@ -4,22 +4,18 @@ use rumina::run_rumina;
 #[test]
 fn test_sqrt_with_irrational() {
     // Test sqrt with irrational value (7 + 2*sqrt(10))
+    // Should preserve symbolic form
     let result = run_rumina("sqrt(7 + 2*sqrt(10));");
     assert!(result.is_ok(), "sqrt should handle irrational values");
     
     if let Ok(Some(value)) = result {
         let value_str = value.to_string();
-        let value_float: f64 = value_str.parse().expect("Result should be a float");
         
-        // Expected value: sqrt(7 + 2*sqrt(10)) ≈ 3.6502815398728847
-        let expected = 3.6502815398728847;
-        let diff = (value_float - expected).abs();
-        
+        // Result should be in symbolic form: √(7+2√10)
         assert!(
-            diff < 1e-10,
-            "Result should be approximately {}, got {}",
-            expected,
-            value_float
+            value_str.contains("√"),
+            "Result should be in symbolic form with √, got {}",
+            value_str
         );
     }
 }
@@ -37,13 +33,14 @@ fn test_sqrt_basic() {
 
 #[test]
 fn test_sqrt_non_perfect_square() {
-    // Test sqrt of non-perfect square (should return irrational)
+    // Test sqrt of non-perfect square (should return irrational in symbolic form)
     let result = run_rumina("sqrt(2);");
     assert!(result.is_ok());
     
     if let Ok(Some(value)) = result {
         let value_str = value.to_string();
-        assert!(value_str.contains("√") || value_str.contains("1.414"));
+        // Should be in symbolic form √2
+        assert_eq!(value_str, "√2", "sqrt(2) should be √2, got {}", value_str);
     }
 }
 
@@ -81,3 +78,41 @@ fn test_sqrt_negative() {
         assert!(value_str.contains("i") || value_str.contains("2i"));
     }
 }
+
+#[test]
+fn test_symbolic_multiplication() {
+    // Test that 2*sqrt(2) preserves symbolic form
+    let result = run_rumina("2*sqrt(2);");
+    assert!(result.is_ok());
+    
+    if let Ok(Some(value)) = result {
+        let value_str = value.to_string();
+        assert_eq!(value_str, "2√2", "2*sqrt(2) should be 2√2, got {}", value_str);
+    }
+}
+
+#[test]
+fn test_symbolic_addition() {
+    // Test that sqrt(2) + sqrt(3) preserves symbolic form
+    let result = run_rumina("sqrt(2) + sqrt(3);");
+    assert!(result.is_ok());
+    
+    if let Ok(Some(value)) = result {
+        let value_str = value.to_string();
+        assert!(value_str.contains("√2") && value_str.contains("√3"), 
+                "sqrt(2) + sqrt(3) should contain √2 and √3, got {}", value_str);
+    }
+}
+
+#[test]
+fn test_symbolic_sqrt_product() {
+    // Test that sqrt(2) * sqrt(3) = sqrt(6)
+    let result = run_rumina("sqrt(2) * sqrt(3);");
+    assert!(result.is_ok());
+    
+    if let Ok(Some(value)) = result {
+        let value_str = value.to_string();
+        assert_eq!(value_str, "√6", "sqrt(2) * sqrt(3) should be √6, got {}", value_str);
+    }
+}
+
