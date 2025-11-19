@@ -1,7 +1,7 @@
 {
   "name": "rumina",
   "description": "Lamina language compatible interpreter written in rust",
-  "version": "1.2.0-beta.4",
+  "version": "1.2.1",
   "main": "lib/index.cjs",
   "module": "lib/index.mjs",
   "types": "lib/index.d.ts",
