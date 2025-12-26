@@ -27,16 +27,6 @@ jobs:
             artifact_name: rumina-cli.exe
             asset_name: rumina-cli-windows-x86.exe
 
-          # Tier 1: Windows MinGW (cross-compiled from Linux)
-          - os: ubuntu-latest
-            target: x86_64-pc-windows-gnu
-            artifact_name: rumina-cli.exe
-            asset_name: rumina-cli-windows-x64-gnu.exe
-          - os: ubuntu-latest
-            target: i686-pc-windows-gnu
-            artifact_name: rumina-cli.exe
-            asset_name: rumina-cli-windows-x86-gnu.exe
-
           # Tier 2: Windows ARM64 MSVC
           - os: windows-latest
             target: aarch64-pc-windows-msvc
