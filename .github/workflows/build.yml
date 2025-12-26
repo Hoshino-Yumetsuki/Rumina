@@ -177,7 +177,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.1
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -190,19 +190,19 @@ jobs:
         run: cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Cache cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v5.0.1
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cache cargo index
-        uses: actions/cache@v4
+        uses: actions/cache@v5.0.1
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cache cargo build
-        uses: actions/cache@v4
+        uses: actions/cache@v5.0.1
         with:
           path: target
           key: ${{ runner.os }}-cargo-build-target-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
@@ -239,21 +239,21 @@ jobs:
           fi
 
       - name: Upload rumina-cli artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6.0.0
         with:
           name: ${{ matrix.asset_name }}
           path: dist/${{ matrix.asset_name }}
           if-no-files-found: error
 
       - name: Upload ruminac artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6.0.0
         with:
           name: ruminac-${{ matrix.target }}
           path: dist/ruminac-${{ matrix.target }}*
           if-no-files-found: error
 
       - name: Upload rmvm artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6.0.0
         with:
           name: rmvm-${{ matrix.target }}
           path: dist/rmvm-${{ matrix.target }}*
@@ -268,10 +268,10 @@ jobs:
       contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.1
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7.0.0
         with:
           path: artifacts
 
@@ -287,7 +287,7 @@ jobs:
           done
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v2.5.0
         with:
           files: artifacts/**/*
           draft: false
