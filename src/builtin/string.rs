@@ -95,12 +95,15 @@ pub fn find(args: &[Value]) -> Result<Value, String> {
                 None => Ok(Value::Int(-1)),
             }
         }
-        _ => Err(format!(
-            "string::find expects (string, int, string), got ({}, {}, {})",
-            args[0].type_name(),
-            args[1].type_name(),
-            args[2].type_name()
-        )),
+        _ => {
+            // Safe to access args[0..3] because we checked args.len() == 3 above
+            Err(format!(
+                "string::find expects (string, int, string), got ({}, {}, {})",
+                args[0].type_name(),
+                args[1].type_name(),
+                args[2].type_name()
+            ))
+        }
     }
 }
 
@@ -123,12 +126,15 @@ pub fn sub(args: &[Value]) -> Result<Value, String> {
             let result: String = chars[start..end].iter().collect();
             Ok(Value::String(result))
         }
-        _ => Err(format!(
-            "string::sub expects (string, int, int), got ({}, {}, {})",
-            args[0].type_name(),
-            args[1].type_name(),
-            args[2].type_name()
-        )),
+        _ => {
+            // Safe to access args[0..3] because we checked args.len() == 3 above
+            Err(format!(
+                "string::sub expects (string, int, int), got ({}, {}, {})",
+                args[0].type_name(),
+                args[1].type_name(),
+                args[2].type_name()
+            ))
+        }
     }
 }
 
@@ -162,11 +168,14 @@ pub fn replace_by_index(args: &[Value]) -> Result<Value, String> {
 
             Ok(Value::String(result))
         }
-        _ => Err(format!(
-            "string::replace_by_index expects (string, int, string), got ({}, {}, {})",
-            args[0].type_name(),
-            args[1].type_name(),
-            args[2].type_name()
-        )),
+        _ => {
+            // Safe to access args[0..3] because we checked args.len() == 3 above
+            Err(format!(
+                "string::replace_by_index expects (string, int, string), got ({}, {}, {})",
+                args[0].type_name(),
+                args[1].type_name(),
+                args[2].type_name()
+            ))
+        }
     }
 }
