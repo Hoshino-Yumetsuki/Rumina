@@ -42,7 +42,11 @@ pub fn char_at(args: &[Value]) -> Result<Value, String> {
                 .map(|c| Value::Int(*c as i64))
                 .ok_or_else(|| format!("String index out of bounds: {}", idx))
         }
-        _ => Err("string::char_at expects (string, int)".to_string()),
+        _ => Err(format!(
+            "string::char_at expects (string, int), got ({}, {})",
+            args[0].type_name(),
+            args[1].type_name()
+        )),
     }
 }
 
@@ -65,7 +69,11 @@ pub fn at(args: &[Value]) -> Result<Value, String> {
                 .map(|c| Value::String(c.to_string()))
                 .ok_or_else(|| format!("String index out of bounds: {}", idx))
         }
-        _ => Err("string::at expects (string, int)".to_string()),
+        _ => Err(format!(
+            "string::at expects (string, int), got ({}, {})",
+            args[0].type_name(),
+            args[1].type_name()
+        )),
     }
 }
 
@@ -87,7 +95,12 @@ pub fn find(args: &[Value]) -> Result<Value, String> {
                 None => Ok(Value::Int(-1)),
             }
         }
-        _ => Err("string::find expects (string, int, string)".to_string()),
+        _ => Err(format!(
+            "string::find expects (string, int, string), got ({}, {}, {})",
+            args[0].type_name(),
+            args[1].type_name(),
+            args[2].type_name()
+        )),
     }
 }
 
@@ -110,7 +123,12 @@ pub fn sub(args: &[Value]) -> Result<Value, String> {
             let result: String = chars[start..end].iter().collect();
             Ok(Value::String(result))
         }
-        _ => Err("string::sub expects (string, int, int)".to_string()),
+        _ => Err(format!(
+            "string::sub expects (string, int, int), got ({}, {}, {})",
+            args[0].type_name(),
+            args[1].type_name(),
+            args[2].type_name()
+        )),
     }
 }
 
@@ -144,6 +162,11 @@ pub fn replace_by_index(args: &[Value]) -> Result<Value, String> {
 
             Ok(Value::String(result))
         }
-        _ => Err("string::replace_by_index expects (string, int, string)".to_string()),
+        _ => Err(format!(
+            "string::replace_by_index expects (string, int, string), got ({}, {}, {})",
+            args[0].type_name(),
+            args[1].type_name(),
+            args[2].type_name()
+        )),
     }
 }
