@@ -34,8 +34,28 @@ mathcore = "^0.3.1"
 rustc-hash = "^2.0"
 rayon = "^1.11"
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.cranelift]
+version = "^0.128"
+optional = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.cranelift-jit]
+version = "^0.128"
+optional = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.cranelift-module]
+version = "^0.128"
+optional = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.cranelift-native]
+version = "^0.128"
+optional = true
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 ctrlc = "^3"
+
+[features]
+default = []
+jit = ["cranelift", "cranelift-jit", "cranelift-module", "cranelift-native"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "^0.2"

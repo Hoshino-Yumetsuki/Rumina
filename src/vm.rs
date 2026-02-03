@@ -1,6 +1,7 @@
 /// Virtual Machine implementation for Rumina
 use crate::ast::DeclaredType;
 use crate::error::RuminaError;
+use crate::jit::JITCompiler;
 use crate::value::Value;
 use crate::vm_ops::VMOperations;
 use rustc_hash::FxHashMap;
@@ -915,6 +916,9 @@ pub struct VM {
     /// Inline cache for member access (maps instruction address to cache)
     member_cache: FxHashMap<usize, InlineCache>,
 
+    /// JIT compiler for hot path optimization
+    jit: JITCompiler,
+
     /// Halt flag
     halted: bool,
 
@@ -938,6 +942,7 @@ impl VM {
             loop_stack: Vec::with_capacity(8), // Pre-allocate for nested loops
             functions: FxHashMap::default(),
             member_cache: FxHashMap::default(),
+            jit: JITCompiler::new(),
             halted: false,
             recursion_depth: 0,
             max_recursion_depth: 4000,
@@ -958,6 +963,26 @@ impl VM {
         while !self.halted && self.ip < self.bytecode.instructions.len() {
             // Get current instruction index
             let current_ip = self.ip;
+            
+            // Record execution for JIT hot path detection
+            self.jit.record_execution(current_ip);
+            
+            // Check if this is a hot path that should be JIT compiled
+            if self.jit.is_hot_path(current_ip) {
+                // Try to compile the hot path (loop body or function)
+                // For now, we'll detect simple loop patterns
+                if let Some(end_ip) = self.detect_hot_region(current_ip) {
+                    if self.jit.compile_hot_path(&self.bytecode, current_ip, end_ip).is_ok() {
+                        // Try to execute the compiled version
+                        if self.jit.execute_compiled(current_ip, &mut self.stack).is_ok() {
+                            // JIT execution succeeded, skip the interpreted region
+                            self.ip = end_ip + 1;
+                            continue;
+                        }
+                    }
+                }
+            }
+            
             self.ip += 1;
 
             // Execute by matching on the instruction at current index
@@ -967,6 +992,39 @@ impl VM {
 
         // Return top of stack if present, otherwise None
         Ok(self.stack.pop())
+    }
+    
+    /// Detect a hot region (loop or function body) starting at the given IP
+    fn detect_hot_region(&self, start_ip: usize) -> Option<usize> {
+        // Look ahead to find the end of a potential hot region
+        // For now, just look for jump-back instructions (loops)
+        let mut ip = start_ip;
+        let mut depth = 0;
+        
+        while ip < self.bytecode.instructions.len() && ip < start_ip + 100 {
+            match &self.bytecode.instructions[ip] {
+                OpCode::Jump(_) | OpCode::JumpIfFalse(_) | OpCode::JumpIfTrue(_) => {
+                    // Found a jump, check if it's a backward jump (loop)
+                    if let OpCode::Jump(target) = &self.bytecode.instructions[ip] {
+                        if *target <= start_ip {
+                            return Some(ip);
+                        }
+                    }
+                }
+                OpCode::DefineFunc(_) => depth += 1,
+                OpCode::Return => {
+                    if depth > 0 {
+                        depth -= 1;
+                    } else {
+                        return Some(ip);
+                    }
+                }
+                _ => {}
+            }
+            ip += 1;
+        }
+        
+        None
     }
 
     /// Execute a single instruction at the given index (safe, no cloning)
@@ -2005,6 +2063,26 @@ impl VM {
         let total_hits: usize = self.member_cache.values().map(|c| c.hits).sum();
         let total_misses: usize = self.member_cache.values().map(|c| c.misses).sum();
         (total_hits, total_misses)
+    }
+    
+    /// Get JIT compilation statistics
+    pub fn get_jit_stats(&self) -> Vec<(usize, usize)> {
+        self.jit.get_stats()
+    }
+    
+    /// Enable or disable JIT compilation
+    pub fn set_jit_enabled(&mut self, enabled: bool) {
+        self.jit.set_enabled(enabled);
+    }
+    
+    /// Check if JIT is enabled
+    pub fn is_jit_enabled(&self) -> bool {
+        self.jit.is_enabled()
+    }
+    
+    /// Clear JIT cache and statistics
+    pub fn clear_jit_cache(&mut self) {
+        self.jit.clear();
     }
 }
 
