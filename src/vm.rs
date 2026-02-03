@@ -1683,7 +1683,8 @@ impl VM {
                     closure,
                 };
 
-                self.stack.push(lambda_value);
+                // Store lambda in RAX (register-based convention)
+                self.set_reg(Register::RAX, lambda_value);
             }
 
             // ===== Control Structures =====

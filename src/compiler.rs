@@ -1090,12 +1090,14 @@ impl Compiler {
                 let lambda_reg = self.alloc_reg();
                 let id_index = self.bytecode.add_constant(Value::String(lambda_id.clone()));
                 self.emit(OpCode::MovConst(lambda_reg, id_index));
+                // Push lambda ID to stack for MakeLambda
+                self.emit(OpCode::Push(lambda_reg));
                 self.emit(OpCode::MakeLambda(Box::new(crate::vm::LambdaInfo {
                     params: params.clone(),
                     body_start,
                     body_end,
                 })));
-                // MakeLambda should place result in RAX
+                // MakeLambda places result in RAX, move to our register
                 self.emit(OpCode::MovReg(lambda_reg, Register::RAX));
                 Ok(lambda_reg)
             }
