@@ -37,79 +37,186 @@ pub struct LambdaInfo {
     pub body_end: usize,
 }
 
-/// VM Instruction Set
+/// x86_64-style register names for register-based VM
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Register {
+    RAX = 0,  // Accumulator, return value
+    RBX = 1,  // Base
+    RCX = 2,  // Counter
+    RDX = 3,  // Data
+    RSI = 4,  // Source index
+    RDI = 5,  // Destination index
+    R8 = 6,   // General purpose
+    R9 = 7,   // General purpose
+    R10 = 8,  // General purpose
+    R11 = 9,  // General purpose
+    R12 = 10, // General purpose
+    R13 = 11, // General purpose
+    R14 = 12, // General purpose
+    R15 = 13, // General purpose
+}
+
+impl Register {
+    pub fn from_index(idx: usize) -> Option<Self> {
+        match idx {
+            0 => Some(Register::RAX),
+            1 => Some(Register::RBX),
+            2 => Some(Register::RCX),
+            3 => Some(Register::RDX),
+            4 => Some(Register::RSI),
+            5 => Some(Register::RDI),
+            6 => Some(Register::R8),
+            7 => Some(Register::R9),
+            8 => Some(Register::R10),
+            9 => Some(Register::R11),
+            10 => Some(Register::R12),
+            11 => Some(Register::R13),
+            12 => Some(Register::R14),
+            13 => Some(Register::R15),
+            _ => None,
+        }
+    }
+}
+
+/// VM Instruction Set (x86_64-style register-based)
 #[derive(Debug, Clone, PartialEq)]
 pub enum OpCode {
     // ===== Data Movement Instructions (MOV family) =====
-    /// Push a constant value onto the stack
+    /// Move constant to register: MOV reg, const
+    MovConst(Register, Value),
+
+    /// Move constant from pool to register: MOV reg, [const_pool + idx]
+    MovConstPooled(Register, usize),
+
+    /// Move variable to register: MOV reg, var
+    MovVar(Register, String),
+
+    /// Move register to variable: MOV var, reg
+    MovToVar(String, Register),
+
+    /// Move register to register: MOV dst, src
+    MovReg(Register, Register),
+
+    /// Push a constant value onto the stack (for compatibility)
     PushConst(Value),
 
-    /// Push a constant from the constant pool onto the stack
+    /// Push a constant from the constant pool onto the stack (for compatibility)
     PushConstPooled(usize),
 
-    /// Push a variable value onto the stack
+    /// Push a variable value onto the stack (for compatibility)
     PushVar(String),
 
-    /// Pop value from stack and store in variable
+    /// Pop value from stack and store in variable (for compatibility)
     PopVar(String),
 
-    /// Duplicate top stack value
+    /// Duplicate top stack value (for compatibility)
     Dup,
 
-    /// Pop and discard top stack value
+    /// Pop and discard top stack value (for compatibility)
     Pop,
 
     // ===== Arithmetic Instructions (ADD, SUB, MUL, DIV family) =====
-    /// Add top two stack values
+    /// Add: dst = src1 + src2
+    AddReg(Register, Register, Register),
+    
+    /// Subtract: dst = src1 - src2
+    SubReg(Register, Register, Register),
+    
+    /// Multiply: dst = src1 * src2
+    MulReg(Register, Register, Register),
+    
+    /// Divide: dst = src1 / src2
+    DivReg(Register, Register, Register),
+    
+    /// Modulo: dst = src1 % src2
+    ModReg(Register, Register, Register),
+    
+    /// Power: dst = src1 ^ src2
+    PowReg(Register, Register, Register),
+    
+    /// Negate: dst = -src
+    NegReg(Register, Register),
+    
+    /// Factorial: dst = src!
+    FactorialReg(Register, Register),
+
+    /// Add top two stack values (for compatibility)
     Add,
 
-    /// Subtract top two stack values (TOS-1 - TOS)
+    /// Subtract top two stack values (TOS-1 - TOS) (for compatibility)
     Sub,
 
-    /// Multiply top two stack values
+    /// Multiply top two stack values (for compatibility)
     Mul,
 
-    /// Divide top two stack values (TOS-1 / TOS)
+    /// Divide top two stack values (TOS-1 / TOS) (for compatibility)
     Div,
 
-    /// Modulo operation
+    /// Modulo operation (for compatibility)
     Mod,
 
-    /// Power operation (TOS-1 ^ TOS)
+    /// Power operation (TOS-1 ^ TOS) (for compatibility)
     Pow,
 
-    /// Negate top stack value
+    /// Negate top stack value (for compatibility)
     Neg,
 
-    /// Factorial operation (postfix !)
+    /// Factorial operation (postfix !) (for compatibility)
     Factorial,
 
     // ===== Logical Instructions =====
-    /// Logical NOT
+    /// Logical NOT: dst = !src
+    NotReg(Register, Register),
+    
+    /// Logical AND: dst = src1 && src2
+    AndReg(Register, Register, Register),
+    
+    /// Logical OR: dst = src1 || src2
+    OrReg(Register, Register, Register),
+    
+    /// Compare equal: dst = src1 == src2
+    EqReg(Register, Register, Register),
+    
+    /// Compare not equal: dst = src1 != src2
+    NeqReg(Register, Register, Register),
+    
+    /// Compare greater than: dst = src1 > src2
+    GtReg(Register, Register, Register),
+    
+    /// Compare greater or equal: dst = src1 >= src2
+    GteReg(Register, Register, Register),
+    
+    /// Compare less than: dst = src1 < src2
+    LtReg(Register, Register, Register),
+    
+    /// Compare less or equal: dst = src1 <= src2
+    LteReg(Register, Register, Register),
+
+    /// Logical NOT (for compatibility)
     Not,
 
-    /// Logical AND
+    /// Logical AND (for compatibility)
     And,
 
-    /// Logical OR
+    /// Logical OR (for compatibility)
     Or,
 
-    /// Compare equal
+    /// Compare equal (for compatibility)
     Eq,
 
-    /// Compare not equal
+    /// Compare not equal (for compatibility)
     Neq,
 
-    /// Compare greater than
+    /// Compare greater than (for compatibility)
     Gt,
 
-    /// Compare greater or equal
+    /// Compare greater or equal (for compatibility)
     Gte,
 
-    /// Compare less than
+    /// Compare less than (for compatibility)
     Lt,
 
-    /// Compare less or equal
+    /// Compare less or equal (for compatibility)
     Lte,
 
     // ===== Control Flow Instructions =====
@@ -513,6 +620,30 @@ impl ByteCode {
 
     fn serialize_opcode(op: &OpCode) -> String {
         match op {
+            // Register-based instructions
+            OpCode::MovConst(dst, v) => format!("MovConst({:?}, {})", dst, Self::serialize_value(v)),
+            OpCode::MovConstPooled(dst, i) => format!("MovConstPooled({:?}, {})", dst, i),
+            OpCode::MovVar(dst, name) => format!("MovVar({:?}, {})", dst, name),
+            OpCode::MovToVar(name, src) => format!("MovToVar({}, {:?})", name, src),
+            OpCode::MovReg(dst, src) => format!("MovReg({:?}, {:?})", dst, src),
+            OpCode::AddReg(dst, src1, src2) => format!("AddReg({:?}, {:?}, {:?})", dst, src1, src2),
+            OpCode::SubReg(dst, src1, src2) => format!("SubReg({:?}, {:?}, {:?})", dst, src1, src2),
+            OpCode::MulReg(dst, src1, src2) => format!("MulReg({:?}, {:?}, {:?})", dst, src1, src2),
+            OpCode::DivReg(dst, src1, src2) => format!("DivReg({:?}, {:?}, {:?})", dst, src1, src2),
+            OpCode::ModReg(dst, src1, src2) => format!("ModReg({:?}, {:?}, {:?})", dst, src1, src2),
+            OpCode::PowReg(dst, src1, src2) => format!("PowReg({:?}, {:?}, {:?})", dst, src1, src2),
+            OpCode::NegReg(dst, src) => format!("NegReg({:?}, {:?})", dst, src),
+            OpCode::FactorialReg(dst, src) => format!("FactorialReg({:?}, {:?})", dst, src),
+            OpCode::NotReg(dst, src) => format!("NotReg({:?}, {:?})", dst, src),
+            OpCode::AndReg(dst, src1, src2) => format!("AndReg({:?}, {:?}, {:?})", dst, src1, src2),
+            OpCode::OrReg(dst, src1, src2) => format!("OrReg({:?}, {:?}, {:?})", dst, src1, src2),
+            OpCode::EqReg(dst, src1, src2) => format!("EqReg({:?}, {:?}, {:?})", dst, src1, src2),
+            OpCode::NeqReg(dst, src1, src2) => format!("NeqReg({:?}, {:?}, {:?})", dst, src1, src2),
+            OpCode::GtReg(dst, src1, src2) => format!("GtReg({:?}, {:?}, {:?})", dst, src1, src2),
+            OpCode::GteReg(dst, src1, src2) => format!("GteReg({:?}, {:?}, {:?})", dst, src1, src2),
+            OpCode::LtReg(dst, src1, src2) => format!("LtReg({:?}, {:?}, {:?})", dst, src1, src2),
+            OpCode::LteReg(dst, src1, src2) => format!("LteReg({:?}, {:?}, {:?})", dst, src1, src2),
+            // Stack-based instructions (for compatibility)
             OpCode::PushConst(v) => format!("PushConst({})", Self::serialize_value(v)),
             OpCode::PushConstPooled(i) => format!("PushConstPooled({})", i),
             OpCode::PushVar(name) => format!("PushVar({})", name),
@@ -577,7 +708,121 @@ impl ByteCode {
         }
     }
 
+    // Helper function to parse register from string
+    fn parse_register(s: &str) -> Result<Register, String> {
+        match s {
+            "RAX" => Ok(Register::RAX),
+            "RBX" => Ok(Register::RBX),
+            "RCX" => Ok(Register::RCX),
+            "RDX" => Ok(Register::RDX),
+            "RSI" => Ok(Register::RSI),
+            "RDI" => Ok(Register::RDI),
+            "R8" => Ok(Register::R8),
+            "R9" => Ok(Register::R9),
+            "R10" => Ok(Register::R10),
+            "R11" => Ok(Register::R11),
+            "R12" => Ok(Register::R12),
+            "R13" => Ok(Register::R13),
+            "R14" => Ok(Register::R14),
+            "R15" => Ok(Register::R15),
+            _ => Err(format!("Invalid register: {}", s)),
+        }
+    }
+
     fn deserialize_opcode(s: &str) -> Result<OpCode, String> {
+        // Register-based instructions
+        if let Some(args) = s.strip_prefix("MovConst(").and_then(|s| s.strip_suffix(")")) {
+            // Parse "Register, Value"
+            if let Some(comma_pos) = args.find(", ") {
+                let reg_str = &args[..comma_pos];
+                let val_str = &args[comma_pos + 2..];
+                let reg = Self::parse_register(reg_str)?;
+                let val = Self::deserialize_value(val_str)?;
+                return Ok(OpCode::MovConst(reg, val));
+            }
+        }
+        if let Some(args) = s.strip_prefix("MovConstPooled(").and_then(|s| s.strip_suffix(")")) {
+            let parts: Vec<&str> = args.splitn(2, ", ").collect();
+            if parts.len() == 2 {
+                let reg = Self::parse_register(parts[0])?;
+                let idx = parts[1].parse().map_err(|_| "Invalid index")?;
+                return Ok(OpCode::MovConstPooled(reg, idx));
+            }
+        }
+        if let Some(args) = s.strip_prefix("MovVar(").and_then(|s| s.strip_suffix(")")) {
+            let parts: Vec<&str> = args.splitn(2, ", ").collect();
+            if parts.len() == 2 {
+                let reg = Self::parse_register(parts[0])?;
+                let name = parts[1].to_string();
+                return Ok(OpCode::MovVar(reg, name));
+            }
+        }
+        if let Some(args) = s.strip_prefix("MovToVar(").and_then(|s| s.strip_suffix(")")) {
+            let parts: Vec<&str> = args.splitn(2, ", ").collect();
+            if parts.len() == 2 {
+                let name = parts[0].to_string();
+                let reg = Self::parse_register(parts[1])?;
+                return Ok(OpCode::MovToVar(name, reg));
+            }
+        }
+        if let Some(args) = s.strip_prefix("MovReg(").and_then(|s| s.strip_suffix(")")) {
+            let parts: Vec<&str> = args.splitn(2, ", ").collect();
+            if parts.len() == 2 {
+                let dst = Self::parse_register(parts[0])?;
+                let src = Self::parse_register(parts[1])?;
+                return Ok(OpCode::MovReg(dst, src));
+            }
+        }
+
+        // Three-register arithmetic/logical operations
+        macro_rules! parse_three_reg {
+            ($prefix:expr, $variant:ident) => {
+                if let Some(args) = s.strip_prefix($prefix).and_then(|s| s.strip_suffix(")")) {
+                    let parts: Vec<&str> = args.split(", ").collect();
+                    if parts.len() == 3 {
+                        let dst = Self::parse_register(parts[0])?;
+                        let src1 = Self::parse_register(parts[1])?;
+                        let src2 = Self::parse_register(parts[2])?;
+                        return Ok(OpCode::$variant(dst, src1, src2));
+                    }
+                }
+            };
+        }
+
+        parse_three_reg!("AddReg(", AddReg);
+        parse_three_reg!("SubReg(", SubReg);
+        parse_three_reg!("MulReg(", MulReg);
+        parse_three_reg!("DivReg(", DivReg);
+        parse_three_reg!("ModReg(", ModReg);
+        parse_three_reg!("PowReg(", PowReg);
+        parse_three_reg!("AndReg(", AndReg);
+        parse_three_reg!("OrReg(", OrReg);
+        parse_three_reg!("EqReg(", EqReg);
+        parse_three_reg!("NeqReg(", NeqReg);
+        parse_three_reg!("GtReg(", GtReg);
+        parse_three_reg!("GteReg(", GteReg);
+        parse_three_reg!("LtReg(", LtReg);
+        parse_three_reg!("LteReg(", LteReg);
+
+        // Two-register unary operations
+        macro_rules! parse_two_reg {
+            ($prefix:expr, $variant:ident) => {
+                if let Some(args) = s.strip_prefix($prefix).and_then(|s| s.strip_suffix(")")) {
+                    let parts: Vec<&str> = args.splitn(2, ", ").collect();
+                    if parts.len() == 2 {
+                        let dst = Self::parse_register(parts[0])?;
+                        let src = Self::parse_register(parts[1])?;
+                        return Ok(OpCode::$variant(dst, src));
+                    }
+                }
+            };
+        }
+
+        parse_two_reg!("NegReg(", NegReg);
+        parse_two_reg!("FactorialReg(", FactorialReg);
+        parse_two_reg!("NotReg(", NotReg);
+
+        // Stack-based instructions (backward compatibility)
         if s == "Dup" {
             return Ok(OpCode::Dup);
         }
@@ -894,7 +1139,10 @@ pub struct VM {
     /// Instruction pointer
     ip: usize,
 
-    /// Data stack (pre-allocated for better performance)
+    /// Register file (14 general-purpose registers, x86_64 style)
+    registers: [Value; 14],
+
+    /// Data stack (pre-allocated for better performance, kept for compatibility)
     stack: Vec<Value>,
 
     /// Call stack (for function calls)
@@ -929,7 +1177,14 @@ impl VM {
         VM {
             bytecode: ByteCode::new(),
             ip: 0,
-            // Pre-allocate stack for better performance (typical recursive depth)
+            // Initialize registers with Null
+            registers: [
+                Value::Null, Value::Null, Value::Null, Value::Null,
+                Value::Null, Value::Null, Value::Null, Value::Null,
+                Value::Null, Value::Null, Value::Null, Value::Null,
+                Value::Null, Value::Null,
+            ],
+            // Pre-allocate stack for better performance (kept for compatibility)
             stack: Vec::with_capacity(256),
             call_stack: Vec::with_capacity(64),
             globals,
@@ -965,8 +1220,13 @@ impl VM {
             self.execute_instruction_at(current_ip)?;
         }
 
-        // Return top of stack if present, otherwise None
-        Ok(self.stack.pop())
+        // Return value from RAX register (x86_64 calling convention)
+        // Fall back to stack for backward compatibility
+        if !matches!(self.registers[Register::RAX as usize], Value::Null) {
+            Ok(Some(self.registers[Register::RAX as usize].clone()))
+        } else {
+            Ok(self.stack.pop())
+        }
     }
 
     /// Execute a single instruction at the given index (safe, no cloning)
@@ -974,6 +1234,157 @@ impl VM {
         // Pattern match directly on the instruction reference
         // The borrow checker allows this because we only need immutable access for matching
         match &self.bytecode.instructions[ip] {
+            // ===== Register-based instructions (x86_64 style) =====
+            OpCode::MovConst(dst, value) => {
+                self.registers[*dst as usize] = value.clone();
+            }
+
+            OpCode::MovConstPooled(dst, index) => {
+                let value = self
+                    .bytecode
+                    .constants
+                    .get(*index)
+                    .ok_or_else(|| {
+                        RuminaError::runtime(format!("Invalid constant pool index: {}", index))
+                    })?
+                    .clone();
+                self.registers[*dst as usize] = value;
+            }
+
+            OpCode::MovVar(dst, name) => {
+                let value = self.get_variable(name)?;
+                self.registers[*dst as usize] = value;
+            }
+
+            OpCode::MovToVar(name, src) => {
+                let value = self.registers[*src as usize].clone();
+                self.set_variable(name.clone(), value);
+            }
+
+            OpCode::MovReg(dst, src) => {
+                self.registers[*dst as usize] = self.registers[*src as usize].clone();
+            }
+
+            // Register-based arithmetic operations
+            OpCode::AddReg(dst, src1, src2) => {
+                let a = &self.registers[*src1 as usize];
+                let b = &self.registers[*src2 as usize];
+                let result = a.vm_add(b).map_err(|e| RuminaError::runtime(e))?;
+                self.registers[*dst as usize] = result;
+            }
+
+            OpCode::SubReg(dst, src1, src2) => {
+                let a = &self.registers[*src1 as usize];
+                let b = &self.registers[*src2 as usize];
+                let result = a.vm_sub(b).map_err(|e| RuminaError::runtime(e))?;
+                self.registers[*dst as usize] = result;
+            }
+
+            OpCode::MulReg(dst, src1, src2) => {
+                let a = &self.registers[*src1 as usize];
+                let b = &self.registers[*src2 as usize];
+                let result = a.vm_mul(b).map_err(|e| RuminaError::runtime(e))?;
+                self.registers[*dst as usize] = result;
+            }
+
+            OpCode::DivReg(dst, src1, src2) => {
+                let a = &self.registers[*src1 as usize];
+                let b = &self.registers[*src2 as usize];
+                let result = a.vm_div(b).map_err(|e| RuminaError::runtime(e))?;
+                self.registers[*dst as usize] = result;
+            }
+
+            OpCode::ModReg(dst, src1, src2) => {
+                let a = &self.registers[*src1 as usize];
+                let b = &self.registers[*src2 as usize];
+                let result = a.vm_mod(b).map_err(|e| RuminaError::runtime(e))?;
+                self.registers[*dst as usize] = result;
+            }
+
+            OpCode::PowReg(dst, src1, src2) => {
+                let a = &self.registers[*src1 as usize];
+                let b = &self.registers[*src2 as usize];
+                let result = a.vm_pow(b).map_err(|e| RuminaError::runtime(e))?;
+                self.registers[*dst as usize] = result;
+            }
+
+            OpCode::NegReg(dst, src) => {
+                let value = &self.registers[*src as usize];
+                let result = value.vm_neg().map_err(|e| RuminaError::runtime(e))?;
+                self.registers[*dst as usize] = result;
+            }
+
+            OpCode::FactorialReg(dst, src) => {
+                let value = &self.registers[*src as usize];
+                let result = value.vm_factorial().map_err(|e| RuminaError::runtime(e))?;
+                self.registers[*dst as usize] = result;
+            }
+
+            // Register-based logical operations
+            OpCode::NotReg(dst, src) => {
+                let value = &self.registers[*src as usize];
+                let result = value.vm_not().map_err(|e| RuminaError::runtime(e))?;
+                self.registers[*dst as usize] = result;
+            }
+
+            OpCode::AndReg(dst, src1, src2) => {
+                let a = &self.registers[*src1 as usize];
+                let b = &self.registers[*src2 as usize];
+                let result = a.vm_and(b).map_err(|e| RuminaError::runtime(e))?;
+                self.registers[*dst as usize] = result;
+            }
+
+            OpCode::OrReg(dst, src1, src2) => {
+                let a = &self.registers[*src1 as usize];
+                let b = &self.registers[*src2 as usize];
+                let result = a.vm_or(b).map_err(|e| RuminaError::runtime(e))?;
+                self.registers[*dst as usize] = result;
+            }
+
+            // Register-based comparison operations
+            OpCode::EqReg(dst, src1, src2) => {
+                let a = &self.registers[*src1 as usize];
+                let b = &self.registers[*src2 as usize];
+                let result = a.vm_eq(b).map_err(|e| RuminaError::runtime(e))?;
+                self.registers[*dst as usize] = result;
+            }
+
+            OpCode::NeqReg(dst, src1, src2) => {
+                let a = &self.registers[*src1 as usize];
+                let b = &self.registers[*src2 as usize];
+                let result = a.vm_neq(b).map_err(|e| RuminaError::runtime(e))?;
+                self.registers[*dst as usize] = result;
+            }
+
+            OpCode::GtReg(dst, src1, src2) => {
+                let a = &self.registers[*src1 as usize];
+                let b = &self.registers[*src2 as usize];
+                let result = a.vm_gt(b).map_err(|e| RuminaError::runtime(e))?;
+                self.registers[*dst as usize] = result;
+            }
+
+            OpCode::GteReg(dst, src1, src2) => {
+                let a = &self.registers[*src1 as usize];
+                let b = &self.registers[*src2 as usize];
+                let result = a.vm_gte(b).map_err(|e| RuminaError::runtime(e))?;
+                self.registers[*dst as usize] = result;
+            }
+
+            OpCode::LtReg(dst, src1, src2) => {
+                let a = &self.registers[*src1 as usize];
+                let b = &self.registers[*src2 as usize];
+                let result = a.vm_lt(b).map_err(|e| RuminaError::runtime(e))?;
+                self.registers[*dst as usize] = result;
+            }
+
+            OpCode::LteReg(dst, src1, src2) => {
+                let a = &self.registers[*src1 as usize];
+                let b = &self.registers[*src2 as usize];
+                let result = a.vm_lte(b).map_err(|e| RuminaError::runtime(e))?;
+                self.registers[*dst as usize] = result;
+            }
+
+            // ===== Stack-based instructions (for backward compatibility) =====
             OpCode::PushConst(value) => {
                 self.stack.push(value.clone());
             }
