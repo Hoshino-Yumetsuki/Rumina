@@ -6,7 +6,7 @@ use crate::error::RuminaError;
 use crate::lexer::Lexer;
 use crate::parser::Parser;
 use crate::value::Value;
-use crate::vm::{ByteCode, OpCode};
+use crate::vm::{ByteCode, OpCode, Register};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
@@ -73,7 +73,7 @@ struct LoopContext {
     break_patches: Vec<usize>,
 }
 
-/// Bytecode compiler
+/// Bytecode compiler with register allocation
 pub struct Compiler {
     /// Output bytecode
     bytecode: ByteCode,
@@ -98,6 +98,12 @@ pub struct Compiler {
 
     /// Module namespace mappings (module_name -> prefix for variables)
     module_namespaces: HashMap<String, String>,
+
+    /// Next temporary register to allocate (R8-R15)
+    next_temp_reg: u8,
+
+    /// Register allocation stack for nested expressions
+    reg_stack: Vec<Register>,
 }
 
 impl Compiler {
@@ -111,6 +117,8 @@ impl Compiler {
             included_files: HashSet::new(),
             current_dir: None,
             module_namespaces: HashMap::new(),
+            next_temp_reg: 8, // Start from R8 (0-7 are reserved, R8-R15 are temps)
+            reg_stack: Vec::new(),
         }
     }
 
@@ -125,7 +133,36 @@ impl Compiler {
             included_files: HashSet::new(),
             current_dir: Some(current_dir),
             module_namespaces: HashMap::new(),
+            next_temp_reg: 8,
+            reg_stack: Vec::new(),
         }
+    }
+
+    /// Allocate a temporary register (R8-R15)
+    fn alloc_reg(&mut self) -> Register {
+        let reg = Register::from_u8(self.next_temp_reg).unwrap_or(Register::R8);
+        self.next_temp_reg += 1;
+        if self.next_temp_reg > 15 {
+            self.next_temp_reg = 8; // Wrap around (simple allocation)
+        }
+        self.reg_stack.push(reg);
+        reg
+    }
+
+    /// Free a temporary register
+    fn free_reg(&mut self, _reg: Register) {
+        self.reg_stack.pop();
+        if let Some(last_reg) = self.reg_stack.last() {
+            self.next_temp_reg = last_reg.as_u8() + 1;
+        } else {
+            self.next_temp_reg = 8;
+        }
+    }
+
+    /// Reset register allocation (for new scope/function)
+    fn reset_regs(&mut self) {
+        self.next_temp_reg = 8;
+        self.reg_stack.clear();
     }
 
     /// Compile a list of statements
@@ -167,8 +204,13 @@ impl Compiler {
     fn compile_stmt(&mut self, stmt: &Stmt) -> Result<(), RuminaError> {
         match stmt {
             Stmt::Expr(expr) => {
-                self.compile_expr(expr)?;
-                // Keep expression result on stack for potential return value
+                // Compile expression and store result in RAX for potential return
+                let reg = self.compile_expr(expr)?;
+                // Move result to RAX if not already there
+                if reg != Register::RAX {
+                    self.emit(OpCode::MovReg(Register::RAX, reg));
+                    self.free_reg(reg);
+                }
             }
 
             Stmt::VarDecl {
@@ -177,28 +219,30 @@ impl Compiler {
                 is_bigint,
                 declared_type,
             } => {
-                // Compile the value expression
-                self.compile_expr(value)?;
+                // Compile the value expression into a register
+                let reg = self.compile_expr(value)?;
 
                 // Apply type conversion if declared_type is specified
                 if let Some(dtype) = declared_type {
-                    self.emit(OpCode::ConvertType(dtype.clone()));
+                    self.emit(OpCode::ConvertType(reg, dtype.clone()));
                 } else if *is_bigint {
                     // Backward compatibility
-                    self.emit(OpCode::ConvertType(DeclaredType::BigInt));
+                    self.emit(OpCode::ConvertType(reg, DeclaredType::BigInt));
                 }
 
-                // Store in variable
-                self.emit(OpCode::PopVar(name.clone()));
+                // Store register in variable
+                self.emit(OpCode::StoreVar(name.clone(), reg));
+                self.free_reg(reg);
                 self.symbols.define(name.clone());
             }
 
             Stmt::Assign { name, value } => {
-                // Compile the value expression
-                self.compile_expr(value)?;
+                // Compile the value expression into a register
+                let reg = self.compile_expr(value)?;
 
-                // Store in variable
-                self.emit(OpCode::PopVar(name.clone()));
+                // Store register in variable
+                self.emit(OpCode::StoreVar(name.clone(), reg));
+                self.free_reg(reg);
             }
 
             Stmt::MemberAssign {
@@ -210,32 +254,33 @@ impl Compiler {
                 if let Expr::Ident(var_name) = object {
                     // For variable identifiers, use MemberAssignVar to enable null auto-vivification
                     // Compile the value expression
-                    self.compile_expr(value)?;
+                    let val_reg = self.compile_expr(value)?;
 
                     // Emit member assignment with variable name
-                    self.emit(OpCode::MemberAssignVar(var_name.clone(), member.clone()));
+                    self.emit(OpCode::MemberAssignVar(var_name.clone(), member.clone(), val_reg));
+                    self.free_reg(val_reg);
                 } else {
                     // For other expressions, use regular MemberAssign
                     // Compile the object expression
-                    self.compile_expr(object)?;
+                    let obj_reg = self.compile_expr(object)?;
 
                     // Compile the value expression
-                    self.compile_expr(value)?;
+                    let val_reg = self.compile_expr(value)?;
 
                     // Emit member assignment
-                    self.emit(OpCode::MemberAssign(member.clone()));
+                    self.emit(OpCode::MemberAssign(obj_reg, member.clone(), val_reg));
+                    self.free_reg(val_reg);
+                    self.free_reg(obj_reg);
                 }
             }
 
             Stmt::Block(statements) => {
                 self.symbols.enter_scope();
-                // EnterScope and ExitScope opcodes are no-ops, so we omit them for performance
 
                 for stmt in statements {
                     self.compile_stmt(stmt)?;
                 }
 
-                // ExitScope is also a no-op
                 self.symbols.exit_scope();
             }
 
@@ -244,11 +289,12 @@ impl Compiler {
                 then_branch,
                 else_branch,
             } => {
-                // Compile condition
-                self.compile_expr(condition)?;
+                // Compile condition into a register
+                let cond_reg = self.compile_expr(condition)?;
 
                 // Jump to else if false
-                let else_jump = self.emit_jump(OpCode::JumpIfFalse(0));
+                let else_jump = self.emit_jump(OpCode::Jz(cond_reg, 0));
+                self.free_reg(cond_reg);
 
                 // Compile then branch
                 for stmt in then_branch {
@@ -257,7 +303,7 @@ impl Compiler {
 
                 if let Some(else_stmts) = else_branch {
                     // Jump over else branch
-                    let end_jump = self.emit_jump(OpCode::Jump(0));
+                    let end_jump = self.emit_jump(OpCode::Jmp(0));
 
                     // Patch else jump to here
                     self.patch_jump(else_jump);
@@ -285,10 +331,11 @@ impl Compiler {
                 });
 
                 // Compile condition
-                self.compile_expr(condition)?;
+                let cond_reg = self.compile_expr(condition)?;
 
                 // Jump to end if false
-                let end_jump = self.emit_jump(OpCode::JumpIfFalse(0));
+                let end_jump = self.emit_jump(OpCode::Jz(cond_reg, 0));
+                self.free_reg(cond_reg);
 
                 // Compile body
                 for stmt in body {
@@ -296,7 +343,7 @@ impl Compiler {
                 }
 
                 // Jump back to start
-                self.emit(OpCode::Jump(loop_start));
+                self.emit(OpCode::Jmp(loop_start));
 
                 // Patch end jump
                 self.patch_jump(end_jump);
@@ -326,8 +373,10 @@ impl Compiler {
 
                 // Compile condition (if present)
                 let end_jump = if let Some(cond_expr) = condition {
-                    self.compile_expr(cond_expr)?;
-                    Some(self.emit_jump(OpCode::JumpIfFalse(0)))
+                    let cond_reg = self.compile_expr(cond_expr)?;
+                    let jump = Some(self.emit_jump(OpCode::Jz(cond_reg, 0)));
+                    self.free_reg(cond_reg);
+                    jump
                 } else {
                     None
                 };
@@ -342,7 +391,7 @@ impl Compiler {
                 });
 
                 // Jump over update to body
-                let body_jump = self.emit_jump(OpCode::Jump(0));
+                let body_jump = self.emit_jump(OpCode::Jmp(0));
 
                 // Compile update section
                 let update_start = self.current_address();
@@ -350,7 +399,7 @@ impl Compiler {
                     self.compile_stmt(update_stmt)?;
                 }
                 // Jump back to condition
-                self.emit(OpCode::Jump(condition_start));
+                self.emit(OpCode::Jmp(condition_start));
 
                 // Patch body jump to here
                 self.patch_jump(body_jump);
@@ -366,7 +415,7 @@ impl Compiler {
                 }
 
                 // Jump to update
-                self.emit(OpCode::Jump(update_start));
+                self.emit(OpCode::Jmp(update_start));
 
                 // Patch end jump (if condition exists)
                 if let Some(end_addr) = end_jump {
@@ -384,16 +433,21 @@ impl Compiler {
 
             Stmt::Return(expr) => {
                 if let Some(expr) = expr {
-                    self.compile_expr(expr)?;
+                    // Compile expression and put result in RAX
+                    let reg = self.compile_expr(expr)?;
+                    if reg != Register::RAX {
+                        self.emit(OpCode::MovReg(Register::RAX, reg));
+                        self.free_reg(reg);
+                    }
                 } else {
-                    let index = self.bytecode.add_constant(Value::Null);
-                    self.emit(OpCode::PushConstPooled(index));
+                    // Return null
+                    self.emit(OpCode::MovImm(Register::RAX, Value::Null));
                 }
-                self.emit(OpCode::Return);
+                self.emit(OpCode::Ret);
             }
 
             Stmt::Break => {
-                let jump_addr = self.emit_jump(OpCode::Jump(0));
+                let jump_addr = self.emit_jump(OpCode::Jmp(0));
                 if let Some(loop_ctx) = self.loop_stack.last_mut() {
                     loop_ctx.break_patches.push(jump_addr);
                 } else {
@@ -404,7 +458,7 @@ impl Compiler {
             Stmt::Continue => {
                 if let Some(loop_ctx) = self.loop_stack.last() {
                     let target = loop_ctx.continue_target;
-                    self.emit(OpCode::Jump(target));
+                    self.emit(OpCode::Jmp(target));
                 } else {
                     return Err(RuminaError::runtime("Continue outside of loop".to_string()));
                 }
@@ -417,12 +471,14 @@ impl Compiler {
                 decorators,
             } => {
                 // Store function definition
-                let skip_jump = self.emit_jump(OpCode::Jump(0));
+                let skip_jump = self.emit_jump(OpCode::Jmp(0));
 
                 let body_start = self.current_address();
 
                 // Compile function body
                 self.symbols.enter_scope();
+                self.reset_regs(); // Reset register allocation for function
+                
                 for param in params {
                     self.symbols.define(param.clone());
                 }
@@ -432,11 +488,11 @@ impl Compiler {
                 }
 
                 // Implicit return null if no explicit return
-                let index = self.bytecode.add_constant(Value::Null);
-                self.emit(OpCode::PushConstPooled(index));
-                self.emit(OpCode::Return);
+                self.emit(OpCode::MovImm(Register::RAX, Value::Null));
+                self.emit(OpCode::Ret);
 
                 self.symbols.exit_scope();
+                self.reset_regs();
 
                 let body_end = self.current_address();
 
@@ -610,17 +666,18 @@ impl Compiler {
                 let prefixed_name = format!("{}::{}", namespace, name);
 
                 // Compile the value expression
-                self.compile_expr(value)?;
+                let reg = self.compile_expr(value)?;
 
                 // Apply type conversion if declared_type is specified
                 if let Some(dtype) = declared_type {
-                    self.emit(OpCode::ConvertType(dtype.clone()));
+                    self.emit(OpCode::ConvertType(reg, dtype.clone()));
                 } else if *is_bigint {
-                    self.emit(OpCode::ConvertType(DeclaredType::BigInt));
+                    self.emit(OpCode::ConvertType(reg, DeclaredType::BigInt));
                 }
 
                 // Store in prefixed variable
-                self.emit(OpCode::PopVar(prefixed_name.clone()));
+                self.emit(OpCode::StoreVar(prefixed_name.clone(), reg));
+                self.free_reg(reg);
                 self.symbols.define(prefixed_name);
                 Ok(())
             }
@@ -635,12 +692,14 @@ impl Compiler {
                 let prefixed_name = format!("{}::{}", namespace, name);
 
                 // Store function definition
-                let skip_jump = self.emit_jump(OpCode::Jump(0));
+                let skip_jump = self.emit_jump(OpCode::Jmp(0));
 
                 let body_start = self.current_address();
 
                 // Compile function body
                 self.symbols.enter_scope();
+                self.reset_regs();
+                
                 for param in params {
                     self.symbols.define(param.clone());
                 }
@@ -650,11 +709,11 @@ impl Compiler {
                 }
 
                 // Implicit return null if no explicit return
-                let index = self.bytecode.add_constant(Value::Null);
-                self.emit(OpCode::PushConstPooled(index));
-                self.emit(OpCode::Return);
+                self.emit(OpCode::MovImm(Register::RAX, Value::Null));
+                self.emit(OpCode::Ret);
 
                 self.symbols.exit_scope();
+                self.reset_regs();
 
                 let body_end = self.current_address();
 
@@ -679,151 +738,276 @@ impl Compiler {
         }
     }
 
-    /// Compile an expression
-    fn compile_expr(&mut self, expr: &Expr) -> Result<(), RuminaError> {
+    /// Compile an expression and return the register containing the result
+    fn compile_expr(&mut self, expr: &Expr) -> Result<Register, RuminaError> {
         match expr {
             Expr::Int(n) => {
+                let reg = self.alloc_reg();
                 let index = self.bytecode.add_constant(Value::Int(*n));
-                self.emit(OpCode::PushConstPooled(index));
+                self.emit(OpCode::MovConst(reg, index));
+                Ok(reg)
             }
 
             Expr::Float(f) => {
+                let reg = self.alloc_reg();
                 let index = self.bytecode.add_constant(Value::Float(*f));
-                self.emit(OpCode::PushConstPooled(index));
+                self.emit(OpCode::MovConst(reg, index));
+                Ok(reg)
             }
 
             Expr::String(s) => {
+                let reg = self.alloc_reg();
                 let index = self.bytecode.add_constant(Value::String(s.clone()));
-                self.emit(OpCode::PushConstPooled(index));
+                self.emit(OpCode::MovConst(reg, index));
+                Ok(reg)
             }
 
             Expr::Bool(b) => {
-                let index = self.bytecode.add_constant(Value::Bool(*b));
-                self.emit(OpCode::PushConstPooled(index));
+                let reg = self.alloc_reg();
+                self.emit(OpCode::MovImm(reg, Value::Bool(*b)));
+                Ok(reg)
             }
 
             Expr::Null => {
-                let index = self.bytecode.add_constant(Value::Null);
-                self.emit(OpCode::PushConstPooled(index));
+                let reg = self.alloc_reg();
+                self.emit(OpCode::MovImm(reg, Value::Null));
+                Ok(reg)
             }
 
             Expr::Ident(name) => {
-                self.emit(OpCode::PushVar(name.clone()));
+                let reg = self.alloc_reg();
+                self.emit(OpCode::MovVar(reg, name.clone()));
+                Ok(reg)
             }
 
             Expr::Binary { left, op, right } => {
-                // Compile operands
-                self.compile_expr(left)?;
-                self.compile_expr(right)?;
+                // Compile operands into registers
+                let left_reg = self.compile_expr(left)?;
+                let right_reg = self.compile_expr(right)?;
 
-                // Emit operation - always use generic opcodes
+                // Emit operation - result goes in left_reg
                 let opcode = match op {
-                    BinOp::Add => OpCode::Add,
-                    BinOp::Sub => OpCode::Sub,
-                    BinOp::Mul => OpCode::Mul,
-                    BinOp::Div => OpCode::Div,
-                    BinOp::Mod => OpCode::Mod,
-                    BinOp::Pow => OpCode::Pow,
-                    BinOp::Equal => OpCode::Eq,
-                    BinOp::NotEqual => OpCode::Neq,
-                    BinOp::Greater => OpCode::Gt,
-                    BinOp::GreaterEq => OpCode::Gte,
-                    BinOp::Less => OpCode::Lt,
-                    BinOp::LessEq => OpCode::Lte,
-                    BinOp::And => OpCode::And,
-                    BinOp::Or => OpCode::Or,
+                    BinOp::Add => OpCode::Add(left_reg, right_reg),
+                    BinOp::Sub => OpCode::Sub(left_reg, right_reg),
+                    BinOp::Mul => OpCode::Mul(left_reg, right_reg),
+                    BinOp::Div => OpCode::Div(left_reg, right_reg),
+                    BinOp::Mod => OpCode::ModOp(left_reg, right_reg),
+                    BinOp::Pow => OpCode::Pow(left_reg, right_reg),
+                    BinOp::Equal => OpCode::CmpEq(left_reg, right_reg),
+                    BinOp::NotEqual => OpCode::CmpNe(left_reg, right_reg),
+                    BinOp::Greater => OpCode::CmpGt(left_reg, right_reg),
+                    BinOp::GreaterEq => OpCode::CmpGe(left_reg, right_reg),
+                    BinOp::Less => OpCode::CmpLt(left_reg, right_reg),
+                    BinOp::LessEq => OpCode::CmpLe(left_reg, right_reg),
+                    BinOp::And => OpCode::And(left_reg, right_reg),
+                    BinOp::Or => OpCode::Or(left_reg, right_reg),
                 };
 
                 self.emit(opcode);
+                self.free_reg(right_reg);
+                Ok(left_reg)
             }
 
             Expr::Unary { op, expr } => {
-                self.compile_expr(expr)?;
+                let reg = self.compile_expr(expr)?;
 
                 let opcode = match op {
-                    UnaryOp::Neg => OpCode::Neg,
-                    UnaryOp::Not => OpCode::Not,
-                    UnaryOp::Factorial => OpCode::Factorial,
+                    UnaryOp::Neg => OpCode::Neg(reg),
+                    UnaryOp::Not => OpCode::Not(reg),
+                    UnaryOp::Factorial => OpCode::Factorial(reg),
                 };
 
                 self.emit(opcode);
+                Ok(reg)
             }
 
             Expr::Array(elements) => {
-                // Compile each element
+                // Push each element onto the stack
                 for elem in elements {
-                    self.compile_expr(elem)?;
+                    let elem_reg = self.compile_expr(elem)?;
+                    self.emit(OpCode::Push(elem_reg));
+                    self.free_reg(elem_reg);
                 }
 
-                // Create array from N elements
-                self.emit(OpCode::MakeArray(elements.len()));
+                // Create array from N elements on stack
+                let result_reg = self.alloc_reg();
+                self.emit(OpCode::MakeArray(result_reg, elements.len()));
+                Ok(result_reg)
             }
 
             Expr::Struct(fields) => {
-                // Compile each field (key, value) pair
+                // Push each field (key, value) pair onto the stack
                 for (key, value) in fields {
                     // Push key as string constant
+                    let key_reg = self.alloc_reg();
                     let key_index = self.bytecode.add_constant(Value::String(key.clone()));
-                    self.emit(OpCode::PushConstPooled(key_index));
+                    self.emit(OpCode::MovConst(key_reg, key_index));
+                    self.emit(OpCode::Push(key_reg));
+                    self.free_reg(key_reg);
+
                     // Push value
-                    self.compile_expr(value)?;
+                    let val_reg = self.compile_expr(value)?;
+                    self.emit(OpCode::Push(val_reg));
+                    self.free_reg(val_reg);
                 }
 
-                // Create struct from N field pairs
-                self.emit(OpCode::MakeStruct(fields.len()));
+                // Create struct from N field pairs on stack
+                let result_reg = self.alloc_reg();
+                self.emit(OpCode::MakeStruct(result_reg, fields.len()));
+                Ok(result_reg)
             }
 
             Expr::Call { func, args } => {
                 // Check if it's a simple function call
                 if let Expr::Ident(name) = &**func {
-                    // Compile arguments
-                    for arg in args {
-                        self.compile_expr(arg)?;
+                    // Compile arguments into R8-R15, or push to stack if more than 8
+                    let mut arg_regs = Vec::new();
+                    for arg in args.iter() {
+                        let arg_reg = self.compile_expr(arg)?;
+                        arg_regs.push(arg_reg);
                     }
+                    
+                    // Now move them to the correct argument registers
+                    for (i, arg_reg) in arg_regs.iter().enumerate() {
+                        if i < 8 {
+                            // First 8 args go in R8-R15
+                            let target_reg = Register::from_u8(8 + i as u8).unwrap();
+                            if *arg_reg != target_reg {
+                                self.emit(OpCode::MovReg(target_reg, *arg_reg));
+                            }
+                        } else {
+                            // Rest go on stack
+                            self.emit(OpCode::Push(*arg_reg));
+                        }
+                    }
+                    
+                    // Free all argument registers
+                    for arg_reg in arg_regs {
+                        self.free_reg(arg_reg);
+                    }
+                    
                     self.emit(OpCode::CallVar(name.clone(), args.len()));
+                    // Result is in RAX, allocate a temp reg and move it
+                    let result_reg = self.alloc_reg();
+                    self.emit(OpCode::MovReg(result_reg, Register::RAX));
+                    Ok(result_reg)
                 } else if let Expr::Namespace { module, name } = &**func {
                     // Namespace function call: module::function(args)
-                    for arg in args {
-                        self.compile_expr(arg)?;
+                    let mut arg_regs = Vec::new();
+                    for arg in args.iter() {
+                        let arg_reg = self.compile_expr(arg)?;
+                        arg_regs.push(arg_reg);
                     }
+                    
+                    for (i, arg_reg) in arg_regs.iter().enumerate() {
+                        if i < 8 {
+                            let target_reg = Register::from_u8(8 + i as u8).unwrap();
+                            if *arg_reg != target_reg {
+                                self.emit(OpCode::MovReg(target_reg, *arg_reg));
+                            }
+                        } else {
+                            self.emit(OpCode::Push(*arg_reg));
+                        }
+                    }
+                    
+                    for arg_reg in arg_regs {
+                        self.free_reg(arg_reg);
+                    }
+                    
                     let prefixed_name = format!("{}::{}", module, name);
                     self.emit(OpCode::CallVar(prefixed_name, args.len()));
+                    let result_reg = self.alloc_reg();
+                    self.emit(OpCode::MovReg(result_reg, Register::RAX));
+                    Ok(result_reg)
                 } else if let Expr::Member { object, member } = &**func {
                     // Method call: obj.method(args)
-                    // Compile the object
-                    self.compile_expr(object)?;
-                    // Duplicate it (one for self, one for getting the method)
-                    self.emit(OpCode::Dup);
-                    // Get the method value (consumes the top copy)
-                    self.emit(OpCode::Member(member.clone()));
+                    // Compile the object into RDI
+                    let obj_reg = self.compile_expr(object)?;
+                    self.emit(OpCode::MovReg(Register::RDI, obj_reg));
+                    self.free_reg(obj_reg);
+                    
+                    // Get the method value into RSI
+                    self.emit(OpCode::Member(Register::RSI, Register::RDI, member.clone()));
+                    
                     // Compile arguments
-                    for arg in args {
-                        self.compile_expr(arg)?;
+                    let mut arg_regs = Vec::new();
+                    for arg in args.iter() {
+                        let arg_reg = self.compile_expr(arg)?;
+                        arg_regs.push(arg_reg);
                     }
-                    // Emit method call (expects stack: [object, method, args...])
+                    
+                    for (i, arg_reg) in arg_regs.iter().enumerate() {
+                        if i < 8 {
+                            let target_reg = Register::from_u8(8 + i as u8).unwrap();
+                            if *arg_reg != target_reg {
+                                self.emit(OpCode::MovReg(target_reg, *arg_reg));
+                            }
+                        } else {
+                            self.emit(OpCode::Push(*arg_reg));
+                        }
+                    }
+                    
+                    for arg_reg in arg_regs {
+                        self.free_reg(arg_reg);
+                    }
+                    
+                    // Emit method call (object in RDI, method in RSI)
                     self.emit(OpCode::CallMethod(args.len()));
+                    let result_reg = self.alloc_reg();
+                    self.emit(OpCode::MovReg(result_reg, Register::RAX));
+                    Ok(result_reg)
                 } else {
                     // Dynamic function call (e.g., (expr)())
-                    // First compile the function expression
-                    self.compile_expr(func)?;
-                    // Then compile arguments
-                    for arg in args {
-                        self.compile_expr(arg)?;
+                    // Compile the function expression
+                    let func_reg = self.compile_expr(func)?;
+                    
+                    // Compile arguments
+                    let mut arg_regs = Vec::new();
+                    for arg in args.iter() {
+                        let arg_reg = self.compile_expr(arg)?;
+                        arg_regs.push(arg_reg);
                     }
+                    
+                    for (i, arg_reg) in arg_regs.iter().enumerate() {
+                        if i < 8 {
+                            let target_reg = Register::from_u8(8 + i as u8).unwrap();
+                            if *arg_reg != target_reg {
+                                self.emit(OpCode::MovReg(target_reg, *arg_reg));
+                            }
+                        } else {
+                            self.emit(OpCode::Push(*arg_reg));
+                        }
+                    }
+                    
+                    for arg_reg in arg_regs {
+                        self.free_reg(arg_reg);
+                    }
+                    
                     // Emit dynamic call
-                    self.emit(OpCode::Call(args.len()));
+                    self.emit(OpCode::CallReg(func_reg, args.len()));
+                    self.free_reg(func_reg);
+                    let result_reg = self.alloc_reg();
+                    self.emit(OpCode::MovReg(result_reg, Register::RAX));
+                    Ok(result_reg)
                 }
             }
 
             Expr::Index { object, index } => {
-                self.compile_expr(object)?;
-                self.compile_expr(index)?;
-                self.emit(OpCode::Index);
+                let obj_reg = self.compile_expr(object)?;
+                let idx_reg = self.compile_expr(index)?;
+                let result_reg = self.alloc_reg();
+                self.emit(OpCode::Index(result_reg, obj_reg, idx_reg));
+                self.free_reg(idx_reg);
+                self.free_reg(obj_reg);
+                Ok(result_reg)
             }
 
             Expr::Member { object, member } => {
-                self.compile_expr(object)?;
-                self.emit(OpCode::Member(member.clone()));
+                let obj_reg = self.compile_expr(object)?;
+                let result_reg = self.alloc_reg();
+                self.emit(OpCode::Member(result_reg, obj_reg, member.clone()));
+                self.free_reg(obj_reg);
+                Ok(result_reg)
             }
 
             Expr::Lambda { params, body, .. } => {
@@ -832,12 +1016,14 @@ impl Compiler {
                 self.lambda_counter += 1;
 
                 // Skip over the lambda body (similar to function definition)
-                let skip_jump = self.emit_jump(OpCode::Jump(0));
+                let skip_jump = self.emit_jump(OpCode::Jmp(0));
 
                 let body_start = self.current_address();
 
                 // Compile lambda body
                 self.symbols.enter_scope();
+                self.reset_regs();
+                
                 for param in params {
                     self.symbols.define(param.clone());
                 }
@@ -845,11 +1031,11 @@ impl Compiler {
                 // Lambda body is a statement - could be a block or an expression
                 self.compile_stmt(body)?;
 
-                // For simple lambdas (expressions), the result is already on stack
-                // For complex lambdas, we need to ensure proper return
-                self.emit(OpCode::Return);
+                // Ensure result is in RAX and return
+                self.emit(OpCode::Ret);
 
                 self.symbols.exit_scope();
+                self.reset_regs();
 
                 let body_end = self.current_address();
 
@@ -866,25 +1052,28 @@ impl Compiler {
                     decorators: vec![],
                 })));
 
-                // Now push a marker that tells VM this is a lambda with this ID
-                let index = self.bytecode.add_constant(Value::String(lambda_id.clone()));
-                self.emit(OpCode::PushConstPooled(index));
+                // Create lambda and return it in a register
+                let lambda_reg = self.alloc_reg();
+                let id_index = self.bytecode.add_constant(Value::String(lambda_id.clone()));
+                self.emit(OpCode::MovConst(lambda_reg, id_index));
                 self.emit(OpCode::MakeLambda(Box::new(crate::vm::LambdaInfo {
                     params: params.clone(),
                     body_start,
                     body_end,
                 })));
+                // MakeLambda should place result in RAX
+                self.emit(OpCode::MovReg(lambda_reg, Register::RAX));
+                Ok(lambda_reg)
             }
 
             Expr::Namespace { module, name } => {
                 // Namespace access: module::name
-                // We compile this as a regular variable access with :: separator
                 let prefixed_name = format!("{}::{}", module, name);
-                self.emit(OpCode::PushVar(prefixed_name));
+                let reg = self.alloc_reg();
+                self.emit(OpCode::MovVar(reg, prefixed_name));
+                Ok(reg)
             }
         }
-
-        Ok(())
     }
 }
 

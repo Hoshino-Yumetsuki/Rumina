@@ -295,7 +295,13 @@ impl ByteCode {
     /// Patch a jump instruction at given address
     pub fn patch_jump(&mut self, address: usize, target: usize) {
         match &mut self.instructions[address] {
-            OpCode::Jump(addr) | OpCode::JumpIfFalse(addr) | OpCode::JumpIfTrue(addr) => {
+            OpCode::Jmp(addr) => {
+                *addr = target;
+            }
+            OpCode::Jz(_, addr) => {
+                *addr = target;
+            }
+            OpCode::Jnz(_, addr) => {
                 *addr = target;
             }
             _ => panic!("Attempted to patch non-jump instruction at {}", address),
@@ -574,317 +580,13 @@ impl ByteCode {
     }
 
     fn serialize_opcode(op: &OpCode) -> String {
-        match op {
-            OpCode::PushConst(v) => format!("PushConst({})", Self::serialize_value(v)),
-            OpCode::PushConstPooled(i) => format!("PushConstPooled({})", i),
-            OpCode::PushVar(name) => format!("PushVar({})", name),
-            OpCode::PopVar(name) => format!("PopVar({})", name),
-            OpCode::Dup => "Dup".into(),
-            OpCode::Pop => "Pop".into(),
-            OpCode::Add => "Add".into(),
-            OpCode::Sub => "Sub".into(),
-            OpCode::Mul => "Mul".into(),
-            OpCode::Div => "Div".into(),
-            OpCode::Mod => "Mod".into(),
-            OpCode::Pow => "Pow".into(),
-            OpCode::Neg => "Neg".into(),
-            OpCode::Factorial => "Factorial".into(),
-            OpCode::Not => "Not".into(),
-            OpCode::And => "And".into(),
-            OpCode::Or => "Or".into(),
-            OpCode::Eq => "Eq".into(),
-            OpCode::Neq => "Neq".into(),
-            OpCode::Gt => "Gt".into(),
-            OpCode::Gte => "Gte".into(),
-            OpCode::Lt => "Lt".into(),
-            OpCode::Lte => "Lte".into(),
-            OpCode::Jump(addr) => format!("Jump({})", addr),
-            OpCode::JumpIfFalse(addr) => format!("JumpIfFalse({})", addr),
-            OpCode::JumpIfTrue(addr) => format!("JumpIfTrue({})", addr),
-            OpCode::CallVar(name, argc) => format!("CallVar({}, {})", name, argc),
-            OpCode::Call(argc) => format!("Call({})", argc),
-            OpCode::CallMethod(argc) => format!("CallMethod({})", argc),
-            OpCode::Return => "Return".into(),
-            OpCode::MakeArray(size) => format!("MakeArray({})", size),
-            OpCode::MakeStruct(size) => format!("MakeStruct({})", size),
-            OpCode::Index => "Index".into(),
-            OpCode::Member(name) => format!("Member({})", name),
-            OpCode::IndexAssign => "IndexAssign".into(),
-            OpCode::MemberAssign(name) => format!("MemberAssign({})", name),
-            OpCode::MemberAssignVar(var, member) => {
-                format!("MemberAssignVar({}, {})", var, member)
-            }
-            OpCode::Break => "Break".into(),
-            OpCode::Continue => "Continue".into(),
-            OpCode::Halt => "Halt".into(),
-            OpCode::DefineFunc(info) => {
-                format!(
-                    "DefineFunc({}, [{}], {}, {}, [{}])",
-                    info.name,
-                    info.params.join(","),
-                    info.body_start,
-                    info.body_end,
-                    info.decorators.join(",")
-                )
-            }
-            OpCode::MakeLambda(info) => {
-                format!(
-                    "MakeLambda([{}], {}, {})",
-                    info.params.join(","),
-                    info.body_start,
-                    info.body_end
-                )
-            }
-            OpCode::ConvertType(dtype) => format!("ConvertType({:?})", dtype),
-        }
+        // TODO: Update for register-based bytecode
+        format!("{:?}", op)
     }
 
-    fn deserialize_opcode(s: &str) -> Result<OpCode, String> {
-        if s == "Dup" {
-            return Ok(OpCode::Dup);
-        }
-        if s == "Pop" {
-            return Ok(OpCode::Pop);
-        }
-        if s == "Add" {
-            return Ok(OpCode::Add);
-        }
-        if s == "Sub" {
-            return Ok(OpCode::Sub);
-        }
-        if s == "Mul" {
-            return Ok(OpCode::Mul);
-        }
-        if s == "Div" {
-            return Ok(OpCode::Div);
-        }
-        if s == "Mod" {
-            return Ok(OpCode::Mod);
-        }
-        if s == "Pow" {
-            return Ok(OpCode::Pow);
-        }
-        if s == "Neg" {
-            return Ok(OpCode::Neg);
-        }
-        if s == "Factorial" {
-            return Ok(OpCode::Factorial);
-        }
-        if s == "Not" {
-            return Ok(OpCode::Not);
-        }
-        if s == "And" {
-            return Ok(OpCode::And);
-        }
-        if s == "Or" {
-            return Ok(OpCode::Or);
-        }
-        if s == "Eq" {
-            return Ok(OpCode::Eq);
-        }
-        if s == "Neq" {
-            return Ok(OpCode::Neq);
-        }
-        if s == "Gt" {
-            return Ok(OpCode::Gt);
-        }
-        if s == "Gte" {
-            return Ok(OpCode::Gte);
-        }
-        if s == "Lt" {
-            return Ok(OpCode::Lt);
-        }
-        if s == "Lte" {
-            return Ok(OpCode::Lte);
-        }
-        if s == "Return" {
-            return Ok(OpCode::Return);
-        }
-        if s == "Index" {
-            return Ok(OpCode::Index);
-        }
-        if s == "IndexAssign" {
-            return Ok(OpCode::IndexAssign);
-        }
-        if s == "Break" {
-            return Ok(OpCode::Break);
-        }
-        if s == "Continue" {
-            return Ok(OpCode::Continue);
-        }
-        if s == "Halt" {
-            return Ok(OpCode::Halt);
-        }
-
-        if let Some(val) = s
-            .strip_prefix("PushConst(")
-            .and_then(|s| s.strip_suffix(")"))
-        {
-            return Ok(OpCode::PushConst(Self::deserialize_value(val)?));
-        }
-        if let Some(idx) = s
-            .strip_prefix("PushConstPooled(")
-            .and_then(|s| s.strip_suffix(")"))
-        {
-            return Ok(OpCode::PushConstPooled(
-                idx.parse().map_err(|_| "Invalid index")?,
-            ));
-        }
-        if let Some(name) = s.strip_prefix("PushVar(").and_then(|s| s.strip_suffix(")")) {
-            return Ok(OpCode::PushVar(name.to_string()));
-        }
-        if let Some(name) = s.strip_prefix("PopVar(").and_then(|s| s.strip_suffix(")")) {
-            return Ok(OpCode::PopVar(name.to_string()));
-        }
-        if let Some(addr) = s.strip_prefix("Jump(").and_then(|s| s.strip_suffix(")")) {
-            return Ok(OpCode::Jump(addr.parse().map_err(|_| "Invalid address")?));
-        }
-        if let Some(addr) = s
-            .strip_prefix("JumpIfFalse(")
-            .and_then(|s| s.strip_suffix(")"))
-        {
-            return Ok(OpCode::JumpIfFalse(
-                addr.parse().map_err(|_| "Invalid address")?,
-            ));
-        }
-        if let Some(addr) = s
-            .strip_prefix("JumpIfTrue(")
-            .and_then(|s| s.strip_suffix(")"))
-        {
-            return Ok(OpCode::JumpIfTrue(
-                addr.parse().map_err(|_| "Invalid address")?,
-            ));
-        }
-        if let Some(args) = s.strip_prefix("CallVar(").and_then(|s| s.strip_suffix(")")) {
-            let parts: Vec<&str> = args.splitn(2, ", ").collect();
-            if parts.len() == 2 {
-                let name = parts[0].to_string();
-                let argc = parts[1].parse().map_err(|_| "Invalid arg count")?;
-                return Ok(OpCode::CallVar(name, argc));
-            }
-        }
-        if let Some(argc) = s.strip_prefix("Call(").and_then(|s| s.strip_suffix(")")) {
-            return Ok(OpCode::Call(argc.parse().map_err(|_| "Invalid arg count")?));
-        }
-        if let Some(argc) = s
-            .strip_prefix("CallMethod(")
-            .and_then(|s| s.strip_suffix(")"))
-        {
-            return Ok(OpCode::CallMethod(
-                argc.parse().map_err(|_| "Invalid arg count")?,
-            ));
-        }
-        if let Some(size) = s
-            .strip_prefix("MakeArray(")
-            .and_then(|s| s.strip_suffix(")"))
-        {
-            return Ok(OpCode::MakeArray(size.parse().map_err(|_| "Invalid size")?));
-        }
-        if let Some(size) = s
-            .strip_prefix("MakeStruct(")
-            .and_then(|s| s.strip_suffix(")"))
-        {
-            return Ok(OpCode::MakeStruct(
-                size.parse().map_err(|_| "Invalid size")?,
-            ));
-        }
-        if let Some(name) = s.strip_prefix("Member(").and_then(|s| s.strip_suffix(")")) {
-            return Ok(OpCode::Member(name.to_string()));
-        }
-        if let Some(name) = s
-            .strip_prefix("MemberAssign(")
-            .and_then(|s| s.strip_suffix(")"))
-        {
-            return Ok(OpCode::MemberAssign(name.to_string()));
-        }
-        if let Some(rest) = s.strip_prefix("MemberAssignVar(") {
-            if let Some(content) = rest.strip_suffix(")") {
-                let parts: Vec<&str> = content.split(", ").collect();
-                if parts.len() == 2 {
-                    return Ok(OpCode::MemberAssignVar(
-                        parts[0].to_string(),
-                        parts[1].to_string(),
-                    ));
-                }
-            }
-        }
-        if let Some(args) = s
-            .strip_prefix("DefineFunc(")
-            .and_then(|s| s.strip_suffix(")"))
-        {
-            // Parse: name, [params], body_start, body_end, [decorators]
-            let parts: Vec<&str> = args.split(", ").collect();
-            if parts.len() >= 4 {
-                let name = parts[0].to_string();
-                let params_str = parts[1].trim_matches(|c| c == '[' || c == ']');
-                let params: Vec<String> = if params_str.is_empty() {
-                    vec![]
-                } else {
-                    params_str.split(',').map(|s| s.to_string()).collect()
-                };
-                let body_start = parts[2].parse().map_err(|_| "Invalid body_start")?;
-                let body_end = parts[3].parse().map_err(|_| "Invalid body_end")?;
-                let decorators = if parts.len() > 4 {
-                    let dec_str = parts[4].trim_matches(|c| c == '[' || c == ']');
-                    if dec_str.is_empty() {
-                        vec![]
-                    } else {
-                        dec_str.split(',').map(|s| s.to_string()).collect()
-                    }
-                } else {
-                    vec![]
-                };
-                return Ok(OpCode::DefineFunc(Box::new(FuncDefInfo {
-                    name,
-                    params,
-                    body_start,
-                    body_end,
-                    decorators,
-                })));
-            }
-        }
-        if let Some(args) = s
-            .strip_prefix("MakeLambda(")
-            .and_then(|s| s.strip_suffix(")"))
-        {
-            // Parse: [params], body_start, body_end
-            let parts: Vec<&str> = args.split(", ").collect();
-            if parts.len() >= 3 {
-                let params_str = parts[0].trim_matches(|c| c == '[' || c == ']');
-                let params: Vec<String> = if params_str.is_empty() {
-                    vec![]
-                } else {
-                    params_str.split(',').map(|s| s.to_string()).collect()
-                };
-                let body_start = parts[1].parse().map_err(|_| "Invalid body_start")?;
-                let body_end = parts[2].parse().map_err(|_| "Invalid body_end")?;
-                return Ok(OpCode::MakeLambda(Box::new(LambdaInfo {
-                    params,
-                    body_start,
-                    body_end,
-                })));
-            }
-        }
-        if let Some(dtype_str) = s
-            .strip_prefix("ConvertType(")
-            .and_then(|s| s.strip_suffix(")"))
-        {
-            let dtype = match dtype_str {
-                "Int" => DeclaredType::Int,
-                "Float" => DeclaredType::Float,
-                "Bool" => DeclaredType::Bool,
-                "String" => DeclaredType::String,
-                "Rational" => DeclaredType::Rational,
-                "Irrational" => DeclaredType::Irrational,
-                "Complex" => DeclaredType::Complex,
-                "Array" => DeclaredType::Array,
-                "BigInt" => DeclaredType::BigInt,
-                _ => return Err(format!("Unknown DeclaredType: {}", dtype_str)),
-            };
-            return Ok(OpCode::ConvertType(dtype));
-        }
-
-        Err(format!("Unknown opcode: {}", s))
+    fn deserialize_opcode(_s: &str) -> Result<OpCode, String> {
+        // TODO: Update for register-based bytecode
+        Err("Deserialization not yet implemented for register-based bytecode".to_string())
     }
 }
 
@@ -2723,16 +2425,16 @@ INSTRUCTIONS:
         // Test serialization/deserialization of ConvertType opcode
         let mut original = ByteCode::new();
 
-        // Test all DeclaredType variants
-        original.emit(OpCode::ConvertType(DeclaredType::Int), Some(1));
-        original.emit(OpCode::ConvertType(DeclaredType::Float), Some(2));
-        original.emit(OpCode::ConvertType(DeclaredType::Bool), Some(3));
-        original.emit(OpCode::ConvertType(DeclaredType::String), Some(4));
-        original.emit(OpCode::ConvertType(DeclaredType::Rational), Some(5));
-        original.emit(OpCode::ConvertType(DeclaredType::Irrational), Some(6));
-        original.emit(OpCode::ConvertType(DeclaredType::Complex), Some(7));
-        original.emit(OpCode::ConvertType(DeclaredType::Array), Some(8));
-        original.emit(OpCode::ConvertType(DeclaredType::BigInt), Some(9));
+        // Test all DeclaredType variants with RAX register
+        original.emit(OpCode::ConvertType(Register::RAX, DeclaredType::Int), Some(1));
+        original.emit(OpCode::ConvertType(Register::RAX, DeclaredType::Float), Some(2));
+        original.emit(OpCode::ConvertType(Register::RAX, DeclaredType::Bool), Some(3));
+        original.emit(OpCode::ConvertType(Register::RAX, DeclaredType::String), Some(4));
+        original.emit(OpCode::ConvertType(Register::RAX, DeclaredType::Rational), Some(5));
+        original.emit(OpCode::ConvertType(Register::RAX, DeclaredType::Irrational), Some(6));
+        original.emit(OpCode::ConvertType(Register::RAX, DeclaredType::Complex), Some(7));
+        original.emit(OpCode::ConvertType(Register::RAX, DeclaredType::Array), Some(8));
+        original.emit(OpCode::ConvertType(Register::RAX, DeclaredType::BigInt), Some(9));
         original.emit(OpCode::Halt, None);
 
         // Serialize and deserialize

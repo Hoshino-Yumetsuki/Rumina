@@ -1,0 +1,27 @@
+// Test basic arithmetic
+var x = 10;
+var y = 20;
+var z = x + y;
+print(z);  // Should print 30
+
+// Test control flow
+if (z > 25) {
+    print("z is greater than 25");
+} else {
+    print("z is not greater than 25");
+}
+
+// Test loop
+var i = 0;
+while (i < 5) {
+    print(i);
+    i = i + 1;
+}
+
+// Test function
+fn add(a, b) {
+    return a + b;
+}
+
+var result = add(5, 7);
+print(result);  // Should print 12

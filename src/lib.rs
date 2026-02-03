@@ -75,11 +75,12 @@ pub fn run_rumina_with_dir(
     } else {
         Compiler::new()
     };
-    let mut bytecode = compiler.compile(optimized_ast)?;
+    let bytecode = compiler.compile(optimized_ast)?;
 
     // Apply bytecode optimization passes
-    let mut bytecode_optimizer = BytecodeOptimizer::new();
-    bytecode_optimizer.optimize(&mut bytecode);
+    // TODO: Re-enable after updating optimizer for register-based bytecode
+    // let mut bytecode_optimizer = BytecodeOptimizer::new();
+    // bytecode_optimizer.optimize(&mut bytecode);
 
     let interpreter = Interpreter::new();
     let globals = interpreter.get_globals();
