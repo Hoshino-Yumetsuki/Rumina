@@ -4,6 +4,7 @@ pub mod bytecode_optimizer;
 pub mod compiler;
 pub mod error;
 pub mod interpreter;
+pub mod jit;
 pub mod lexer;
 pub mod optimizer;
 pub mod parser;

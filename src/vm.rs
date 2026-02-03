@@ -1,6 +1,7 @@
 /// Virtual Machine implementation for Rumina
 use crate::ast::DeclaredType;
 use crate::error::RuminaError;
+use crate::jit::{CompiledTrace, JITCompiler, OptimizedOp};
 use crate::value::Value;
 use crate::vm_ops::VMOperations;
 use rustc_hash::FxHashMap;
@@ -921,6 +922,12 @@ pub struct VM {
     /// Recursion depth tracking
     recursion_depth: usize,
     max_recursion_depth: usize,
+
+    /// JIT compiler for hot path optimization
+    jit: JITCompiler,
+
+    /// Enable/disable JIT compilation
+    jit_enabled: bool,
 }
 
 impl VM {
@@ -941,7 +948,20 @@ impl VM {
             halted: false,
             recursion_depth: 0,
             max_recursion_depth: 4000,
+            jit: JITCompiler::new(),
+            jit_enabled: true,
         }
+    }
+
+    /// Enable or disable JIT compilation
+    pub fn set_jit_enabled(&mut self, enabled: bool) {
+        self.jit_enabled = enabled;
+        self.jit.set_enabled(enabled);
+    }
+
+    /// Get JIT compilation statistics
+    pub fn jit_stats(&self) -> crate::jit::JITStats {
+        self.jit.stats()
     }
 
     /// Load bytecode into VM
@@ -958,6 +978,23 @@ impl VM {
         while !self.halted && self.ip < self.bytecode.instructions.len() {
             // Get current instruction index
             let current_ip = self.ip;
+            
+            // JIT optimization: Check for hot traces
+            if self.jit_enabled {
+                // Record execution for hot path detection
+                if self.jit.record_execution(current_ip) {
+                    // This path is hot, try to compile it
+                    let _ = self.jit.compile_trace(&self.bytecode, current_ip);
+                }
+                
+                // Check if we have a compiled trace at this location
+                if let Some(trace) = self.jit.get_trace(current_ip).cloned() {
+                    // Execute optimized trace
+                    self.execute_compiled_trace(&trace)?;
+                    continue;
+                }
+            }
+
             self.ip += 1;
 
             // Execute by matching on the instruction at current index
@@ -1018,11 +1055,11 @@ impl VM {
                     .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
             }
 
-            OpCode::Add => self.binary_op(|a, b| a.vm_add(b))?,
-            OpCode::Sub => self.binary_op(|a, b| a.vm_sub(b))?,
-            OpCode::Mul => self.binary_op(|a, b| a.vm_mul(b))?,
+            OpCode::Add => self.binary_op_fast_int(|a, b| a.vm_add(b), |a, b| a + b)?,
+            OpCode::Sub => self.binary_op_fast_int(|a, b| a.vm_sub(b), |a, b| a - b)?,
+            OpCode::Mul => self.binary_op_fast_int(|a, b| a.vm_mul(b), |a, b| a * b)?,
             OpCode::Div => self.binary_op(|a, b| a.vm_div(b))?,
-            OpCode::Mod => self.binary_op(|a, b| a.vm_mod(b))?,
+            OpCode::Mod => self.binary_op_fast_int(|a, b| a.vm_mod(b), |a, b| a % b)?,
             OpCode::Pow => self.binary_op(|a, b| a.vm_pow(b))?,
 
             OpCode::Neg => {
@@ -1960,6 +1997,197 @@ impl VM {
         let result = f(&left, &right).map_err(|e| RuminaError::runtime(e))?;
 
         self.stack.push(result);
+        Ok(())
+    }
+
+    /// Fast path binary operation for integers
+    /// Uses specialized integer operation when both operands are integers
+    #[inline]
+    fn binary_op_fast_int<F, G>(&mut self, general_op: F, int_op: G) -> Result<(), RuminaError>
+    where
+        F: FnOnce(&Value, &Value) -> Result<Value, String>,
+        G: FnOnce(i64, i64) -> i64,
+    {
+        let right = self
+            .stack
+            .pop()
+            .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
+        let left = self
+            .stack
+            .pop()
+            .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
+
+        // Fast path for integer operations (most common case)
+        if let (Value::Int(a), Value::Int(b)) = (&left, &right) {
+            // Use specialized integer operation for better performance
+            let result = int_op(*a, *b);
+            self.stack.push(Value::Int(result));
+            Ok(())
+        } else {
+            // Fall back to general operation for other types
+            let result = general_op(&left, &right).map_err(|e| RuminaError::runtime(e))?;
+            self.stack.push(result);
+            Ok(())
+        }
+    }
+
+    /// Execute a compiled JIT trace
+    fn execute_compiled_trace(&mut self, trace: &CompiledTrace) -> Result<(), RuminaError> {
+        // Execute optimized operations in the trace
+        for op in &trace.optimized_ops {
+            match op {
+                OptimizedOp::Original(opcode) => {
+                    // Fall back to regular execution for unoptimized ops
+                    self.execute_opcode(opcode)?;
+                }
+                OptimizedOp::AddVarVar(v1, v2) => {
+                    // Optimized: Add two variables directly without stack operations
+                    let val1 = self.get_variable(v1)?;
+                    let val2 = self.get_variable(v2)?;
+                    let result = val1.vm_add(&val2).map_err(|e| RuminaError::runtime(e))?;
+                    self.stack.push(result);
+                }
+                OptimizedOp::AddVarConst(var, const_idx) => {
+                    // Optimized: Add variable and constant
+                    let val = self.get_variable(var)?;
+                    let constant = self
+                        .bytecode
+                        .constants
+                        .get(*const_idx)
+                        .ok_or_else(|| {
+                            RuminaError::runtime(format!("Invalid constant index: {}", const_idx))
+                        })?;
+                    let result = val.vm_add(constant).map_err(|e| RuminaError::runtime(e))?;
+                    self.stack.push(result);
+                }
+                OptimizedOp::MulVarConst(var, const_idx) => {
+                    // Optimized: Multiply variable and constant
+                    let val = self.get_variable(var)?;
+                    let constant = self
+                        .bytecode
+                        .constants
+                        .get(*const_idx)
+                        .ok_or_else(|| {
+                            RuminaError::runtime(format!("Invalid constant index: {}", const_idx))
+                        })?;
+                    let result = val.vm_mul(constant).map_err(|e| RuminaError::runtime(e))?;
+                    self.stack.push(result);
+                }
+                OptimizedOp::CopyVar(from, to) => {
+                    // Optimized: Copy variable value directly
+                    let val = self.get_variable(from)?;
+                    self.set_variable(to.clone(), val);
+                }
+                OptimizedOp::IncrementVar(var) => {
+                    // Optimized: Increment variable by 1
+                    let val = self.get_variable(var)?;
+                    let one = Value::Int(1);
+                    let result = val.vm_add(&one).map_err(|e| RuminaError::runtime(e))?;
+                    self.set_variable(var.clone(), result);
+                }
+                OptimizedOp::DecrementVar(var) => {
+                    // Optimized: Decrement variable by 1
+                    let val = self.get_variable(var)?;
+                    let one = Value::Int(1);
+                    let result = val.vm_sub(&one).map_err(|e| RuminaError::runtime(e))?;
+                    self.set_variable(var.clone(), result);
+                }
+            }
+        }
+
+        // Update instruction pointer to after the trace
+        self.ip = trace.end_ip;
+        Ok(())
+    }
+
+    /// Execute a single opcode (helper for JIT fallback)
+    fn execute_opcode(&mut self, opcode: &OpCode) -> Result<(), RuminaError> {
+        match opcode {
+            OpCode::PushConst(value) => {
+                self.stack.push(value.clone());
+            }
+            OpCode::PushConstPooled(index) => {
+                let value = self
+                    .bytecode
+                    .constants
+                    .get(*index)
+                    .ok_or_else(|| {
+                        RuminaError::runtime(format!("Invalid constant pool index: {}", index))
+                    })?
+                    .clone();
+                self.stack.push(value);
+            }
+            OpCode::PushVar(name) => {
+                let value = self.get_variable(name)?;
+                self.stack.push(value);
+            }
+            OpCode::PopVar(name) => {
+                let value = self
+                    .stack
+                    .pop()
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
+                self.set_variable(name.clone(), value);
+            }
+            OpCode::Add => self.binary_op_fast_int(|a, b| a.vm_add(b), |a, b| a + b)?,
+            OpCode::Sub => self.binary_op_fast_int(|a, b| a.vm_sub(b), |a, b| a - b)?,
+            OpCode::Mul => self.binary_op_fast_int(|a, b| a.vm_mul(b), |a, b| a * b)?,
+            OpCode::Div => self.binary_op(|a, b| a.vm_div(b))?,
+            OpCode::Mod => self.binary_op_fast_int(|a, b| a.vm_mod(b), |a, b| a % b)?,
+            OpCode::Pow => self.binary_op(|a, b| a.vm_pow(b))?,
+            OpCode::Eq => self.binary_op(|a, b| a.vm_eq(b))?,
+            OpCode::Neq => self.binary_op(|a, b| a.vm_neq(b))?,
+            OpCode::Gt => self.binary_op(|a, b| a.vm_gt(b))?,
+            OpCode::Gte => self.binary_op(|a, b| a.vm_gte(b))?,
+            OpCode::Lt => self.binary_op(|a, b| a.vm_lt(b))?,
+            OpCode::Lte => self.binary_op(|a, b| a.vm_lte(b))?,
+            OpCode::And => self.binary_op(|a, b| a.vm_and(b))?,
+            OpCode::Or => self.binary_op(|a, b| a.vm_or(b))?,
+            OpCode::Neg => {
+                let value = self
+                    .stack
+                    .pop()
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
+                let result = value.vm_neg().map_err(|e| RuminaError::runtime(e))?;
+                self.stack.push(result);
+            }
+            OpCode::Not => {
+                let value = self
+                    .stack
+                    .pop()
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
+                let result = value.vm_not().map_err(|e| RuminaError::runtime(e))?;
+                self.stack.push(result);
+            }
+            OpCode::Factorial => {
+                let value = self
+                    .stack
+                    .pop()
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
+                let result = value.vm_factorial().map_err(|e| RuminaError::runtime(e))?;
+                self.stack.push(result);
+            }
+            OpCode::Dup => {
+                let value = self
+                    .stack
+                    .last()
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?
+                    .clone();
+                self.stack.push(value);
+            }
+            OpCode::Pop => {
+                self.stack
+                    .pop()
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
+            }
+            _ => {
+                // For other complex operations (jumps, calls, etc.), don't JIT compile them yet
+                // This is a conservative approach - only optimize simple arithmetic sequences
+                return Err(RuminaError::runtime(format!(
+                    "Unsupported opcode in JIT trace: {:?}",
+                    opcode
+                )));
+            }
+        }
         Ok(())
     }
 
