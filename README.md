@@ -4,6 +4,37 @@
 
 一个用 Rust 编写的 Lamina 编程语言解释器，完全兼容 Lamina 语言规范。
 
+## 虚拟机架构
+
+Rumina VM 现已支持 **x86_64 风格的寄存器式虚拟机**，同时保持与原有栈式虚拟机的完全兼容。
+
+### 主要特性
+
+- ✅ **寄存器式架构**：14 个通用寄存器（RAX, RBX, RCX, RDX, RSI, RDI, R8-R15）
+- ✅ **x86_64 风格**：遵循 x86_64 指令集设计和调用约定
+- ✅ **三操作数格式**：现代 RISC 风格的指令格式（dst, src1, src2）
+- ✅ **完全向后兼容**：支持现有的所有栈式指令
+- ✅ **高效执行**：寄存器操作减少内存访问，提升性能
+
+详细文档请参阅 [REGISTER_VM.md](REGISTER_VM.md)
+
+### 示例：寄存器式指令
+
+```rust
+// 计算 (10 + 5) * 2
+MOV RAX, 10      // 将 10 加载到 RAX
+MOV RBX, 5       // 将 5 加载到 RBX  
+ADD RCX, RAX, RBX // RCX = RAX + RBX (15)
+MOV RDX, 2       // 将 2 加载到 RDX
+MUL RAX, RCX, RDX // RAX = RCX * RDX (30)
+HALT             // 结果从 RAX 寄存器返回
+```
+
+运行示例程序：
+```bash
+cargo run --example register_vm_demo
+```
+
 ## 项目结构
 
 Rumina 采用 Cargo workspace 结构，包含以下组件：

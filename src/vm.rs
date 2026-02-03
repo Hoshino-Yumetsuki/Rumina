@@ -710,6 +710,7 @@ impl ByteCode {
 
     // Helper function to parse register from string
     fn parse_register(s: &str) -> Result<Register, String> {
+        // Try to match by name
         match s {
             "RAX" => Ok(Register::RAX),
             "RBX" => Ok(Register::RBX),
@@ -1221,7 +1222,13 @@ impl VM {
         }
 
         // Return value from RAX register (x86_64 calling convention)
-        // Fall back to stack for backward compatibility
+        // Fall back to stack for backward compatibility with stack-based code
+        //
+        // Design note: We use Value::Null to distinguish between register and stack mode:
+        // - Register-based code explicitly sets RAX to a non-null value
+        // - Stack-based code never touches RAX (it remains Null)
+        // - To return Null from register code, use stack operations (PushConst, etc.)
+        // This provides clean backward compatibility while following x86_64 conventions
         if !matches!(self.registers[Register::RAX as usize], Value::Null) {
             Ok(Some(self.registers[Register::RAX as usize].clone()))
         } else {
