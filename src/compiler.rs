@@ -140,17 +140,28 @@ impl Compiler {
 
     /// Allocate a temporary register (R8-R15)
     fn alloc_reg(&mut self) -> Register {
-        let reg = Register::from_u8(self.next_temp_reg).unwrap_or(Register::R8);
+        assert!(self.next_temp_reg >= 8 && self.next_temp_reg <= 15, 
+            "Register allocation out of bounds: {}", self.next_temp_reg);
+        let reg = Register::from_u8(self.next_temp_reg)
+            .expect("next_temp_reg should always be valid (8-15)");
         self.next_temp_reg += 1;
         if self.next_temp_reg > 15 {
-            self.next_temp_reg = 8; // Wrap around (simple allocation)
+            // Wrap around - in a production compiler, this should error or spill to stack
+            self.next_temp_reg = 8;
         }
         self.reg_stack.push(reg);
         reg
     }
 
     /// Free a temporary register
-    fn free_reg(&mut self, _reg: Register) {
+    /// Note: Current implementation uses LIFO (stack) semantics
+    /// Registers must be freed in reverse order of allocation
+    fn free_reg(&mut self, reg: Register) {
+        // Validate that we're freeing the most recently allocated register
+        if let Some(&top_reg) = self.reg_stack.last() {
+            assert_eq!(top_reg, reg, 
+                "Register free order violation: expected {:?}, got {:?}", top_reg, reg);
+        }
         self.reg_stack.pop();
         if let Some(last_reg) = self.reg_stack.last() {
             self.next_temp_reg = last_reg.as_u8() + 1;
@@ -881,9 +892,9 @@ impl Compiler {
                         }
                     }
                     
-                    // Free all argument registers
-                    for arg_reg in arg_regs {
-                        self.free_reg(arg_reg);
+                    // Free all argument registers in reverse order (LIFO)
+                    for arg_reg in arg_regs.iter().rev() {
+                        self.free_reg(*arg_reg);
                     }
                     
                     self.emit(OpCode::CallVar(name.clone(), args.len()));
@@ -910,8 +921,9 @@ impl Compiler {
                         }
                     }
                     
-                    for arg_reg in arg_regs {
-                        self.free_reg(arg_reg);
+                    // Free all argument registers in reverse order (LIFO)
+                    for arg_reg in arg_regs.iter().rev() {
+                        self.free_reg(*arg_reg);
                     }
                     
                     let prefixed_name = format!("{}::{}", module, name);
@@ -947,8 +959,9 @@ impl Compiler {
                         }
                     }
                     
-                    for arg_reg in arg_regs {
-                        self.free_reg(arg_reg);
+                    // Free all argument registers in reverse order (LIFO)
+                    for arg_reg in arg_regs.iter().rev() {
+                        self.free_reg(*arg_reg);
                     }
                     
                     // Emit method call (object in RDI, method in RSI)
@@ -979,8 +992,9 @@ impl Compiler {
                         }
                     }
                     
-                    for arg_reg in arg_regs {
-                        self.free_reg(arg_reg);
+                    // Free all argument registers in reverse order (LIFO)
+                    for arg_reg in arg_regs.iter().rev() {
+                        self.free_reg(*arg_reg);
                     }
                     
                     // Emit dynamic call
@@ -995,18 +1009,22 @@ impl Compiler {
             Expr::Index { object, index } => {
                 let obj_reg = self.compile_expr(object)?;
                 let idx_reg = self.compile_expr(index)?;
-                let result_reg = self.alloc_reg();
-                self.emit(OpCode::Index(result_reg, obj_reg, idx_reg));
+                // Free source registers before allocating result (LIFO order)
                 self.free_reg(idx_reg);
                 self.free_reg(obj_reg);
+                // Now allocate result register
+                let result_reg = self.alloc_reg();
+                self.emit(OpCode::Index(result_reg, obj_reg, idx_reg));
                 Ok(result_reg)
             }
 
             Expr::Member { object, member } => {
                 let obj_reg = self.compile_expr(object)?;
+                // Free source register before allocating result
+                self.free_reg(obj_reg);
+                // Now allocate result register
                 let result_reg = self.alloc_reg();
                 self.emit(OpCode::Member(result_reg, obj_reg, member.clone()));
-                self.free_reg(obj_reg);
                 Ok(result_reg)
             }
 
