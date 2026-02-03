@@ -323,7 +323,7 @@ mod tests {
             assert!(!jit.record_execution(0));
         }
         
-        // HOT_THRESHOLD-th execution should trigger hotspot detection
+        // Execution at hot threshold should trigger hotspot detection
         assert!(jit.record_execution(0));
         
         // Mark as having a trace (simulate compilation)
