@@ -23,6 +23,10 @@ use crate::vm::OpCode;
 use std::mem;
 
 /// Threshold for considering a function "hot" and eligible for JIT compilation
+/// This value balances JIT compilation overhead with performance benefits:
+/// - Too low: wastes time compiling rarely-executed code
+/// - Too high: misses optimization opportunities
+/// 100 iterations provides good balance for typical workloads
 const HOT_THRESHOLD: usize = 100;
 
 /// JIT-compiled function type
@@ -212,7 +216,7 @@ impl JITCompiler {
         bytecode: &ByteCode,
         start_ip: usize,
         end_ip: usize,
-        _ctx_ptr: cranelift::prelude::Value,
+        ctx_ptr: cranelift::prelude::Value,
     ) -> Result<(), RuminaError> {
         // Simple implementation: just compile arithmetic operations
         // This is a basic starting point that can be extended

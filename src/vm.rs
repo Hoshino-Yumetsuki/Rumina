@@ -20,6 +20,10 @@ const ERR_BREAK_OUTSIDE_LOOP: &str = "Break outside of loop";
 const ERR_CONTINUE_OUTSIDE_LOOP: &str = "Continue outside of loop";
 const ERR_LAMBDA_ID_NOT_FOUND: &str = "Lambda ID not found";
 
+// Hot region detection limit: maximum instructions to scan ahead
+// This prevents excessive analysis of large code blocks
+const HOT_REGION_SCAN_LIMIT: usize = 100;
+
 /// Function definition information (boxed in OpCode to reduce size)
 #[derive(Debug, Clone, PartialEq)]
 pub struct FuncDefInfo {
@@ -972,12 +976,27 @@ impl VM {
                 // Try to compile the hot path (loop body or function)
                 // For now, we'll detect simple loop patterns
                 if let Some(end_ip) = self.detect_hot_region(current_ip) {
-                    if self.jit.compile_hot_path(&self.bytecode, current_ip, end_ip).is_ok() {
-                        // Try to execute the compiled version
-                        if self.jit.execute_compiled(current_ip, &mut self.stack).is_ok() {
-                            // JIT execution succeeded, skip the interpreted region
-                            self.ip = end_ip + 1;
-                            continue;
+                    match self.jit.compile_hot_path(&self.bytecode, current_ip, end_ip) {
+                        Ok(_) => {
+                            // Try to execute the compiled version
+                            match self.jit.execute_compiled(current_ip, &mut self.stack) {
+                                Ok(_) => {
+                                    // JIT execution succeeded, skip the interpreted region
+                                    self.ip = end_ip + 1;
+                                    continue;
+                                }
+                                Err(_e) => {
+                                    // JIT execution failed, fall back to interpreter
+                                    // Error is silently ignored as fallback is the expected behavior
+                                    #[cfg(debug_assertions)]
+                                    eprintln!("JIT execution failed at {}: {:?}, falling back to interpreter", current_ip, _e);
+                                }
+                            }
+                        }
+                        Err(_e) => {
+                            // JIT compilation failed, fall back to interpreter
+                            #[cfg(debug_assertions)]
+                            eprintln!("JIT compilation failed at {}: {:?}, falling back to interpreter", current_ip, _e);
                         }
                     }
                 }
@@ -1001,7 +1020,7 @@ impl VM {
         let mut ip = start_ip;
         let mut depth = 0;
         
-        while ip < self.bytecode.instructions.len() && ip < start_ip + 100 {
+        while ip < self.bytecode.instructions.len() && ip < start_ip + HOT_REGION_SCAN_LIMIT {
             match &self.bytecode.instructions[ip] {
                 OpCode::Jump(_) | OpCode::JumpIfFalse(_) | OpCode::JumpIfTrue(_) => {
                     // Found a jump, check if it's a backward jump (loop)

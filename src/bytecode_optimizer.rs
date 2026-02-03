@@ -34,7 +34,8 @@ impl BytecodeOptimizer {
             self.optimize_jump_chains(bytecode);
             self.eliminate_nop_patterns(bytecode);
             self.fuse_arithmetic_patterns(bytecode);
-            self.optimize_variable_access(bytecode);
+            // Note: optimize_variable_access is disabled as it requires control flow analysis
+            // to ensure safety (variables might be modified between PushVar operations)
 
             // If no changes were made in this iteration, we're done
             if self.modified == before_modified {
@@ -303,6 +304,11 @@ impl BytecodeOptimizer {
     
     /// Optimize variable access patterns
     /// Pattern: PushVar(x) -> PushVar(x)  ==>  PushVar(x) -> Dup
+    /// 
+    /// DISABLED: This optimization is not safe without control flow analysis.
+    /// Variables might be modified between the two PushVar operations,
+    /// especially in loops or after function calls.
+    #[allow(dead_code)]
     fn optimize_variable_access(&mut self, bytecode: &mut ByteCode) {
         let mut i = 0;
         let mut replacements = Vec::new();

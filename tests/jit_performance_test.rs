@@ -202,7 +202,11 @@ result;
         "VM time: {:?}, Interpreter time: {:?}, Speedup: {:.2}x",
         vm_time,
         interp_time,
-        interp_time.as_secs_f64() / vm_time.as_secs_f64()
+        if vm_time.as_secs_f64() > 0.0 {
+            interp_time.as_secs_f64() / vm_time.as_secs_f64()
+        } else {
+            0.0
+        }
     );
 
     // In release mode, VM should be faster or at least comparable
