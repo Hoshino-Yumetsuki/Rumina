@@ -1009,23 +1009,39 @@ impl Compiler {
             Expr::Index { object, index } => {
                 let obj_reg = self.compile_expr(object)?;
                 let idx_reg = self.compile_expr(index)?;
-                // Free source registers before allocating result (LIFO order)
-                self.free_reg(idx_reg);
-                self.free_reg(obj_reg);
-                // Now allocate result register
+                // Emit the instruction while source registers are still allocated
+                // (register numbers are captured in the instruction)
                 let result_reg = self.alloc_reg();
                 self.emit(OpCode::Index(result_reg, obj_reg, idx_reg));
-                Ok(result_reg)
+                // Free registers in correct LIFO order: result, idx, obj
+                self.free_reg(result_reg);
+                self.free_reg(idx_reg);
+                self.free_reg(obj_reg);
+                // Re-allocate for the result we're returning
+                let final_result = self.alloc_reg();
+                // The result value is at runtime in result_reg, need to preserve it
+                // Emit move if registers differ (they will if we consumed >1 register)
+                if final_result != result_reg {
+                    self.emit(OpCode::MovReg(final_result, result_reg));
+                }
+                Ok(final_result)
             }
 
             Expr::Member { object, member } => {
                 let obj_reg = self.compile_expr(object)?;
-                // Free source register before allocating result
-                self.free_reg(obj_reg);
-                // Now allocate result register
+                // Emit the instruction while source register is still allocated
                 let result_reg = self.alloc_reg();
                 self.emit(OpCode::Member(result_reg, obj_reg, member.clone()));
-                Ok(result_reg)
+                // Free registers in correct LIFO order: result, then obj
+                self.free_reg(result_reg);
+                self.free_reg(obj_reg);
+                // Re-allocate for the result we're returning
+                let final_result = self.alloc_reg();
+                // Emit move if registers differ
+                if final_result != result_reg {
+                    self.emit(OpCode::MovReg(final_result, result_reg));
+                }
+                Ok(final_result)
             }
 
             Expr::Lambda { params, body, .. } => {
