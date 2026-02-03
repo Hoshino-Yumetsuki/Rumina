@@ -26,6 +26,7 @@ use std::mem;
 const HOT_THRESHOLD: usize = 100;
 
 /// JIT-compiled function type
+#[cfg(feature = "jit")]
 type JitFunction = unsafe extern "C" fn(*mut JitContext) -> i64;
 
 /// Context passed to JIT-compiled functions

@@ -6,6 +6,7 @@
 /// - Remove dead code
 /// - Optimize jump patterns
 use crate::vm::{ByteCode, OpCode};
+use crate::vm_ops::VMOperations;
 
 /// Bytecode optimizer that performs peephole optimizations
 pub struct BytecodeOptimizer {
@@ -32,6 +33,8 @@ impl BytecodeOptimizer {
             self.merge_constant_operations(bytecode);
             self.optimize_jump_chains(bytecode);
             self.eliminate_nop_patterns(bytecode);
+            self.fuse_arithmetic_patterns(bytecode);
+            self.optimize_variable_access(bytecode);
 
             // If no changes were made in this iteration, we're done
             if self.modified == before_modified {
@@ -228,6 +231,102 @@ impl BytecodeOptimizer {
         for &idx in removals.iter().rev() {
             bytecode.instructions.remove(idx);
             bytecode.line_numbers.remove(idx);
+        }
+    }
+    
+    /// Fuse common arithmetic patterns for better performance
+    /// Pattern: PushConst(a) -> PushConst(b) -> Add  ==>  PushConst(a+b)
+    fn fuse_arithmetic_patterns(&mut self, bytecode: &mut ByteCode) {
+        let mut i = 0;
+        let mut replacements = Vec::new();
+        
+        while i + 2 < bytecode.instructions.len() {
+            let first = &bytecode.instructions[i];
+            let second = &bytecode.instructions[i + 1];
+            let third = &bytecode.instructions[i + 2];
+            
+            match (first, second, third) {
+                // Constant folding: two constants followed by binary op
+                (OpCode::PushConst(a), OpCode::PushConst(b), OpCode::Add) => {
+                    if let Ok(result) = a.vm_add(b) {
+                        replacements.push((i, i + 2, OpCode::PushConst(result)));
+                        self.modified = true;
+                        i += 3;
+                        continue;
+                    }
+                }
+                (OpCode::PushConst(a), OpCode::PushConst(b), OpCode::Sub) => {
+                    if let Ok(result) = a.vm_sub(b) {
+                        replacements.push((i, i + 2, OpCode::PushConst(result)));
+                        self.modified = true;
+                        i += 3;
+                        continue;
+                    }
+                }
+                (OpCode::PushConst(a), OpCode::PushConst(b), OpCode::Mul) => {
+                    if let Ok(result) = a.vm_mul(b) {
+                        replacements.push((i, i + 2, OpCode::PushConst(result)));
+                        self.modified = true;
+                        i += 3;
+                        continue;
+                    }
+                }
+                (OpCode::PushConst(a), OpCode::PushConst(b), OpCode::Div) => {
+                    if let Ok(result) = a.vm_div(b) {
+                        replacements.push((i, i + 2, OpCode::PushConst(result)));
+                        self.modified = true;
+                        i += 3;
+                        continue;
+                    }
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+        
+        // Apply replacements in reverse order to maintain indices
+        for (start, end, new_op) in replacements.into_iter().rev() {
+            // Remove the three instructions
+            for _ in start..=end {
+                bytecode.instructions.remove(start);
+                bytecode.line_numbers.remove(start);
+            }
+            // Insert the fused instruction
+            bytecode.instructions.insert(start, new_op);
+            if let Some(&line) = bytecode.line_numbers.get(start) {
+                bytecode.line_numbers.insert(start, line);
+            } else {
+                bytecode.line_numbers.insert(start, None);
+            }
+        }
+    }
+    
+    /// Optimize variable access patterns
+    /// Pattern: PushVar(x) -> PushVar(x)  ==>  PushVar(x) -> Dup
+    fn optimize_variable_access(&mut self, bytecode: &mut ByteCode) {
+        let mut i = 0;
+        let mut replacements = Vec::new();
+        
+        while i + 1 < bytecode.instructions.len() {
+            let first = &bytecode.instructions[i];
+            let second = &bytecode.instructions[i + 1];
+            
+            match (first, second) {
+                // Same variable pushed twice - second can be a Dup
+                (OpCode::PushVar(name1), OpCode::PushVar(name2)) if name1 == name2 => {
+                    replacements.push(i + 1);
+                    self.modified = true;
+                    i += 2;
+                }
+                _ => {
+                    i += 1;
+                }
+            }
+        }
+        
+        // Replace marked instructions with Dup
+        for &idx in replacements.iter().rev() {
+            bytecode.instructions[idx] = OpCode::Dup;
         }
     }
 }
