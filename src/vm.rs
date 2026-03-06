@@ -1239,6 +1239,28 @@ impl VM {
                             )));
                         }
                     }
+                    Value::Array(_) => {
+                        match member_name.as_str() {
+                            "foreach" | "map" | "filter" | "reduce" | "fold" | "push"
+                            | "pop" => {
+                                let globals = self.globals.borrow();
+                                if let Some(value) = globals.get(member_name) {
+                                    self.stack.push(value.clone());
+                                } else {
+                                    return Err(RuminaError::runtime(format!(
+                                        "Undefined array method '{}'",
+                                        member_name
+                                    )));
+                                }
+                            }
+                            _ => {
+                                return Err(RuminaError::runtime(format!(
+                                    "array does not have member '{}'",
+                                    member_name
+                                )));
+                            }
+                        }
+                    }
                     _ => {
                         // Non-struct/module type - track miss
                         if let Some(cache) = self.member_cache.get_mut(&cache_addr) {
@@ -1829,8 +1851,17 @@ impl VM {
                         }
                     }
                     Value::NativeFunction {
-                        func: native_fn, ..
+                        name, func: native_fn, ..
                     } => {
+                        if matches!(
+                            name.as_str(),
+                            "foreach" | "map" | "filter" | "reduce" | "fold"
+                        ) {
+                            return Err(RuminaError::runtime(format!(
+                                "Higher-order array method '{}' is not yet supported by the VM",
+                                name
+                            )));
+                        }
                         let mut native_args = Vec::with_capacity(args.len() + 1);
                         native_args.push(object);
                         native_args.extend(args);

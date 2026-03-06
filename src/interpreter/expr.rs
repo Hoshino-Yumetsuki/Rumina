@@ -9,6 +9,103 @@ use crate::value::Value;
 use super::Interpreter;
 
 impl Interpreter {
+    fn try_call_special_method(
+        &mut self,
+        obj: Value,
+        member: &str,
+        args: Vec<Value>,
+    ) -> Option<Result<Value, String>> {
+        if let Value::Array(_) = &obj {
+            return Some(self.call_array_method(obj, member, args));
+        }
+
+        if member == "curried" {
+            if !args.is_empty() {
+                return Some(Err("curried() does not take arguments".to_string()));
+            }
+
+            let curried = match &obj {
+                Value::Function { params, .. } | Value::Lambda { params, .. } => {
+                    Value::CurriedFunction {
+                        original: Box::new(obj.clone()),
+                        collected_args: Vec::new(),
+                        total_params: params.len(),
+                    }
+                }
+                Value::NativeFunction { .. } => {
+                    return Some(Err("Cannot curry native functions".to_string()));
+                }
+                _ => {
+                    return Some(Err(format!(
+                        "Type {} does not have method 'curried'",
+                        obj.type_name()
+                    )));
+                }
+            };
+
+            return Some(Ok(curried));
+        }
+
+        None
+    }
+
+    fn eval_pipe_expr(&mut self, left: &Expr, right: &Expr) -> Result<Value, String> {
+        let left_value = self.eval_expr(left)?;
+
+        match right {
+            Expr::Call { func, args } => {
+                if let Expr::Member { object, member } = &**func {
+                    let obj = self.eval_expr(object)?;
+
+                    let mut arg_vals = Vec::with_capacity(args.len() + 1);
+                    arg_vals.push(left_value.clone());
+                    for arg in args {
+                        arg_vals.push(self.eval_expr(arg)?);
+                    }
+
+                    if let Value::Array(_) = &obj {
+                        return self.call_array_method(obj, member, arg_vals);
+                    }
+
+                    if member == "curried" {
+                        let curried = match self.try_call_special_method(obj.clone(), member, Vec::new())
+                        {
+                            Some(Ok(value)) => value,
+                            Some(Err(err)) => return Err(err),
+                            None => unreachable!("curried should be handled as a special method"),
+                        };
+
+                        return self.call_function(curried, vec![left_value]);
+                    }
+
+                    let method = match &obj {
+                        Value::Struct(s) | Value::Module(s) => {
+                            let s = s.borrow();
+                            s.get(member).cloned().ok_or_else(|| {
+                                format!("{} does not have member '{}'", obj.type_name(), member)
+                            })?
+                        }
+                        _ => return Err(format!("Cannot access member of {}", obj.type_name())),
+                    };
+
+                    self.call_method(method, obj, arg_vals)
+                } else {
+                    let func_val = self.eval_expr(func)?;
+                    let mut arg_vals = Vec::with_capacity(args.len() + 1);
+                    arg_vals.push(left_value);
+                    for arg in args {
+                        arg_vals.push(self.eval_expr(arg)?);
+                    }
+                    self.call_function(func_val, arg_vals)
+                }
+            }
+            _ => {
+                let func_val = self.eval_expr(right)?;
+                self.call_function(func_val, vec![left_value])
+            }
+        }
+    }
+
     pub(super) fn eval_expr(&mut self, expr: &Expr) -> Result<Value, String> {
         match expr {
             Expr::Int(n) => Ok(Value::Int(*n)),
@@ -37,9 +134,21 @@ impl Interpreter {
             }
 
             Expr::Binary { left, op, right } => {
-                let l = self.eval_expr(left)?;
-                let r = self.eval_expr(right)?;
-                self.eval_binary_op(&l, *op, &r)
+                if *op == crate::ast::BinOp::Pipe {
+                    self.eval_pipe_expr(left, right)
+                } else {
+                    let l = self.eval_expr(left)?;
+                    let r = self.eval_expr(right)?;
+                    self.eval_binary_op(&l, *op, &r)
+                }
+            }
+
+            Expr::Multi(values) => {
+                let mut evaluated = Vec::with_capacity(values.len());
+                for value in values {
+                    evaluated.push(self.eval_expr(value)?);
+                }
+                Ok(Value::normalize_multi(evaluated))
             }
 
             Expr::Unary { op, expr } => {
@@ -52,31 +161,14 @@ impl Interpreter {
                 if let Expr::Member { object, member } = &**func {
                     let obj = self.eval_expr(object)?;
 
-                    // 特殊处理 .curried() 方法
-                    if member == "curried" {
-                        match &obj {
-                            Value::Function { params, .. } | Value::Lambda { params, .. } => {
-                                // curried() 不接受参数
-                                if !args.is_empty() {
-                                    return Err("curried() does not take arguments".to_string());
-                                }
-                                // 返回柯里化版本
-                                return Ok(Value::CurriedFunction {
-                                    original: Box::new(obj.clone()),
-                                    collected_args: Vec::new(),
-                                    total_params: params.len(),
-                                });
-                            }
-                            Value::NativeFunction { .. } => {
-                                return Err("Cannot curry native functions".to_string());
-                            }
-                            _ => {
-                                return Err(format!(
-                                    "Type {} does not have method 'curried'",
-                                    obj.type_name()
-                                ));
-                            }
-                        }
+                    let arg_vals: Result<Vec<_>, _> =
+                        args.iter().map(|a| self.eval_expr(a)).collect();
+                    let arg_vals = arg_vals?;
+
+                    if let Some(result) =
+                        self.try_call_special_method(obj.clone(), member, arg_vals.clone())
+                    {
+                        return result;
                     }
 
                     // 获取方法
@@ -89,11 +181,6 @@ impl Interpreter {
                         }
                         _ => return Err(format!("Cannot access member of {}", obj.type_name())),
                     };
-
-                    // 计算参数
-                    let arg_vals: Result<Vec<_>, _> =
-                        args.iter().map(|a| self.eval_expr(a)).collect();
-                    let arg_vals = arg_vals?;
 
                     // 调用方法，并注入self
                     self.call_method(method, obj, arg_vals)
@@ -175,6 +262,15 @@ impl Interpreter {
                         })
                     }
                     _ => Err(format!("'{}' is not a module", module)),
+                }
+            }
+
+            Expr::Try(expr) => {
+                let value = self.eval_expr(expr)?;
+                match value {
+                    Value::Result { ok: true, value } => Ok(*value),
+                    Value::Result { ok: false, value } => self.propagate_result(*value),
+                    other => Err(format!("? operator expects result, got {}", other.type_name())),
                 }
             }
         }

@@ -16,6 +16,21 @@ use crate::value::{IrrationalValue, Value, irrational_to_float};
 use super::Interpreter;
 
 impl Interpreter {
+    fn map_binary_multivalue(
+        &mut self,
+        left: &[Value],
+        op: BinOp,
+        right: &[Value],
+    ) -> Result<Value, String> {
+        let mut results = Vec::new();
+        for l in left {
+            for r in right {
+                results.push(self.eval_binary_op(l, op, r)?);
+            }
+        }
+        Ok(Value::normalize_multi(results))
+    }
+
     pub(super) fn compute_power(&self, base: f64, exponent: f64) -> Result<Value, String> {
         // Check if exponent is a simple rational (1/n form)
         let denom_approx = (1.0 / exponent).round();
@@ -141,6 +156,10 @@ impl Interpreter {
         op: BinOp,
         right: &Value,
     ) -> Result<Value, String> {
+        if matches!(left, Value::MultiValue(_)) || matches!(right, Value::MultiValue(_)) {
+            return self.map_binary_multivalue(&left.expand_multivalue(), op, &right.expand_multivalue());
+        }
+
         match (left, right) {
             (Value::Int(a), Value::Int(b)) => {
                 match op {
@@ -1383,6 +1402,14 @@ impl Interpreter {
     }
 
     pub fn eval_unary_op(&mut self, op: UnaryOp, val: &Value) -> Result<Value, String> {
+        if let Value::MultiValue(values) = val {
+            let mut results = Vec::new();
+            for value in values {
+                results.push(self.eval_unary_op(op, value)?);
+            }
+            return Ok(Value::normalize_multi(results));
+        }
+
         match op {
             UnaryOp::Neg => match val {
                 Value::Int(n) => Ok(Value::Int(-n)),

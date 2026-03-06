@@ -96,6 +96,9 @@ pub enum Stmt {
     // Include模块
     Include(String),
 
+    // try/catch
+    TryCatch(Box<Stmt>, String, Box<Stmt>),
+
     // 块语句
     Block(Vec<Stmt>),
     Empty,
@@ -126,6 +129,9 @@ pub enum Expr {
         op: BinOp,
         right: Box<Expr>,
     },
+
+    // 多值表达式
+    Multi(Vec<Expr>),
 
     // 一元运算
     Unary {
@@ -163,6 +169,9 @@ pub enum Expr {
         module: String,
         name: String,
     },
+
+    // ? 错误传播
+    Try(Box<Expr>),
 }
 
 /// 二元运算符
@@ -174,6 +183,7 @@ pub enum BinOp {
     Div, // /
     Mod, // %
     Pow, // ^
+    Pipe, // |>
 
     Equal,     // ==
     NotEqual,  // !=
@@ -203,6 +213,7 @@ impl fmt::Display for BinOp {
             BinOp::Div => write!(f, "/"),
             BinOp::Mod => write!(f, "%"),
             BinOp::Pow => write!(f, "^"),
+            BinOp::Pipe => write!(f, "|>"),
             BinOp::Equal => write!(f, "=="),
             BinOp::NotEqual => write!(f, "!="),
             BinOp::Greater => write!(f, ">"),

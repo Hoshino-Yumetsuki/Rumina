@@ -1,4 +1,18 @@
-use rumina::{Value, run_rumina};
+use rumina::{run_rumina, Value};
+
+fn expect_int(result: Result<Option<Value>, rumina::RuminaError>) -> i64 {
+    match result.unwrap() {
+        Some(Value::Int(n)) => n,
+        other => panic!("Expected Int, got {:?}", other),
+    }
+}
+
+fn expect_array(result: Result<Option<Value>, rumina::RuminaError>) -> Vec<Value> {
+    match result.unwrap() {
+        Some(Value::Array(values)) => values.borrow().clone(),
+        other => panic!("Expected Array, got {:?}", other),
+    }
+}
 
 fn expect_float(result: Result<Option<Value>, rumina::RuminaError>) -> f64 {
     match result.unwrap() {
@@ -29,6 +43,49 @@ fn test_pipeline_operator_basic() {
         Some(Value::Int(n)) => assert_eq!(n, 3),
         other => panic!("Expected Int(3), got {:?}", other),
     }
+}
+
+#[test]
+fn test_array_instance_map() {
+    let values = expect_array(run_rumina("var nums = [1, 2, 3]; nums.map(|x| x * x);"));
+    assert_eq!(values, vec![Value::Int(1), Value::Int(4), Value::Int(9)]);
+}
+
+#[test]
+fn test_array_instance_filter() {
+    let values = expect_array(run_rumina(
+        "var nums = [1, 2, 3, 4]; nums.filter(|x| x % 2 == 0);",
+    ));
+    assert_eq!(values, vec![Value::Int(2), Value::Int(4)]);
+}
+
+#[test]
+fn test_array_instance_reduce() {
+    let result = expect_int(run_rumina(
+        "var nums = [1, 2, 3, 4]; nums.reduce(|acc, x| acc + x, 0);",
+    ));
+    assert_eq!(result, 10);
+}
+
+#[test]
+fn test_try_catch_catches_runtime_error() {
+    let result = run_rumina(
+        "var caught = \"\"; try { missing(); } catch (e) { caught = e; } caught;",
+    )
+    .unwrap();
+    match result {
+        Some(Value::String(message)) => {
+            assert!(message.contains("Undefined variable: missing"), "got {message}");
+        }
+        other => panic!("Expected caught error string, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_line_continuation_runtime() {
+    let result = expect_int(run_rumina("var x = 1\\
+ + 2; x;"));
+    assert_eq!(result, 3);
 }
 
 #[test]

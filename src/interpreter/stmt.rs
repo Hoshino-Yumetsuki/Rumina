@@ -432,6 +432,33 @@ impl Interpreter {
 
                 Ok(())
             }
+            Stmt::TryCatch(try_block, error_name, catch_block) => {
+                match self.execute_stmt(try_block) {
+                    Ok(()) => Ok(()),
+                    Err(err) => {
+                        let catch_value = if Self::is_result_propagation(&err) {
+                            self.take_propagated_result()
+                                .unwrap_or(Value::String("Unknown propagated error".to_string()))
+                        } else {
+                            Value::String(err)
+                        };
+
+                        let mut scope = HashMap::new();
+                        scope.insert(error_name.clone(), catch_value);
+                        self.locals.push(Rc::new(RefCell::new(scope)));
+                        self.immutable_locals.push(std::collections::HashSet::new());
+
+                        let result = self.execute_stmt(catch_block);
+
+                        self.locals.pop();
+                        if self.immutable_locals.pop().is_none() {
+                            return Err("Internal error: immutable scope stack underflow".to_string());
+                        }
+
+                        result
+                    }
+                }
+            }
             Stmt::Block(stmts) => {
                 for stmt in stmts {
                     self.execute_stmt(stmt)?;

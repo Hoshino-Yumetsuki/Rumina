@@ -43,6 +43,91 @@ pub fn run_rumina(source: &str) -> Result<Option<Value>, RuminaError> {
     run_rumina_with_dir(source, None)
 }
 
+fn should_use_interpreter_runtime(statements: &[ast::Stmt]) -> bool {
+    fn stmt_requires_interpreter(stmt: &ast::Stmt) -> bool {
+        match stmt {
+            ast::Stmt::TryCatch(_, _, _) => true,
+            ast::Stmt::Expr(expr)
+            | ast::Stmt::VarDecl { value: expr, .. }
+            | ast::Stmt::LetDecl { value: expr, .. }
+            | ast::Stmt::Assign { value: expr, .. } => expr_requires_interpreter(expr),
+            ast::Stmt::MemberAssign { object, value, .. } => {
+                expr_requires_interpreter(object) || expr_requires_interpreter(value)
+            }
+            ast::Stmt::FuncDef { body, .. } | ast::Stmt::Block(body) => {
+                body.iter().any(stmt_requires_interpreter)
+            }
+            ast::Stmt::Return(Some(expr)) => expr_requires_interpreter(expr),
+            ast::Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                expr_requires_interpreter(condition)
+                    || then_branch.iter().any(stmt_requires_interpreter)
+                    || else_branch
+                        .as_ref()
+                        .map(|branch| branch.iter().any(stmt_requires_interpreter))
+                        .unwrap_or(false)
+            }
+            ast::Stmt::While { condition, body } => {
+                expr_requires_interpreter(condition) || body.iter().any(stmt_requires_interpreter)
+            }
+            ast::Stmt::For {
+                init,
+                condition,
+                update,
+                body,
+            } => {
+                init.as_ref().map(|stmt| stmt_requires_interpreter(stmt)).unwrap_or(false)
+                    || condition
+                        .as_ref()
+                        .map(expr_requires_interpreter)
+                        .unwrap_or(false)
+                    || update
+                        .as_ref()
+                        .map(|stmt| stmt_requires_interpreter(stmt))
+                        .unwrap_or(false)
+                    || body.iter().any(stmt_requires_interpreter)
+            }
+            ast::Stmt::Loop { body } => body.iter().any(stmt_requires_interpreter),
+            _ => false,
+        }
+    }
+
+    fn expr_requires_interpreter(expr: &ast::Expr) -> bool {
+        match expr {
+            ast::Expr::Try(_) => true,
+            ast::Expr::Member { object, .. } => {
+                matches!(object.as_ref(), ast::Expr::Array(_)) || expr_requires_interpreter(object)
+            }
+            ast::Expr::Call { func, args } => {
+                matches!(func.as_ref(), ast::Expr::Member { .. })
+                    || expr_requires_interpreter(func)
+                    || args.iter().any(expr_requires_interpreter)
+            }
+            ast::Expr::Binary { left, right, .. } => {
+                matches!(expr, ast::Expr::Binary { op: ast::BinOp::Pipe, .. })
+                    || expr_requires_interpreter(left)
+                    || expr_requires_interpreter(right)
+            }
+            ast::Expr::Index { object, index } => {
+                expr_requires_interpreter(object) || expr_requires_interpreter(index)
+            }
+            ast::Expr::Unary { expr, .. } => expr_requires_interpreter(expr),
+            ast::Expr::Array(items) => items.iter().any(expr_requires_interpreter),
+            ast::Expr::Struct(fields) => {
+                fields.iter().any(|(_, expr)| expr_requires_interpreter(expr))
+            }
+            ast::Expr::Lambda { body, .. } => stmt_requires_interpreter(body),
+            ast::Expr::Multi(_) => true,
+            _ => false,
+        }
+    }
+
+    statements.iter().any(stmt_requires_interpreter)
+}
+
 /// Run Lamina code using the VM with a specific working directory
 ///
 /// This allows proper resolution of include statements with relative paths.
@@ -64,6 +149,11 @@ pub fn run_rumina_with_dir(
 
     let mut parser = Parser::new(tokens);
     let ast = parser.parse().map_err(|e| RuminaError::runtime(e))?;
+
+    if should_use_interpreter_runtime(&ast) {
+        let mut interpreter = Interpreter::new();
+        return interpreter.interpret(ast);
+    }
 
     // Apply AST optimization passes
     let mut optimizer = ASTOptimizer::new();

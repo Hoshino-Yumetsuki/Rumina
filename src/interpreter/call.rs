@@ -110,7 +110,14 @@ impl Interpreter {
                 self.recursion_depth -= 1;
 
                 // Check execution result
-                exec_result?;
+                if let Err(err) = exec_result {
+                    if Interpreter::is_result_propagation(&err) {
+                        return self
+                            .take_propagated_result()
+                            .ok_or_else(|| "Missing propagated result value".to_string());
+                    }
+                    return Err(err);
+                }
 
                 // 获取返回值
                 let result = self.return_value.take().unwrap_or(Value::Null);
@@ -167,7 +174,14 @@ impl Interpreter {
                 self.recursion_depth -= 1;
 
                 // Check execution result
-                exec_result?;
+                if let Err(err) = exec_result {
+                    if Interpreter::is_result_propagation(&err) {
+                        return self
+                            .take_propagated_result()
+                            .ok_or_else(|| "Missing propagated result value".to_string());
+                    }
+                    return Err(err);
+                }
 
                 // 获取返回值
                 let result = self.return_value.take().unwrap_or(Value::Null);
@@ -217,7 +231,14 @@ impl Interpreter {
                 self.immutable_locals.push(std::collections::HashSet::new());
 
                 // 执行函数体
-                self.execute_stmt(&body)?;
+                if let Err(err) = self.execute_stmt(&body) {
+                    if Interpreter::is_result_propagation(&err) {
+                        return self
+                            .take_propagated_result()
+                            .ok_or_else(|| "Missing propagated result value".to_string());
+                    }
+                    return Err(err);
+                }
 
                 // 弹出局部作用域
                 self.locals.pop();
@@ -253,7 +274,14 @@ impl Interpreter {
                 self.immutable_locals.push(std::collections::HashSet::new());
 
                 // 执行函数体
-                self.execute_stmt(&body)?;
+                if let Err(err) = self.execute_stmt(&body) {
+                    if Interpreter::is_result_propagation(&err) {
+                        return self
+                            .take_propagated_result()
+                            .ok_or_else(|| "Missing propagated result value".to_string());
+                    }
+                    return Err(err);
+                }
 
                 // 弹出局部作用域
                 self.locals.pop();
@@ -274,6 +302,27 @@ impl Interpreter {
             }
 
             _ => Err(format!("Cannot call method on {}", func.type_name())),
+        }
+    }
+
+    pub(super) fn call_array_method(
+        &mut self,
+        array: Value,
+        member: &str,
+        args: Vec<Value>,
+    ) -> Result<Value, String> {
+        let mut all_args = Vec::with_capacity(args.len() + 1);
+        all_args.push(array);
+        all_args.extend(args);
+
+        match member {
+            "foreach" => self.handle_foreach(&all_args),
+            "map" => self.handle_map(&all_args),
+            "filter" => self.handle_filter(&all_args),
+            "reduce" | "fold" => self.handle_reduce(&all_args),
+            "push" => crate::builtin::array::push(&all_args),
+            "pop" => crate::builtin::array::pop(&all_args),
+            other => Err(format!("array does not have member '{}'", other)),
         }
     }
 

@@ -29,6 +29,8 @@ pub enum Token {
     Continue,
     Include,
     Do,
+    Try,
+    Catch,
 
     // LSR-005: Type keywords for type declarations
     TypeInt,
@@ -48,6 +50,7 @@ pub enum Token {
     Percent, // %
     Caret,   // ^ (幂运算)
     Bang,    // ! (阶乘或逻辑非)
+    Question, // ?
 
     // 比较运算符
     Equal,        // =
@@ -94,6 +97,9 @@ impl std::fmt::Display for Token {
             Token::Decimal(s) => write!(f, "{}", s),
             Token::String(s) => write!(f, "\"{}\"", s),
             Token::Ident(s) => write!(f, "{}", s),
+            Token::Try => write!(f, "try"),
+            Token::Catch => write!(f, "catch"),
+            Token::Question => write!(f, "?"),
             _ => write!(f, "{:?}", self),
         }
     }

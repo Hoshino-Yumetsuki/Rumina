@@ -161,6 +161,7 @@ impl Parser {
                 Ok(Stmt::Continue)
             }
             Token::Include => self.parse_include(),
+            Token::Try => self.parse_try_catch(),
             Token::LBrace => self.parse_block(),
             Token::Ident(_) => {
                 // 可能是赋值、成员赋值或表达式语句
@@ -521,6 +522,34 @@ impl Parser {
         Ok(Stmt::Include(path))
     }
 
+    fn parse_try_catch(&mut self) -> Result<Stmt, String> {
+        self.expect(Token::Try)?;
+
+        let try_block = self.parse_block()?;
+
+        self.expect(Token::Catch)?;
+        self.expect(Token::LParen)?;
+
+        let error_name = if let Token::Ident(name) = self.current_token() {
+            name.clone()
+        } else {
+            return Err(format!(
+                "Expected catch binding name, found {:?}",
+                self.current_token()
+            ));
+        };
+        self.advance();
+
+        self.expect(Token::RParen)?;
+        let catch_block = self.parse_block()?;
+
+        Ok(Stmt::TryCatch(
+            Box::new(try_block),
+            error_name,
+            Box::new(catch_block),
+        ))
+    }
+
     fn parse_block(&mut self) -> Result<Stmt, String> {
         self.expect(Token::LBrace)?;
         let statements = self.parse_block_statements()?;
@@ -542,33 +571,33 @@ impl Parser {
     }
 
     fn parse_pipeline(&mut self) -> Result<Expr, String> {
-        let mut left = self.parse_or()?;
+        let left = self.parse_multi_value()?;
 
-        while self.match_token(&Token::PipeForward) {
-            let right = self.parse_or()?;
-            left = Self::transform_pipeline(left, right)?;
+        if self.match_token(&Token::PipeForward) {
+            let right = self.parse_pipeline()?;
+            Ok(Expr::Binary {
+                left: Box::new(left),
+                op: BinOp::Pipe,
+                right: Box::new(right),
+            })
+        } else {
+            Ok(left)
         }
-
-        Ok(left)
     }
 
-    fn transform_pipeline(left: Expr, right: Expr) -> Result<Expr, String> {
-        match right {
-            Expr::Call { func, mut args } => {
-                let mut new_args = Vec::with_capacity(args.len() + 1);
-                new_args.push(left);
-                new_args.append(&mut args);
-                Ok(Expr::Call {
-                    func,
-                    args: new_args,
-                })
-            }
-            Expr::Ident(_) | Expr::Namespace { .. } | Expr::Member { .. } => Ok(Expr::Call {
-                func: Box::new(right),
-                args: vec![left],
-            }),
-            _ => Err("Pipeline right-hand side must be a callable expression".to_string()),
+    fn parse_multi_value(&mut self) -> Result<Expr, String> {
+        let first = self.parse_or()?;
+
+        if !matches!(self.current_token(), Token::Pipe) {
+            return Ok(first);
         }
+
+        let mut values = vec![first];
+        while self.match_token(&Token::Pipe) {
+            values.push(self.parse_or()?);
+        }
+
+        Ok(Expr::Multi(values))
     }
 
     fn parse_or(&mut self) -> Result<Expr, String> {
@@ -774,6 +803,10 @@ impl Parser {
                         op: UnaryOp::Factorial,
                         expr: Box::new(expr),
                     };
+                }
+                Token::Question => {
+                    self.advance();
+                    expr = Expr::Try(Box::new(expr));
                 }
                 _ => break,
             }

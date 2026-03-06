@@ -52,6 +52,8 @@ pub struct Interpreter {
 }
 
 impl Interpreter {
+    const RESULT_PROPAGATION_SIGNAL: &'static str = "__rumina_result_propagation__";
+
     pub fn new() -> Self {
         let mut globals = HashMap::new();
         builtin::register_builtins(&mut globals);
@@ -109,16 +111,51 @@ impl Interpreter {
         result.map_err(|e| self.wrap_error(e))
     }
 
+    pub(super) fn is_result_propagation(err: &str) -> bool {
+        err == Self::RESULT_PROPAGATION_SIGNAL
+    }
+
+    pub(super) fn propagate_result(&mut self, value: Value) -> Result<Value, String> {
+        self.return_value = Some(Value::Result {
+            ok: false,
+            value: Box::new(value),
+        });
+        Err(Self::RESULT_PROPAGATION_SIGNAL.to_string())
+    }
+
+    pub(super) fn take_propagated_result(&mut self) -> Option<Value> {
+        match self.return_value.take() {
+            Some(value @ Value::Result { ok: false, .. }) => Some(value),
+            Some(other) => {
+                self.return_value = Some(other);
+                None
+            }
+            None => None,
+        }
+    }
+
     pub fn interpret(&mut self, statements: Vec<Stmt>) -> Result<Option<Value>, RuminaError> {
         let mut last_value = None;
         for stmt in statements {
             // 如果是表达式语句,保存其值
             if let Stmt::Expr(expr) = stmt {
-                let result = self.eval_expr(&expr);
-                last_value = Some(self.convert_result(result)?);
+                match self.eval_expr(&expr) {
+                    Ok(value) => last_value = Some(self.convert_result(Ok(value))?),
+                    Err(err) if Self::is_result_propagation(&err) => {
+                        last_value = self.take_propagated_result();
+                        break;
+                    }
+                    Err(err) => return Err(self.wrap_error(err)),
+                }
             } else {
-                let result = self.execute_stmt(&stmt);
-                self.convert_result(result)?;
+                match self.execute_stmt(&stmt) {
+                    Ok(()) => {}
+                    Err(err) if Self::is_result_propagation(&err) => {
+                        last_value = self.take_propagated_result();
+                        break;
+                    }
+                    Err(err) => return Err(self.wrap_error(err)),
+                }
             }
 
             if self.return_value.is_some() || self.break_flag || self.continue_flag {

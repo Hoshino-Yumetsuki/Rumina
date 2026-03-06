@@ -1,6 +1,7 @@
 use num::BigInt;
 use num::BigRational;
 use std::cell::RefCell;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
@@ -19,6 +20,10 @@ pub enum Value {
     Bool(bool),
     String(String),
     Null,
+    Set(Vec<Value>),
+    MultiValue(Vec<Value>),
+    Result { ok: bool, value: Box<Value> },
+    Option(Option<Box<Value>>),
     Array(Rc<RefCell<Vec<Value>>>),
     Struct(Rc<RefCell<HashMap<String, Value>>>),
     Lambda {
@@ -71,6 +76,10 @@ impl Value {
             Value::Bool(_) => "bool",
             Value::String(_) => "string",
             Value::Null => "null",
+            Value::Set(_) => "set",
+            Value::MultiValue(_) => "multi_value",
+            Value::Result { .. } => "result",
+            Value::Option(_) => "option",
             Value::Array(_) => "array",
             Value::Struct(_) => "struct",
             Value::Lambda { .. } => "lambda",
@@ -88,6 +97,7 @@ impl Value {
             Value::Null => false,
             Value::Int(0) => false,
             Value::Float(f) if *f == 0.0 => false,
+            Value::MultiValue(values) => values.iter().any(Value::is_truthy),
             Value::Complex(re, im) => {
                 // Complex is truthy if either real or imaginary part is non-zero
                 re.is_truthy() || im.is_truthy()
@@ -134,6 +144,27 @@ impl Value {
             Value::Float(f) => Ok(*f as i64),
             Value::Bool(b) => Ok(if *b { 1 } else { 0 }),
             _ => Err(format!("Cannot convert {} to int", self.type_name())),
+        }
+    }
+
+    pub fn normalize_multi(values: Vec<Value>) -> Value {
+        let mut flattened = Vec::new();
+        for value in values {
+            match value {
+                Value::MultiValue(inner) => flattened.extend(inner),
+                other => flattened.push(other),
+            }
+        }
+
+        flattened.sort_by(compare_value_for_multivalue);
+        flattened.dedup_by(|a, b| multivalue_sort_key(a) == multivalue_sort_key(b));
+        Value::MultiValue(flattened)
+    }
+
+    pub fn expand_multivalue(&self) -> Vec<Value> {
+        match self {
+            Value::MultiValue(values) => values.clone(),
+            other => vec![other.clone()],
         }
     }
 }
@@ -219,6 +250,39 @@ impl fmt::Display for Value {
             Value::Bool(b) => write!(f, "{}", b),
             Value::String(s) => write!(f, "{}", s),
             Value::Null => write!(f, "null"),
+            Value::Set(values) => {
+                write!(f, "{{")?;
+                for (i, value) in values.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", value)?;
+                }
+                write!(f, "}}")
+            }
+            Value::MultiValue(values) => {
+                for (i, value) in values.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, "|")?;
+                    }
+                    write!(f, "{}", value)?;
+                }
+                Ok(())
+            }
+            Value::Result { ok, value } => {
+                if *ok {
+                    write!(f, "Ok({})", value)
+                } else {
+                    write!(f, "Err({})", value)
+                }
+            }
+            Value::Option(value) => {
+                if let Some(value) = value {
+                    write!(f, "Some({})", value)
+                } else {
+                    write!(f, "None")
+                }
+            }
             Value::Array(arr) => {
                 let arr = arr.borrow();
                 write!(f, "[")?;
@@ -266,6 +330,14 @@ impl fmt::Display for Value {
             }
         }
     }
+}
+
+fn multivalue_sort_key(value: &Value) -> String {
+    format!("{}:{}", value.type_name(), value)
+}
+
+fn compare_value_for_multivalue(left: &Value, right: &Value) -> Ordering {
+    multivalue_sort_key(left).cmp(&multivalue_sort_key(right))
 }
 
 // Helper function to convert irrational values to float approximations

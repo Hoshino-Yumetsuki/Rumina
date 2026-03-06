@@ -119,7 +119,7 @@ impl Lexer {
             if ch.is_ascii_digit() {
                 num_str.push(ch);
                 self.advance();
-            } else if ch == '.' && !is_float && self.peek().map_or(false, |c| c.is_ascii_digit()) {
+            } else if ch == '.' && !is_float && self.peek().is_some_and(|c| c.is_ascii_digit()) {
                 is_float = true;
                 num_str.push(ch);
                 self.advance();
@@ -234,6 +234,8 @@ impl Lexer {
             "continue" => Token::Continue,
             "include" => Token::Include,
             "do" => Token::Do,
+            "try" => Token::Try,
+            "catch" => Token::Catch,
             "true" => Token::True,
             "false" => Token::False,
             "null" => Token::Null,
@@ -261,21 +263,6 @@ impl Lexer {
             {
                 self.skip_comment();
                 continue;
-            }
-
-            // 跳过续行符（支持 \n 和 \r\n）
-            if self.current_char == Some('\\') {
-                let next = self.peek();
-                if next == Some('\n') || next == Some('\r') {
-                    self.advance(); // 跳过 \
-                    if self.current_char == Some('\r') {
-                        self.advance(); // 跳过 \r
-                    }
-                    if self.current_char == Some('\n') {
-                        self.advance(); // 跳过 \n
-                    }
-                    continue; // 继续处理，会再次跳过空格
-                }
             }
 
             break;
@@ -312,6 +299,10 @@ impl Lexer {
                 '^' => {
                     self.advance();
                     Token::Caret
+                }
+                '?' => {
+                    self.advance();
+                    Token::Question
                 }
                 '!' => {
                     self.advance();
@@ -448,6 +439,21 @@ impl Lexer {
         let mut tokens = Vec::new();
         loop {
             let token = self.next_token();
+
+             // LSR-009: 显式续行，仅处理反斜杠后紧跟换行（\n 或 \r\n）
+            if token == Token::Backslash {
+                if self.current_char == Some('\r') {
+                    self.advance();
+                    if self.current_char == Some('\n') {
+                        self.advance();
+                        continue;
+                    }
+                } else if self.current_char == Some('\n') {
+                    self.advance();
+                    continue;
+                }
+            }
+
             if token == Token::Eof {
                 tokens.push(token);
                 break;
@@ -485,5 +491,34 @@ mod tests {
         let mut lexer = Lexer::new(r#""Hello, World!""#.to_string());
         let tokens = lexer.tokenize();
         assert_eq!(tokens[0], Token::String("Hello, World!".to_string()));
+    }
+
+    #[test]
+    fn test_line_continuation_skips_newline() {
+        let source = "var x = 1\\\n + 2;".replace("\\n", "\n");
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize();
+
+        assert_eq!(tokens[0], Token::Var);
+        assert_eq!(tokens[1], Token::Ident("x".to_string()));
+        assert_eq!(tokens[2], Token::Equal);
+        assert_eq!(tokens[3], Token::Int(1));
+        assert_eq!(tokens[4], Token::Plus);
+        assert_eq!(tokens[5], Token::Int(2));
+        assert_eq!(tokens[6], Token::Semicolon);
+    }
+
+    #[test]
+    fn test_line_continuation_skips_crlf() {
+        let mut lexer = Lexer::new("var x = 1\\\r\n + 2;".to_string());
+        let tokens = lexer.tokenize();
+
+        assert_eq!(tokens[0], Token::Var);
+        assert_eq!(tokens[1], Token::Ident("x".to_string()));
+        assert_eq!(tokens[2], Token::Equal);
+        assert_eq!(tokens[3], Token::Int(1));
+        assert_eq!(tokens[4], Token::Plus);
+        assert_eq!(tokens[5], Token::Int(2));
+        assert_eq!(tokens[6], Token::Semicolon);
     }
 }

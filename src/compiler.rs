@@ -478,6 +478,12 @@ impl Compiler {
                 // Resolve include at compile time
                 self.compile_include(path)?;
             }
+
+            Stmt::TryCatch(_, _, _) => {
+                return Err(RuminaError::runtime(
+                    "try/catch is not yet supported by the bytecode compiler".to_string(),
+                ));
+            }
             Stmt::Empty => {}
 
             _ => {
@@ -811,6 +817,12 @@ impl Compiler {
             }
 
             Expr::Binary { left, op, right } => {
+                if matches!(op, BinOp::Pipe) {
+                    return Err(RuminaError::runtime(
+                        "|> operator is not yet supported by the bytecode compiler".to_string(),
+                    ));
+                }
+
                 // Compile operands
                 self.compile_expr(left)?;
                 self.compile_expr(right)?;
@@ -831,6 +843,7 @@ impl Compiler {
                     BinOp::LessEq => OpCode::Lte,
                     BinOp::And => OpCode::And,
                     BinOp::Or => OpCode::Or,
+                    BinOp::Pipe => unreachable!("pipe handled before opcode emission"),
                 };
 
                 self.emit(opcode);
@@ -980,6 +993,19 @@ impl Compiler {
                 // We compile this as a regular variable access with :: separator
                 let prefixed_name = format!("{}::{}", module, name);
                 self.emit(OpCode::PushVar(prefixed_name));
+            }
+
+            Expr::Try(_) => {
+                return Err(RuminaError::runtime(
+                    "? operator is not yet supported by the bytecode compiler".to_string(),
+                ));
+            }
+
+            Expr::Multi(_) => {
+                return Err(RuminaError::runtime(
+                    "multi-value expressions are not yet supported by the bytecode compiler"
+                        .to_string(),
+                ));
             }
         }
 
