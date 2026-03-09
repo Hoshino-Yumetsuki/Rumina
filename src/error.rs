@@ -132,8 +132,6 @@ impl From<String> for RuminaError {
             RuminaError::key_error(message)
         } else if message.contains("division") || message.contains("Division by zero") {
             RuminaError::division_by_zero()
-        } else if message.contains("not defined") || message.contains("Undefined") {
-            RuminaError::runtime(message)
         } else {
             RuminaError::runtime(message)
         }

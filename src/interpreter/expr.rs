@@ -68,12 +68,14 @@ impl Interpreter {
                     }
 
                     if member == "curried" {
-                        let curried = match self.try_call_special_method(obj.clone(), member, Vec::new())
-                        {
-                            Some(Ok(value)) => value,
-                            Some(Err(err)) => return Err(err),
-                            None => unreachable!("curried should be handled as a special method"),
-                        };
+                        let curried =
+                            match self.try_call_special_method(obj.clone(), member, Vec::new()) {
+                                Some(Ok(value)) => value,
+                                Some(Err(err)) => return Err(err),
+                                None => {
+                                    unreachable!("curried should be handled as a special method")
+                                }
+                            };
 
                         return self.call_function(curried, vec![left_value]);
                     }
@@ -270,7 +272,10 @@ impl Interpreter {
                 match value {
                     Value::Result { ok: true, value } => Ok(*value),
                     Value::Result { ok: false, value } => self.propagate_result(*value),
-                    other => Err(format!("? operator expects result, got {}", other.type_name())),
+                    other => Err(format!(
+                        "? operator expects result, got {}",
+                        other.type_name()
+                    )),
                 }
             }
         }

@@ -75,7 +75,7 @@ fn compile_to_bytecode(source: &str, current_dir: &str) -> Result<String, Rumina
 
     // Parse
     let mut parser = Parser::new(tokens);
-    let ast = parser.parse().map_err(|e| RuminaError::runtime(e))?;
+    let ast = parser.parse().map_err(RuminaError::runtime)?;
 
     // Compile to bytecode with current directory context for includes
     let mut compiler = Compiler::with_current_dir(current_dir.to_string());

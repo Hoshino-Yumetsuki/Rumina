@@ -1,4 +1,4 @@
-use rumina::{run_rumina_with_dir, Value};
+use rumina::{Value, run_rumina_with_dir};
 use std::fs;
 
 #[test]

@@ -1,6 +1,6 @@
 [package]
 name = "rmvm"
-version = "1.1.1"
+version.workspace = true
 edition = "2024"
 description = "Rumina VM - executes .rmc bytecode files"
 license = "LGPL-2.1"

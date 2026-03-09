@@ -157,7 +157,11 @@ impl Interpreter {
         right: &Value,
     ) -> Result<Value, String> {
         if matches!(left, Value::MultiValue(_)) || matches!(right, Value::MultiValue(_)) {
-            return self.map_binary_multivalue(&left.expand_multivalue(), op, &right.expand_multivalue());
+            return self.map_binary_multivalue(
+                &left.expand_multivalue(),
+                op,
+                &right.expand_multivalue(),
+            );
         }
 
         match (left, right) {
@@ -241,13 +245,7 @@ impl Interpreter {
             (Value::BigInt(a), Value::Int(b)) | (Value::Int(b), Value::BigInt(a)) => {
                 let b_bigint = BigInt::from(*b);
                 match op {
-                    BinOp::Add => {
-                        if matches!(left, Value::BigInt(_)) {
-                            Ok(Value::BigInt(a + b_bigint))
-                        } else {
-                            Ok(Value::BigInt(b_bigint + a))
-                        }
-                    }
+                    BinOp::Add => Ok(Value::BigInt(a + b_bigint)),
                     BinOp::Sub => {
                         if matches!(left, Value::BigInt(_)) {
                             Ok(Value::BigInt(a - b_bigint))
@@ -1401,11 +1399,15 @@ impl Interpreter {
         }
     }
 
-    pub fn eval_unary_op(&mut self, op: UnaryOp, val: &Value) -> Result<Value, String> {
+    pub fn eval_unary_op(&self, op: UnaryOp, val: &Value) -> Result<Value, String> {
+        Self::eval_unary_op_impl(op, val)
+    }
+
+    fn eval_unary_op_impl(op: UnaryOp, val: &Value) -> Result<Value, String> {
         if let Value::MultiValue(values) = val {
             let mut results = Vec::new();
             for value in values {
-                results.push(self.eval_unary_op(op, value)?);
+                results.push(Self::eval_unary_op_impl(op, value)?);
             }
             return Ok(Value::normalize_multi(results));
         }
@@ -1415,8 +1417,8 @@ impl Interpreter {
                 Value::Int(n) => Ok(Value::Int(-n)),
                 Value::Float(f) => Ok(Value::Float(-f)),
                 Value::Complex(re, im) => {
-                    let neg_re = self.eval_unary_op(UnaryOp::Neg, re)?;
-                    let neg_im = self.eval_unary_op(UnaryOp::Neg, im)?;
+                    let neg_re = Self::eval_unary_op_impl(UnaryOp::Neg, re)?;
+                    let neg_im = Self::eval_unary_op_impl(UnaryOp::Neg, im)?;
                     Ok(Value::Complex(Box::new(neg_re), Box::new(neg_im)))
                 }
                 Value::Rational(r) => Ok(Value::Rational(-r)),

@@ -116,37 +116,35 @@ impl BytecodeOptimizer {
             let third = &bytecode.instructions[i + 2];
 
             // Try to constant-fold integer operations
-            match (first, second, third) {
-                (
-                    OpCode::PushConstPooled(idx1),
-                    OpCode::PushConstPooled(idx2),
-                    OpCode::Add | OpCode::Sub | OpCode::Mul,
-                ) => {
-                    // Check if both constants are integers
-                    if let (Some(val1), Some(val2)) =
-                        (bytecode.constants.get(*idx1), bytecode.constants.get(*idx2))
-                    {
-                        use crate::value::Value;
+            if let (
+                OpCode::PushConstPooled(idx1),
+                OpCode::PushConstPooled(idx2),
+                OpCode::Add | OpCode::Sub | OpCode::Mul,
+            ) = (first, second, third)
+            {
+                // Check if both constants are integers
+                if let (Some(val1), Some(val2)) =
+                    (bytecode.constants.get(*idx1), bytecode.constants.get(*idx2))
+                {
+                    use crate::value::Value;
 
-                        if let (Value::Int(a), Value::Int(b)) = (val1, val2) {
-                            let result = match third {
-                                OpCode::Add => a + b,
-                                OpCode::Sub => a - b,
-                                OpCode::Mul => a * b,
-                                _ => {
-                                    i += 1;
-                                    continue;
-                                }
-                            };
+                    if let (Value::Int(a), Value::Int(b)) = (val1, val2) {
+                        let result = match third {
+                            OpCode::Add => a + b,
+                            OpCode::Sub => a - b,
+                            OpCode::Mul => a * b,
+                            _ => {
+                                i += 1;
+                                continue;
+                            }
+                        };
 
-                            changes.push((i, OpCode::PushConst(Value::Int(result)), 3));
-                            self.modified = true;
-                            i += 3;
-                            continue;
-                        }
+                        changes.push((i, OpCode::PushConst(Value::Int(result)), 3));
+                        self.modified = true;
+                        i += 3;
+                        continue;
                     }
                 }
-                _ => {}
             }
 
             i += 1;

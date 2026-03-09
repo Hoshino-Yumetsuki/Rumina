@@ -34,7 +34,6 @@ mod stmt;
 /// - Complex for complex numbers
 ///
 /// Float should NOT be used where exact computation is possible.
-
 pub struct Interpreter {
     globals: Rc<RefCell<HashMap<String, Value>>>,
     immutable_globals: HashSet<String>,
@@ -106,11 +105,6 @@ impl Interpreter {
         error
     }
 
-    /// Helper to convert Result<T, String> to Result<T, RuminaError>
-    fn convert_result<T>(&self, result: Result<T, String>) -> Result<T, RuminaError> {
-        result.map_err(|e| self.wrap_error(e))
-    }
-
     pub(super) fn is_result_propagation(err: &str) -> bool {
         err == Self::RESULT_PROPAGATION_SIGNAL
     }
@@ -134,28 +128,64 @@ impl Interpreter {
         }
     }
 
+    fn execute_stmt_for_last_value(&mut self, stmt: &Stmt) -> Result<Option<Value>, RuminaError> {
+        match stmt {
+            Stmt::Expr(expr) => self
+                .eval_expr(expr)
+                .map(Some)
+                .map_err(|err| self.wrap_error(err)),
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                let cond = self
+                    .eval_expr(condition)
+                    .map_err(|err| self.wrap_error(err))?;
+
+                if cond.is_truthy() {
+                    self.execute_stmts_for_last_value(then_branch)
+                } else if let Some(else_stmts) = else_branch {
+                    self.execute_stmts_for_last_value(else_stmts)
+                } else {
+                    Ok(None)
+                }
+            }
+            Stmt::Block(stmts) => self.execute_stmts_for_last_value(stmts),
+            _ => {
+                self.execute_stmt(stmt)
+                    .map_err(|err| self.wrap_error(err))?;
+                Ok(None)
+            }
+        }
+    }
+
+    fn execute_stmts_for_last_value(
+        &mut self,
+        stmts: &[Stmt],
+    ) -> Result<Option<Value>, RuminaError> {
+        let mut last_value = None;
+
+        for stmt in stmts {
+            if let Some(value) = self.execute_stmt_for_last_value(stmt)? {
+                last_value = Some(value);
+            }
+
+            if self.return_value.is_some() || self.break_flag || self.continue_flag {
+                break;
+            }
+        }
+
+        Ok(last_value)
+    }
+
     pub fn interpret(&mut self, statements: Vec<Stmt>) -> Result<Option<Value>, RuminaError> {
         let mut last_value = None;
         for stmt in statements {
-            // 如果是表达式语句,保存其值
-            if let Stmt::Expr(expr) = stmt {
-                match self.eval_expr(&expr) {
-                    Ok(value) => last_value = Some(self.convert_result(Ok(value))?),
-                    Err(err) if Self::is_result_propagation(&err) => {
-                        last_value = self.take_propagated_result();
-                        break;
-                    }
-                    Err(err) => return Err(self.wrap_error(err)),
-                }
-            } else {
-                match self.execute_stmt(&stmt) {
-                    Ok(()) => {}
-                    Err(err) if Self::is_result_propagation(&err) => {
-                        last_value = self.take_propagated_result();
-                        break;
-                    }
-                    Err(err) => return Err(self.wrap_error(err)),
-                }
+            match self.execute_stmt_for_last_value(&stmt) {
+                Ok(Some(value)) => last_value = Some(value),
+                Ok(None) => {}
+                Err(err) => return Err(err),
             }
 
             if self.return_value.is_some() || self.break_flag || self.continue_flag {
@@ -168,10 +198,8 @@ impl Interpreter {
     fn set_variable(&mut self, name: String, value: Value, immutable: bool) {
         if let Some(local) = self.locals.last() {
             local.borrow_mut().insert(name.clone(), value);
-            if immutable {
-                if let Some(immutable_scope) = self.immutable_locals.last_mut() {
-                    immutable_scope.insert(name);
-                }
+            if immutable && let Some(immutable_scope) = self.immutable_locals.last_mut() {
+                immutable_scope.insert(name);
             }
         } else {
             let key = name.clone();
@@ -262,6 +290,12 @@ impl Interpreter {
                 Ok(func)
             }
         }
+    }
+}
+
+impl Default for Interpreter {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

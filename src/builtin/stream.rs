@@ -272,10 +272,10 @@ fn read_stream_read_until(args: &[Value]) -> Result<Value, String> {
     let mut reached_eof = false;
 
     loop {
-        if let Some(limit) = max_bytes {
-            if out.len() >= limit {
-                break;
-            }
+        if let Some(limit) = max_bytes
+            && out.len() >= limit
+        {
+            break;
         }
 
         let n = reader

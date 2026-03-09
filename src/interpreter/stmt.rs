@@ -133,7 +133,7 @@ impl Interpreter {
 
                 // LSR-011: Apply decorators
                 for decorator in decorators {
-                    func = self.apply_decorator(&decorator, func)?;
+                    func = self.apply_decorator(decorator, func)?;
                 }
 
                 self.set_variable(name.clone(), func, false);
@@ -281,7 +281,8 @@ impl Interpreter {
             Stmt::Include(path) => {
                 // Handle built-in virtual modules
                 if path == "rumina:fs" {
-                    if let Some(module) = self.globals.borrow().get("rumina:fs").cloned() {
+                    let module = self.globals.borrow().get("rumina:fs").cloned();
+                    if let Some(module) = module {
                         self.globals.borrow_mut().insert("fs".to_string(), module);
                         return Ok(());
                     }
@@ -289,7 +290,8 @@ impl Interpreter {
                 }
 
                 if path == "rumina:path" {
-                    if let Some(module) = self.globals.borrow().get("rumina:path").cloned() {
+                    let module = self.globals.borrow().get("rumina:path").cloned();
+                    if let Some(module) = module {
                         self.globals.borrow_mut().insert("path".to_string(), module);
                         return Ok(());
                     }
@@ -297,7 +299,8 @@ impl Interpreter {
                 }
 
                 if path == "rumina:env" {
-                    if let Some(module) = self.globals.borrow().get("rumina:env").cloned() {
+                    let module = self.globals.borrow().get("rumina:env").cloned();
+                    if let Some(module) = module {
                         self.globals.borrow_mut().insert("env".to_string(), module);
                         return Ok(());
                     }
@@ -305,7 +308,8 @@ impl Interpreter {
                 }
 
                 if path == "rumina:process" {
-                    if let Some(module) = self.globals.borrow().get("rumina:process").cloned() {
+                    let module = self.globals.borrow().get("rumina:process").cloned();
+                    if let Some(module) = module {
                         self.globals
                             .borrow_mut()
                             .insert("process".to_string(), module);
@@ -315,7 +319,8 @@ impl Interpreter {
                 }
 
                 if path == "rumina:time" {
-                    if let Some(module) = self.globals.borrow().get("rumina:time").cloned() {
+                    let module = self.globals.borrow().get("rumina:time").cloned();
+                    if let Some(module) = module {
                         self.globals.borrow_mut().insert("time".to_string(), module);
                         return Ok(());
                     }
@@ -323,7 +328,8 @@ impl Interpreter {
                 }
 
                 if path == "rumina:stream" {
-                    if let Some(module) = self.globals.borrow().get("rumina:stream").cloned() {
+                    let module = self.globals.borrow().get("rumina:stream").cloned();
+                    if let Some(module) = module {
                         self.globals
                             .borrow_mut()
                             .insert("stream".to_string(), module);
@@ -333,7 +339,8 @@ impl Interpreter {
                 }
 
                 if path == "rumina:buffer" {
-                    if let Some(module) = self.globals.borrow().get("rumina:buffer").cloned() {
+                    let module = self.globals.borrow().get("rumina:buffer").cloned();
+                    if let Some(module) = module {
                         self.globals
                             .borrow_mut()
                             .insert("Buffer".to_string(), module);
@@ -363,9 +370,9 @@ impl Interpreter {
                 // 尝试多个路径位置
                 let contents = if let Ok(content) = fs::read_to_string(&file_path) {
                     content
-                } else if file_path.starts_with("./") {
+                } else if let Some(stripped_path) = file_path.strip_prefix("./") {
                     // 如果以 ./ 开头，尝试在 examples 目录中查找
-                    let examples_path = format!("examples/{}", &file_path[2..]);
+                    let examples_path = format!("examples/{}", stripped_path);
                     fs::read_to_string(&examples_path)
                         .map_err(|e| format!("Cannot read module '{}': {}", file_path, e))?
                 } else {
@@ -387,8 +394,8 @@ impl Interpreter {
                     } else {
                         // 没有模块声明，使用文件名
                         path.split('/')
-                            .last()
-                            .or_else(|| path.split('\\').last())
+                            .next_back()
+                            .or_else(|| path.split('\\').next_back())
                             .unwrap_or(path)
                             .trim_end_matches(".lm")
                             .to_string()
@@ -396,8 +403,8 @@ impl Interpreter {
                 } else {
                     // 空文件，使用文件名
                     path.split('/')
-                        .last()
-                        .or_else(|| path.split('\\').last())
+                        .next_back()
+                        .or_else(|| path.split('\\').next_back())
                         .unwrap_or(path)
                         .trim_end_matches(".lm")
                         .to_string()
@@ -452,7 +459,9 @@ impl Interpreter {
 
                         self.locals.pop();
                         if self.immutable_locals.pop().is_none() {
-                            return Err("Internal error: immutable scope stack underflow".to_string());
+                            return Err(
+                                "Internal error: immutable scope stack underflow".to_string()
+                            );
                         }
 
                         result

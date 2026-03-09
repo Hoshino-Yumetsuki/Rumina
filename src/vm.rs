@@ -256,10 +256,10 @@ impl ByteCode {
             _ => None,
         };
 
-        if let Some(key) = cache_key {
-            if let Some(&index) = self.common_constants_cache.get(&key) {
-                return index;
-            }
+        if let Some(key) = cache_key
+            && let Some(&index) = self.common_constants_cache.get(&key)
+        {
+            return index;
         }
 
         // Slow path: Linear search for complex types or cache miss
@@ -446,11 +446,7 @@ impl ByteCode {
             }
             Value::Null => "Null".to_string(),
             Value::Array(arr) => {
-                let items: Vec<String> = arr
-                    .borrow()
-                    .iter()
-                    .map(|v| Self::serialize_value(v))
-                    .collect();
+                let items: Vec<String> = arr.borrow().iter().map(Self::serialize_value).collect();
                 format!("Array[{}]", items.join(", "))
             }
             Value::Struct(s) => {
@@ -746,15 +742,15 @@ impl ByteCode {
         {
             return Ok(OpCode::MemberAssign(name.to_string()));
         }
-        if let Some(rest) = s.strip_prefix("MemberAssignVar(") {
-            if let Some(content) = rest.strip_suffix(")") {
-                let parts: Vec<&str> = content.split(", ").collect();
-                if parts.len() == 2 {
-                    return Ok(OpCode::MemberAssignVar(
-                        parts[0].to_string(),
-                        parts[1].to_string(),
-                    ));
-                }
+        if let Some(rest) = s.strip_prefix("MemberAssignVar(")
+            && let Some(content) = rest.strip_suffix(")")
+        {
+            let parts: Vec<&str> = content.split(", ").collect();
+            if parts.len() == 2 {
+                return Ok(OpCode::MemberAssignVar(
+                    parts[0].to_string(),
+                    parts[1].to_string(),
+                ));
             }
         }
         if let Some(args) = s
@@ -834,6 +830,12 @@ impl ByteCode {
         }
 
         Err(format!("Unknown opcode: {}", s))
+    }
+}
+
+impl Default for ByteCode {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -1060,7 +1062,7 @@ impl VM {
                     .stack
                     .pop()
                     .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
-                let result = value.vm_neg().map_err(|e| RuminaError::runtime(e))?;
+                let result = value.vm_neg().map_err(RuminaError::runtime)?;
                 self.stack.push(result);
             }
 
@@ -1069,7 +1071,7 @@ impl VM {
                     .stack
                     .pop()
                     .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
-                let result = value.vm_not().map_err(|e| RuminaError::runtime(e))?;
+                let result = value.vm_not().map_err(RuminaError::runtime)?;
                 self.stack.push(result);
             }
 
@@ -1078,7 +1080,7 @@ impl VM {
                     .stack
                     .pop()
                     .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
-                let result = value.vm_factorial().map_err(|e| RuminaError::runtime(e))?;
+                let result = value.vm_factorial().map_err(RuminaError::runtime)?;
                 self.stack.push(result);
             }
 
@@ -1239,28 +1241,25 @@ impl VM {
                             )));
                         }
                     }
-                    Value::Array(_) => {
-                        match member_name.as_str() {
-                            "foreach" | "map" | "filter" | "reduce" | "fold" | "push"
-                            | "pop" => {
-                                let globals = self.globals.borrow();
-                                if let Some(value) = globals.get(member_name) {
-                                    self.stack.push(value.clone());
-                                } else {
-                                    return Err(RuminaError::runtime(format!(
-                                        "Undefined array method '{}'",
-                                        member_name
-                                    )));
-                                }
-                            }
-                            _ => {
+                    Value::Array(_) => match member_name.as_str() {
+                        "foreach" | "map" | "filter" | "reduce" | "fold" | "push" | "pop" => {
+                            let globals = self.globals.borrow();
+                            if let Some(value) = globals.get(member_name) {
+                                self.stack.push(value.clone());
+                            } else {
                                 return Err(RuminaError::runtime(format!(
-                                    "array does not have member '{}'",
+                                    "Undefined array method '{}'",
                                     member_name
                                 )));
                             }
                         }
-                    }
+                        _ => {
+                            return Err(RuminaError::runtime(format!(
+                                "array does not have member '{}'",
+                                member_name
+                            )));
+                        }
+                    },
                     _ => {
                         // Non-struct/module type - track miss
                         if let Some(cache) = self.member_cache.get_mut(&cache_addr) {
@@ -1360,7 +1359,7 @@ impl VM {
                         func: native_fn, ..
                     } => {
                         // Call native function
-                        let result = native_fn(&args).map_err(|e| RuminaError::runtime(e))?;
+                        let result = native_fn(&args).map_err(RuminaError::runtime)?;
                         self.stack.push(result);
                     }
                     Value::Function { name, .. } => {
@@ -1453,7 +1452,7 @@ impl VM {
                             _ => {
                                 // Fallback: try to find by params (less reliable)
                                 let mut found_id = None;
-                                for (name, _) in &self.functions {
+                                for name in self.functions.keys() {
                                     if name.starts_with("__lambda_") {
                                         found_id = Some(name.clone());
                                         break;
@@ -1538,7 +1537,7 @@ impl VM {
                         func: native_fn, ..
                     } => {
                         // Call native function
-                        let result = native_fn(&args).map_err(|e| RuminaError::runtime(e))?;
+                        let result = native_fn(&args).map_err(RuminaError::runtime)?;
                         self.stack.push(result);
                     }
                     Value::Function { name, .. } => {
@@ -1629,7 +1628,7 @@ impl VM {
                             _ => {
                                 // Fallback: try to find by params (less reliable)
                                 let mut found_id = None;
-                                for (name, _) in &self.functions {
+                                for name in self.functions.keys() {
                                     if name.starts_with("__lambda_") {
                                         found_id = Some(name.clone());
                                         break;
@@ -1741,7 +1740,7 @@ impl VM {
                             _ => {
                                 // Fallback: try to find by params (less reliable)
                                 let mut found_id = None;
-                                for (name, _) in &self.functions {
+                                for name in self.functions.keys() {
                                     if name.starts_with("__lambda_") {
                                         found_id = Some(name.clone());
                                         break;
@@ -1851,7 +1850,9 @@ impl VM {
                         }
                     }
                     Value::NativeFunction {
-                        name, func: native_fn, ..
+                        name,
+                        func: native_fn,
+                        ..
                     } => {
                         if matches!(
                             name.as_str(),
@@ -2017,7 +2018,7 @@ impl VM {
                     .stack
                     .pop()
                     .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
-                let converted = self.convert_to_type(val, &dtype)?;
+                let converted = self.convert_to_type(val, dtype)?;
                 self.stack.push(converted);
             }
 
@@ -2043,7 +2044,7 @@ impl VM {
             .pop()
             .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
 
-        let result = f(&left, &right).map_err(|e| RuminaError::runtime(e))?;
+        let result = f(&left, &right).map_err(RuminaError::runtime)?;
 
         self.stack.push(result);
         Ok(())
@@ -2052,7 +2053,7 @@ impl VM {
     /// Convert value to specified type
     fn convert_to_type(&self, val: Value, dtype: &DeclaredType) -> Result<Value, RuminaError> {
         use crate::interpreter::convert;
-        convert::convert_to_declared_type(val, dtype).map_err(|e| RuminaError::runtime(e))
+        convert::convert_to_declared_type(val, dtype).map_err(RuminaError::runtime)
     }
 
     /// Get variable from locals or globals
@@ -2204,7 +2205,7 @@ mod tests {
         let result = vm.run().unwrap();
 
         match result {
-            Some(Value::Bool(b)) => assert_eq!(b, true),
+            Some(Value::Bool(b)) => assert!(b),
             _ => panic!("Expected Bool(true)"),
         }
     }
@@ -2416,7 +2417,7 @@ mod tests {
 
         // Test: 10 (int) + 3.14 (float) = 13.14 (float)
         let idx_int = bytecode.add_constant(Value::Int(10));
-        let idx_float = bytecode.add_constant(Value::Float(3.14));
+        let idx_float = bytecode.add_constant(Value::Float(std::f64::consts::PI));
 
         bytecode.emit(OpCode::PushConstPooled(idx_int), None);
         bytecode.emit(OpCode::PushConstPooled(idx_float), None);
@@ -2452,7 +2453,7 @@ mod tests {
         let result = vm.run().unwrap();
 
         match result {
-            Some(Value::Bool(b)) => assert_eq!(b, true),
+            Some(Value::Bool(b)) => assert!(b),
             other => panic!("Expected Bool(true), got {:?}", other),
         }
     }
@@ -2526,9 +2527,9 @@ mod tests {
         let mut bytecode = ByteCode::new();
 
         // Add the same float multiple times
-        let idx1 = bytecode.add_constant(Value::Float(3.14));
-        let idx2 = bytecode.add_constant(Value::Float(3.14));
-        let idx3 = bytecode.add_constant(Value::Float(2.71));
+        let idx1 = bytecode.add_constant(Value::Float(std::f64::consts::PI));
+        let idx2 = bytecode.add_constant(Value::Float(std::f64::consts::PI));
+        let idx3 = bytecode.add_constant(Value::Float(std::f64::consts::E));
 
         // First two should be the same index
         assert_eq!(idx1, idx2);

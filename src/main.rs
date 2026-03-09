@@ -122,7 +122,7 @@ fn check_semicolons(contents: &str, filename: &str) {
 
         // 移除行末注释后再检查分号
         let code_part = if let Some(comment_pos) = trimmed.find("//") {
-            &trimmed[..comment_pos].trim_end()
+            trimmed[..comment_pos].trim_end()
         } else {
             trimmed
         };
@@ -244,7 +244,7 @@ fn execute_input_vm(
     let tokens = lexer.tokenize();
 
     let mut parser = Parser::new(tokens);
-    let ast = parser.parse().map_err(|e| RuminaError::runtime(e))?;
+    let ast = parser.parse().map_err(RuminaError::runtime)?;
 
     let mut compiler = Compiler::new();
     let bytecode = compiler.compile(ast)?;

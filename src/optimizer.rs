@@ -456,13 +456,11 @@ impl ASTOptimizer {
         // Extract init: var i = start_value
         let (loop_var, start_val) = if let Some(init_stmt) = init {
             match init_stmt.as_ref() {
-                Stmt::VarDecl { name, value, .. } => {
-                    if let Expr::Int(start) = value {
-                        (name.clone(), *start)
-                    } else {
-                        return None;
-                    }
-                }
+                Stmt::VarDecl {
+                    name,
+                    value: Expr::Int(start),
+                    ..
+                } => (name.clone(), *start),
                 _ => return None,
             }
         } else {
@@ -470,24 +468,20 @@ impl ASTOptimizer {
         };
 
         // Extract condition: i < end_value
-        let end_val = if let Some(cond) = condition {
-            match cond {
-                Expr::Binary {
-                    left,
-                    op: BinOp::Less,
-                    right,
-                } => {
-                    if let (Expr::Ident(var), Expr::Int(end)) = (left.as_ref(), right.as_ref()) {
-                        if var == &loop_var {
-                            *end
-                        } else {
-                            return None;
-                        }
-                    } else {
-                        return None;
-                    }
+        let end_val = if let Some(Expr::Binary {
+            left,
+            op: BinOp::Less,
+            right,
+        }) = condition
+        {
+            if let (Expr::Ident(var), Expr::Int(end)) = (left.as_ref(), right.as_ref()) {
+                if var == &loop_var {
+                    *end
+                } else {
+                    return None;
                 }
-                _ => return None,
+            } else {
+                return None;
             }
         } else {
             return None;
@@ -560,30 +554,36 @@ impl ASTOptimizer {
     #[allow(dead_code)]
     fn substitute_var_in_stmt(&self, stmt: &Stmt, var: &str, val: i64) -> Stmt {
         match stmt {
-            Stmt::Expr(expr) => Stmt::Expr(self.substitute_var_in_expr(expr, var, val)),
+            Stmt::Expr(expr) => Stmt::Expr(Self::substitute_var_in_expr(expr, var, val)),
             Stmt::Assign { name, value } => Stmt::Assign {
                 name: name.clone(),
-                value: self.substitute_var_in_expr(value, var, val),
+                value: Self::substitute_var_in_expr(value, var, val),
             },
             stmt => stmt.clone(), // For complex statements, just clone
         }
     }
 
     /// Substitute variable references with constant value in an expression
-    fn substitute_var_in_expr(&self, expr: &Expr, var: &str, val: i64) -> Expr {
+    fn substitute_var_in_expr(expr: &Expr, var: &str, val: i64) -> Expr {
         match expr {
             Expr::Ident(name) if name == var => Expr::Int(val),
             Expr::Binary { left, op, right } => Expr::Binary {
-                left: Box::new(self.substitute_var_in_expr(left, var, val)),
+                left: Box::new(Self::substitute_var_in_expr(left, var, val)),
                 op: *op,
-                right: Box::new(self.substitute_var_in_expr(right, var, val)),
+                right: Box::new(Self::substitute_var_in_expr(right, var, val)),
             },
             Expr::Unary { op, expr: inner } => Expr::Unary {
                 op: *op,
-                expr: Box::new(self.substitute_var_in_expr(inner, var, val)),
+                expr: Box::new(Self::substitute_var_in_expr(inner, var, val)),
             },
             expr => expr.clone(),
         }
+    }
+}
+
+impl Default for ASTOptimizer {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

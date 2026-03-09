@@ -628,31 +628,26 @@ impl Compiler {
         // Look for: define module_name = "..." or var module_name = "..."
         for stmt in statements {
             match stmt {
-                Stmt::VarDecl { name, value, .. } if name == "module_name" => {
-                    if let Expr::String(s) = value {
-                        return s.clone();
-                    }
-                }
-                Stmt::Assign { name, value } if name == "module_name" => {
-                    if let Expr::String(s) = value {
-                        return s.clone();
-                    }
-                }
+                Stmt::VarDecl {
+                    name,
+                    value: Expr::String(s),
+                    ..
+                } if name == "module_name" => return s.clone(),
+                Stmt::Assign {
+                    name,
+                    value: Expr::String(s),
+                } if name == "module_name" => return s.clone(),
                 // Also check expression statements that might be assignments
-                Stmt::Expr(expr) => {
+                Stmt::Expr(Expr::Call { func, args }) => {
                     // Check for: define module_name = "..." (which is parsed as a call expression)
-                    if let Expr::Call { func, args } = expr {
-                        if let Expr::Ident(fn_name) = &**func {
-                            if fn_name == "define" && args.len() == 2 {
-                                if let Expr::Ident(var_name) = &args[0] {
-                                    if var_name == "module_name" {
-                                        if let Expr::String(s) = &args[1] {
-                                            return s.clone();
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    if let Expr::Ident(fn_name) = &**func
+                        && fn_name == "define"
+                        && args.len() == 2
+                        && let Expr::Ident(var_name) = &args[0]
+                        && var_name == "module_name"
+                        && let Expr::String(s) = &args[1]
+                    {
+                        return s.clone();
                     }
                 }
                 _ => {}
@@ -661,8 +656,8 @@ impl Compiler {
 
         // Fallback: use filename without extension
         path.split('/')
-            .last()
-            .or_else(|| path.split('\\').last())
+            .next_back()
+            .or_else(|| path.split('\\').next_back())
             .unwrap_or(path)
             .trim_end_matches(".lm")
             .to_string()
@@ -1036,7 +1031,7 @@ mod tests {
 
         compiler.compile_expr(&expr).unwrap();
 
-        assert!(compiler.bytecode.instructions.len() > 0);
+        assert!(!compiler.bytecode.instructions.is_empty());
     }
 
     #[test]

@@ -7,7 +7,7 @@ pub fn compile(source: &str) -> Result<ByteCode, RuminaError> {
     let tokens = lexer.tokenize();
 
     let mut parser = Parser::new(tokens);
-    let ast = parser.parse().map_err(|e| RuminaError::runtime(e))?;
+    let ast = parser.parse().map_err(RuminaError::runtime)?;
 
     let mut compiler = Compiler::new();
     compiler.compile(ast)

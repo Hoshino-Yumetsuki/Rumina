@@ -121,6 +121,86 @@ yarn build
 
 注意：WASM 构建会使用根包的库部分，不包含独立的二进制工具。
 
+## 工程化工作流
+
+### 版本号管理
+
+Rumina 现在使用 **统一单版本** 策略：
+
+- Cargo workspace 版本定义在根目录 `Cargo.toml` 的 `[workspace.package]`
+- 根 crate 与 `crates/ruminac`、`crates/rmvm`、`crates/rmpack` 都继承这个版本
+- `package.json` 的版本必须与 Cargo workspace 版本保持一致
+
+可使用下面的命令检查版本一致性：
+
+```bash
+yarn check:version
+```
+
+### 本地质量检查
+
+```bash
+# 版本一致性 + TypeScript + Biome + Rust library tests
+yarn check
+
+# 单独运行 TypeScript 检查
+yarn typecheck
+
+# 单独运行 Biome 检查
+yarn lint
+
+# 单独运行 Rust library tests
+yarn test:rust
+```
+
+说明：默认的 `yarn test:rust` 只运行 workspace 的 **library tests**，并为 Rust 测试进程设置更大的栈空间，以稳定覆盖解释器的深递归测试场景。
+
+如果你需要查看当前所有 Rust 测试（包括现有集成测试），可以运行：
+
+```bash
+yarn test:rust:all
+```
+
+### 覆盖率
+
+Rumina 当前的覆盖率统计以 **Rust workspace** 为主，使用 `cargo-llvm-cov`。
+
+首次使用前请先安装：
+
+```bash
+cargo install cargo-llvm-cov
+```
+
+本地可用命令：
+
+```bash
+# 输出覆盖率摘要
+yarn coverage:rust
+
+# 生成 lcov 文件
+yarn coverage:rust:lcov
+```
+
+lcov 文件默认输出到：
+
+```text
+target/llvm-cov/lcov.info
+```
+
+### CI 质量门禁
+
+GitHub Actions 中新增了 `Quality Gates` 任务，会在多平台构建前执行：
+
+- 版本一致性检查
+- `cargo fmt --all --check`
+- `cargo clippy --workspace --all-targets -- -D warnings`
+- `yarn typecheck`
+- `yarn lint`
+- `yarn test:rust`
+- `yarn coverage:rust`
+
+这样可以先保证基础工程质量，再进入现有的多平台构建与 release 流程。
+
 ## 作为库使用
 
 ### 在 Rust 中使用

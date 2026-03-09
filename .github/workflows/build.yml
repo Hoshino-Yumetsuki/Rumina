@@ -10,8 +10,57 @@ on:
   workflow_dispatch:
 
 jobs:
+  quality:
+    name: Quality Gates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install JS dependencies
+        run: yarn install --immutable
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Check version parity
+        run: yarn check:version
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Run TypeScript typecheck
+        run: yarn typecheck
+
+      - name: Run Biome lint
+        run: yarn lint
+
+      - name: Run Rust library tests
+        run: yarn test:rust
+
+      - name: Generate Rust coverage summary
+        run: yarn coverage:rust
+
   build:
     name: Build ${{ matrix.target }}
+    needs: quality
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

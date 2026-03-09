@@ -22,7 +22,10 @@ pub enum Value {
     Null,
     Set(Vec<Value>),
     MultiValue(Vec<Value>),
-    Result { ok: bool, value: Box<Value> },
+    Result {
+        ok: bool,
+        value: Box<Value>,
+    },
     Option(Option<Box<Value>>),
     Array(Rc<RefCell<Vec<Value>>>),
     Struct(Rc<RefCell<HashMap<String, Value>>>),
@@ -443,10 +446,10 @@ fn format_irrational(irr: &IrrationalValue) -> String {
 
     fn format_product(coef: &Value, irr: &IrrationalValue) -> String {
         // Special case: Product(n, Sqrt(1)) = n
-        if let IrrationalValue::Sqrt(inner) = irr {
-            if let Value::Int(1) = inner.as_ref() {
-                return coef.to_string();
-            }
+        if let IrrationalValue::Sqrt(inner) = irr
+            && let Value::Int(1) = inner.as_ref()
+        {
+            return coef.to_string();
         }
 
         // Check if this is a square (e.g., π*π or e*e)

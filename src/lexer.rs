@@ -11,7 +11,7 @@ pub struct Lexer {
 impl Lexer {
     pub fn new(input: String) -> Self {
         let chars: Vec<char> = input.chars().collect();
-        let current_char = chars.get(0).copied();
+        let current_char = chars.first().copied();
         Lexer {
             input: chars,
             position: 0,
@@ -440,7 +440,7 @@ impl Lexer {
         loop {
             let token = self.next_token();
 
-             // LSR-009: 显式续行，仅处理反斜杠后紧跟换行（\n 或 \r\n）
+            // LSR-009: 显式续行，仅处理反斜杠后紧跟换行（\n 或 \r\n）
             if token == Token::Backslash {
                 if self.current_char == Some('\r') {
                     self.advance();

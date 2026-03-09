@@ -177,12 +177,12 @@ pub enum Expr {
 /// 二元运算符
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinOp {
-    Add, // +
-    Sub, // -
-    Mul, // *
-    Div, // /
-    Mod, // %
-    Pow, // ^
+    Add,  // +
+    Sub,  // -
+    Mul,  // *
+    Div,  // /
+    Mod,  // %
+    Pow,  // ^
     Pipe, // |>
 
     Equal,     // ==

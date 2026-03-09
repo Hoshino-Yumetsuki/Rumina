@@ -1,4 +1,4 @@
-use rumina::{run_rumina, Value};
+use rumina::{Value, run_rumina};
 
 fn expect_int(result: Result<Option<Value>, rumina::RuminaError>) -> i64 {
     match result.unwrap() {
@@ -69,13 +69,15 @@ fn test_array_instance_reduce() {
 
 #[test]
 fn test_try_catch_catches_runtime_error() {
-    let result = run_rumina(
-        "var caught = \"\"; try { missing(); } catch (e) { caught = e; } caught;",
-    )
-    .unwrap();
+    let result =
+        run_rumina("var caught = \"\"; try { missing(); } catch (e) { caught = e; } caught;")
+            .unwrap();
     match result {
         Some(Value::String(message)) => {
-            assert!(message.contains("Undefined variable: missing"), "got {message}");
+            assert!(
+                message.contains("Undefined variable: missing"),
+                "got {message}"
+            );
         }
         other => panic!("Expected caught error string, got {:?}", other),
     }
@@ -83,8 +85,10 @@ fn test_try_catch_catches_runtime_error() {
 
 #[test]
 fn test_line_continuation_runtime() {
-    let result = expect_int(run_rumina("var x = 1\\
- + 2; x;"));
+    let result = expect_int(run_rumina(
+        "var x = 1\\
+ + 2; x;",
+    ));
     assert_eq!(result, 3);
 }
 

@@ -602,13 +602,21 @@ fn buffer_compare(args: &[Value]) -> Result<Value, String> {
     let a = buffer_to_bytes(&args[0])?;
     let b = buffer_to_bytes(&args[1])?;
 
-    let target_start = if args.len() >= 3 { get_index(args, 2)? } else { 0 };
+    let target_start = if args.len() >= 3 {
+        get_index(args, 2)?
+    } else {
+        0
+    };
     let target_end = if args.len() >= 4 {
         get_index(args, 3)?
     } else {
         b.len()
     };
-    let source_start = if args.len() >= 5 { get_index(args, 4)? } else { 0 };
+    let source_start = if args.len() >= 5 {
+        get_index(args, 4)?
+    } else {
+        0
+    };
     let source_end = if args.len() >= 6 {
         get_index(args, 5)?
     } else {
@@ -634,7 +642,7 @@ fn buffer_compare(args: &[Value]) -> Result<Value, String> {
 
     let a = &a[source_start..source_end];
     let b = &b[target_start..target_end];
-    let out = match a.cmp(&b) {
+    let out = match a.cmp(b) {
         std::cmp::Ordering::Less => -1,
         std::cmp::Ordering::Equal => 0,
         std::cmp::Ordering::Greater => 1,

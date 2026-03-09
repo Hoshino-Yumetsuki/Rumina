@@ -43,13 +43,13 @@ pub enum Token {
     TypeArray,
 
     // 运算符
-    Plus,    // +
-    Minus,   // -
-    Star,    // *
-    Slash,   // /
-    Percent, // %
-    Caret,   // ^ (幂运算)
-    Bang,    // ! (阶乘或逻辑非)
+    Plus,     // +
+    Minus,    // -
+    Star,     // *
+    Slash,    // /
+    Percent,  // %
+    Caret,    // ^ (幂运算)
+    Bang,     // ! (阶乘或逻辑非)
     Question, // ?
 
     // 比较运算符

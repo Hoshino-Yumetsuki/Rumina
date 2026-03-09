@@ -103,13 +103,13 @@ fn bigint_pow_parallel(base: &BigInt, exponent: u32) -> BigInt {
     // Multiply all chunk results together
     let mut result = BigInt::from(1);
     for chunk_result in chunk_results {
-        result = result * chunk_result;
+        result *= chunk_result;
     }
 
     // Handle remainder
     if remainder > 0 {
         let remainder_result = base.pow(remainder);
-        result = result * remainder_result;
+        result *= remainder_result;
     }
 
     result
@@ -387,7 +387,7 @@ pub fn value_unary_op(op: UnaryOp, val: &Value) -> Result<Value, String> {
                 _ => {
                     // Fall back to interpreter for complex types
                     use crate::interpreter::Interpreter;
-                    let mut interp = Interpreter::new();
+                    let interp = Interpreter::new();
                     interp.eval_unary_op(op, val)
                 }
             }
@@ -399,7 +399,7 @@ pub fn value_unary_op(op: UnaryOp, val: &Value) -> Result<Value, String> {
         UnaryOp::Factorial => {
             // Fall back to interpreter for factorial
             use crate::interpreter::Interpreter;
-            let mut interp = Interpreter::new();
+            let interp = Interpreter::new();
             interp.eval_unary_op(op, val)
         }
     }
