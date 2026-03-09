@@ -439,7 +439,7 @@ fn fs_chmod(args: &[Value]) -> Result<Value, String> {
         let perms = fs::Permissions::from_mode(mode as u32);
         fs::set_permissions(&path, perms)
             .map_err(|e| format!("fs.chmod failed for '{}': {}", path, e))?;
-        return Ok(Value::Null);
+        Ok(Value::Null)
     }
 
     #[cfg(not(unix))]
