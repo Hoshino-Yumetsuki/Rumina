@@ -21,12 +21,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: yarn
 
       - name: Enable Corepack
         run: corepack enable
 
-      - name: Corepack prepare
+      - name: Activate project Yarn
         run: corepack prepare
 
       - name: Install JS dependencies
