@@ -26,6 +26,9 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
 
+      - name: Corepack prepare
+        run: corepack prepare
+
       - name: Install JS dependencies
         run: yarn install --immutable
 
