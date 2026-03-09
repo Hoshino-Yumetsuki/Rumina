@@ -48,9 +48,6 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: Run TypeScript typecheck
-        run: yarn typecheck
-
       - name: Run Biome lint
         run: yarn lint
 

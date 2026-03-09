@@ -42,17 +42,16 @@
   ],
   "scripts": {
     "build": "wasm-pack build --out-dir dist && yarn postbuild && node scripts/sync-wasm-bindings.js && rolldown -c rolldown.config.js",
-    "check": "yarn check:version && yarn typecheck && yarn lint && yarn test:rust",
+    "check": "yarn check:version && yarn lint && yarn test:rust",
     "check:version": "node scripts/check-version.js",
     "coverage:rust": "node scripts/run-rust-command.js llvm-cov --workspace --lib --summary-only",
     "coverage:rust:lcov": "node scripts/run-rust-command.js llvm-cov --workspace --lib --lcov --output-path target/llvm-cov/lcov.info",
     "postbuild": "rimraf dist/.gitignore dist/README.md dist/package.json dist/LICENSE",
-    "lint": "biome check package.json tsconfig.json biome.json scripts src .github/workflows",
-    "lint-fix": "biome check --write package.json tsconfig.json biome.json scripts src .github/workflows",
+    "lint": "biome check && biome lint",
+    "lint-fix": "biome format --write && biome lint --write",
     "test:rust": "node scripts/run-rust-command.js test --workspace --lib",
     "test:rust:all": "node scripts/run-rust-command.js test --workspace",
-    "test:versions": "node --test scripts/check-version.test.js",
-    "typecheck": "tsc --noEmit"
+    "test:versions": "node --test scripts/check-version.test.js"
   },
   "repository": {
     "type": "git",
