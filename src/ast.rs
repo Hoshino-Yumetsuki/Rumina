@@ -225,3 +225,39 @@ impl fmt::Display for BinOp {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_binop_display() {
+        assert_eq!(BinOp::Add.to_string(), "+");
+        assert_eq!(BinOp::Sub.to_string(), "-");
+        assert_eq!(BinOp::Mul.to_string(), "*");
+        assert_eq!(BinOp::Div.to_string(), "/");
+        assert_eq!(BinOp::Mod.to_string(), "%");
+        assert_eq!(BinOp::Pow.to_string(), "^");
+        assert_eq!(BinOp::Pipe.to_string(), "|>");
+        assert_eq!(BinOp::Equal.to_string(), "==");
+        assert_eq!(BinOp::NotEqual.to_string(), "!=");
+        assert_eq!(BinOp::Greater.to_string(), ">");
+        assert_eq!(BinOp::GreaterEq.to_string(), ">=");
+        assert_eq!(BinOp::Less.to_string(), "<");
+        assert_eq!(BinOp::LessEq.to_string(), "<=");
+        assert_eq!(BinOp::And.to_string(), "&&");
+        assert_eq!(BinOp::Or.to_string(), "||");
+    }
+
+    #[test]
+    fn test_declared_type_clone() {
+        let t = DeclaredType::Int;
+        assert_eq!(t.clone(), DeclaredType::Int);
+    }
+
+    #[test]
+    fn test_expr_clone() {
+        let e = Expr::Int(42);
+        assert_eq!(e.clone(), Expr::Int(42));
+    }
+}

@@ -24,3 +24,37 @@ pub fn random(_args: &[Value]) -> Result<Value, String> {
     let mut rng = rand::rng();
     Ok(Value::Float(rng.random::<f64>()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rand() {
+        let result = rand(&[]);
+        assert!(result.is_ok());
+        if let Ok(Value::Float(f)) = result {
+            assert!(f >= 0.0 && f < 1.0);
+        }
+    }
+
+    #[test]
+    fn test_randint() {
+        let result = randint(&[Value::Int(1), Value::Int(10)]);
+        assert!(result.is_ok());
+        if let Ok(Value::Int(i)) = result {
+            assert!(i >= 1 && i <= 10);
+        }
+    }
+
+    #[test]
+    fn test_randint_wrong_args() {
+        assert!(randint(&[Value::Int(1)]).is_err());
+    }
+
+    #[test]
+    fn test_random() {
+        let result = random(&[]);
+        assert!(result.is_ok());
+    }
+}

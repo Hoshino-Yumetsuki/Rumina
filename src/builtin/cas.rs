@@ -322,3 +322,149 @@ pub fn definite_integral(args: &[Value]) -> Result<Value, String> {
         Err(e) => Err(format!("Integration error: {}", e)),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_valid() {
+        let args = vec![Value::String("x + 1".to_string())];
+        assert!(parse(&args).is_ok());
+    }
+
+    #[test]
+    fn test_parse_wrong_args() {
+        assert!(parse(&[]).is_err());
+        assert!(parse(&[Value::Int(1)]).is_err());
+    }
+
+    #[test]
+    fn test_differentiate_valid() {
+        let args = vec![
+            Value::String("x^2".to_string()),
+            Value::String("x".to_string()),
+        ];
+        assert!(differentiate(&args).is_ok());
+    }
+
+    #[test]
+    fn test_differentiate_wrong_args() {
+        assert!(differentiate(&[]).is_err());
+        let args = vec![Value::String("x".to_string())];
+        assert!(differentiate(&args).is_err());
+    }
+
+    #[test]
+    fn test_solve_linear_valid() {
+        let args = vec![
+            Value::String("x - 5".to_string()),
+            Value::String("x".to_string()),
+        ];
+        let result = solve_linear(&args);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_solve_linear_wrong_args() {
+        assert!(solve_linear(&[]).is_err());
+    }
+
+    #[test]
+    fn test_evaluate_at_valid() {
+        let args = vec![
+            Value::String("x + 1".to_string()),
+            Value::String("x".to_string()),
+            Value::Float(5.0),
+        ];
+        let result = evaluate_at(&args);
+        assert!(result.is_ok());
+        if let Ok(Value::Float(v)) = result {
+            assert!((v - 6.0).abs() < 1e-10);
+        }
+    }
+
+    #[test]
+    fn test_evaluate_at_wrong_args() {
+        assert!(evaluate_at(&[]).is_err());
+        let args = vec![Value::String("x".to_string())];
+        assert!(evaluate_at(&args).is_err());
+    }
+
+    #[test]
+    fn test_store_and_load() {
+        let store_args = vec![
+            Value::String("test_expr".to_string()),
+            Value::String("x + 1".to_string()),
+        ];
+        assert!(store(&store_args).is_ok());
+
+        let load_args = vec![Value::String("test_expr".to_string())];
+        let result = load(&load_args);
+        assert!(result.is_ok());
+        if let Ok(Value::String(s)) = result {
+            assert_eq!(s, "x + 1");
+        }
+    }
+
+    #[test]
+    fn test_store_wrong_args() {
+        assert!(store(&[]).is_err());
+        assert!(store(&[Value::Int(1)]).is_err());
+    }
+
+    #[test]
+    fn test_load_not_found() {
+        let args = vec![Value::String("nonexistent".to_string())];
+        assert!(load(&args).is_err());
+    }
+
+    #[test]
+    fn test_numerical_derivative_valid() {
+        let args = vec![
+            Value::String("x^2".to_string()),
+            Value::String("x".to_string()),
+            Value::Float(3.0),
+        ];
+        let result = numerical_derivative(&args);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_numerical_derivative_wrong_args() {
+        assert!(numerical_derivative(&[]).is_err());
+    }
+
+    #[test]
+    fn test_integrate_valid() {
+        let args = vec![
+            Value::String("x".to_string()),
+            Value::String("x".to_string()),
+        ];
+        assert!(integrate(&args).is_ok());
+    }
+
+    #[test]
+    fn test_integrate_wrong_args() {
+        assert!(integrate(&[]).is_err());
+    }
+
+    #[test]
+    fn test_definite_integral_valid() {
+        let args = vec![
+            Value::String("x".to_string()),
+            Value::String("x".to_string()),
+            Value::Float(0.0),
+            Value::Float(1.0),
+        ];
+        let result = definite_integral(&args);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_definite_integral_wrong_args() {
+        assert!(definite_integral(&[]).is_err());
+        let args = vec![Value::String("x".to_string())];
+        assert!(definite_integral(&args).is_err());
+    }
+}

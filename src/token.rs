@@ -104,3 +104,26 @@ impl std::fmt::Display for Token {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_token_display() {
+        assert_eq!(Token::Int(42).to_string(), "42");
+        assert_eq!(Token::Float(3.14).to_string(), "3.14");
+        assert_eq!(Token::Decimal("0.1".to_string()).to_string(), "0.1");
+        assert_eq!(Token::String("hello".to_string()).to_string(), "\"hello\"");
+        assert_eq!(Token::Ident("x".to_string()).to_string(), "x");
+        assert_eq!(Token::Try.to_string(), "try");
+        assert_eq!(Token::Catch.to_string(), "catch");
+        assert_eq!(Token::Question.to_string(), "?");
+    }
+
+    #[test]
+    fn test_token_clone() {
+        let t = Token::Int(42);
+        assert_eq!(t.clone(), Token::Int(42));
+    }
+}

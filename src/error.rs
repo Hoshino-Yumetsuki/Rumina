@@ -144,3 +144,127 @@ impl From<&str> for RuminaError {
         RuminaError::from(message.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_type_display() {
+        assert_eq!(ErrorType::RuntimeError.to_string(), "RuntimeError");
+        assert_eq!(ErrorType::TypeError.to_string(), "TypeError");
+        assert_eq!(ErrorType::IndexError.to_string(), "IndexError");
+        assert_eq!(ErrorType::KeyError.to_string(), "KeyError");
+        assert_eq!(
+            ErrorType::DivisionByZeroError.to_string(),
+            "DivisionByZeroError"
+        );
+        assert_eq!(
+            ErrorType::UndefinedVariableError.to_string(),
+            "UndefinedVariableError"
+        );
+    }
+
+    #[test]
+    fn test_rumina_error_new() {
+        let err = RuminaError::new(ErrorType::RuntimeError, "test error".to_string());
+        assert_eq!(err.error_type, ErrorType::RuntimeError);
+        assert_eq!(err.message, "test error");
+        assert!(err.stack_trace.is_empty());
+    }
+
+    #[test]
+    fn test_error_constructors() {
+        let err = RuminaError::runtime("runtime error");
+        assert_eq!(err.error_type, ErrorType::RuntimeError);
+
+        let err = RuminaError::type_error("type error");
+        assert_eq!(err.error_type, ErrorType::TypeError);
+
+        let err = RuminaError::index_error("index error");
+        assert_eq!(err.error_type, ErrorType::IndexError);
+
+        let err = RuminaError::key_error("key error");
+        assert_eq!(err.error_type, ErrorType::KeyError);
+
+        let err = RuminaError::division_by_zero();
+        assert_eq!(err.error_type, ErrorType::DivisionByZeroError);
+        assert_eq!(err.message, "Division by zero");
+
+        let err = RuminaError::undefined_variable("x");
+        assert_eq!(err.error_type, ErrorType::UndefinedVariableError);
+        assert_eq!(err.message, "Undefined variable 'x'");
+    }
+
+    #[test]
+    fn test_add_frame() {
+        let mut err = RuminaError::runtime("test");
+        let frame = StackFrame {
+            function_name: "main".to_string(),
+            file_name: "test.lm".to_string(),
+            line_number: Some(10),
+        };
+        err.add_frame(frame);
+        assert_eq!(err.stack_trace.len(), 1);
+    }
+
+    #[test]
+    fn test_format_error_no_stack() {
+        let err = RuminaError::runtime("test error");
+        let formatted = err.format_error();
+        assert!(formatted.contains("RuntimeError: test error"));
+        assert!(!formatted.contains("Traceback"));
+    }
+
+    #[test]
+    fn test_format_error_with_stack() {
+        let mut err = RuminaError::type_error("invalid type");
+        err.add_frame(StackFrame {
+            function_name: "foo".to_string(),
+            file_name: "test.lm".to_string(),
+            line_number: Some(5),
+        });
+        err.add_frame(StackFrame {
+            function_name: "bar".to_string(),
+            file_name: "main.lm".to_string(),
+            line_number: None,
+        });
+
+        let formatted = err.format_error();
+        assert!(formatted.contains("Traceback (most recent call last)"));
+        assert!(formatted.contains("File \"main.lm\", line ?, in bar"));
+        assert!(formatted.contains("File \"test.lm\", line 5, in foo"));
+        assert!(formatted.contains("TypeError: invalid type"));
+    }
+
+    #[test]
+    fn test_display_trait() {
+        let err = RuminaError::runtime("display test");
+        let display_str = format!("{}", err);
+        assert!(display_str.contains("RuntimeError: display test"));
+    }
+
+    #[test]
+    fn test_from_string() {
+        let err: RuminaError = "type mismatch".to_string().into();
+        assert_eq!(err.error_type, ErrorType::TypeError);
+
+        let err: RuminaError = "index out of bounds".to_string().into();
+        assert_eq!(err.error_type, ErrorType::IndexError);
+
+        let err: RuminaError = "key not found".to_string().into();
+        assert_eq!(err.error_type, ErrorType::KeyError);
+
+        let err: RuminaError = "Division by zero".to_string().into();
+        assert_eq!(err.error_type, ErrorType::DivisionByZeroError);
+
+        let err: RuminaError = "generic error".to_string().into();
+        assert_eq!(err.error_type, ErrorType::RuntimeError);
+    }
+
+    #[test]
+    fn test_from_str() {
+        let err: RuminaError = "test error".into();
+        assert_eq!(err.error_type, ErrorType::RuntimeError);
+    }
+}

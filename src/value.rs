@@ -570,6 +570,8 @@ impl PartialEq for Value {
         match (self, other) {
             (Value::Int(a), Value::Int(b)) => a == b,
             (Value::Float(a), Value::Float(b)) => a == b,
+            (Value::BigInt(a), Value::BigInt(b)) => a == b,
+            (Value::Rational(a), Value::Rational(b)) => a == b,
             (Value::Complex(a_re, a_im), Value::Complex(b_re, b_im)) => {
                 a_re == b_re && a_im == b_im
             }
@@ -578,5 +580,267 @@ impl PartialEq for Value {
             (Value::Null, Value::Null) => true,
             _ => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_type_name() {
+        assert_eq!(Value::Int(42).type_name(), "int");
+        assert_eq!(Value::Float(3.14).type_name(), "float");
+        assert_eq!(Value::Bool(true).type_name(), "bool");
+        assert_eq!(Value::String("test".to_string()).type_name(), "string");
+        assert_eq!(Value::Null.type_name(), "null");
+    }
+
+    #[test]
+    fn test_to_int() {
+        assert_eq!(Value::Int(42).to_int(), Ok(42));
+        assert_eq!(Value::Float(3.14).to_int(), Ok(3));
+        assert_eq!(Value::Bool(true).to_int(), Ok(1));
+        assert_eq!(Value::Bool(false).to_int(), Ok(0));
+        assert!(Value::String("test".to_string()).to_int().is_err());
+    }
+
+    #[test]
+    fn test_to_float() {
+        assert_eq!(Value::Int(42).to_float(), Ok(42.0));
+        assert_eq!(Value::Float(3.14).to_float(), Ok(3.14));
+        assert!(Value::String("test".to_string()).to_float().is_err());
+    }
+
+    #[test]
+    fn test_is_truthy() {
+        assert!(Value::Bool(true).is_truthy());
+        assert!(!Value::Bool(false).is_truthy());
+        assert!(!Value::Null.is_truthy());
+        assert!(!Value::Int(0).is_truthy());
+        assert!(Value::Int(1).is_truthy());
+        assert!(!Value::Float(0.0).is_truthy());
+        assert!(Value::Float(1.0).is_truthy());
+    }
+
+    #[test]
+    fn test_display() {
+        assert_eq!(format!("{}", Value::Int(42)), "42");
+        assert_eq!(format!("{}", Value::Float(3.14)), "3.14");
+        assert_eq!(format!("{}", Value::Bool(true)), "true");
+        assert_eq!(format!("{}", Value::String("test".to_string())), "test");
+        assert_eq!(format!("{}", Value::Null), "null");
+    }
+
+    #[test]
+    fn test_partial_eq() {
+        assert_eq!(Value::Int(42), Value::Int(42));
+        assert_ne!(Value::Int(42), Value::Int(43));
+        assert_eq!(Value::Bool(true), Value::Bool(true));
+        assert_eq!(Value::Null, Value::Null);
+        assert_ne!(Value::Int(42), Value::Float(42.0));
+    }
+
+    #[test]
+    fn test_type_name_extended() {
+        assert_eq!(Value::BigInt(BigInt::from(100)).type_name(), "bigint");
+        assert_eq!(
+            Value::Rational(BigRational::from_integer(BigInt::from(5))).type_name(),
+            "rational"
+        );
+        assert_eq!(
+            Value::Irrational(IrrationalValue::Pi).type_name(),
+            "irrational"
+        );
+        assert_eq!(
+            Value::Complex(Box::new(Value::Int(1)), Box::new(Value::Int(2))).type_name(),
+            "complex"
+        );
+        assert_eq!(Value::Set(vec![]).type_name(), "set");
+        assert_eq!(Value::MultiValue(vec![]).type_name(), "multi_value");
+        assert_eq!(
+            Value::Result {
+                ok: true,
+                value: Box::new(Value::Int(1))
+            }
+            .type_name(),
+            "result"
+        );
+        assert_eq!(Value::Option(None).type_name(), "option");
+        assert_eq!(
+            Value::Array(Rc::new(RefCell::new(vec![]))).type_name(),
+            "array"
+        );
+        assert_eq!(
+            Value::Struct(Rc::new(RefCell::new(HashMap::new()))).type_name(),
+            "struct"
+        );
+    }
+
+    #[test]
+    fn test_is_truthy_extended() {
+        assert!(Value::MultiValue(vec![Value::Bool(true)]).is_truthy());
+        assert!(!Value::MultiValue(vec![Value::Bool(false)]).is_truthy());
+        assert!(Value::Complex(Box::new(Value::Int(1)), Box::new(Value::Int(0))).is_truthy());
+        assert!(Value::Complex(Box::new(Value::Int(0)), Box::new(Value::Int(1))).is_truthy());
+        assert!(!Value::Complex(Box::new(Value::Int(0)), Box::new(Value::Int(0))).is_truthy());
+    }
+
+    #[test]
+    fn test_to_float_extended() {
+        assert_eq!(Value::BigInt(BigInt::from(100)).to_float(), Ok(100.0));
+        assert_eq!(
+            Value::Rational(BigRational::new(BigInt::from(1), BigInt::from(2))).to_float(),
+            Ok(0.5)
+        );
+        assert_eq!(
+            Value::Irrational(IrrationalValue::Pi).to_float(),
+            Ok(std::f64::consts::PI)
+        );
+        assert_eq!(
+            Value::Irrational(IrrationalValue::E).to_float(),
+            Ok(std::f64::consts::E)
+        );
+        assert_eq!(
+            Value::Complex(Box::new(Value::Int(5)), Box::new(Value::Int(0))).to_float(),
+            Ok(5.0)
+        );
+        assert!(
+            Value::Complex(Box::new(Value::Int(5)), Box::new(Value::Int(1)))
+                .to_float()
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn test_display_extended() {
+        assert_eq!(format!("{}", Value::BigInt(BigInt::from(999))), "999");
+        assert_eq!(
+            format!(
+                "{}",
+                Value::Rational(BigRational::new(BigInt::from(3), BigInt::from(4)))
+            ),
+            "3/4"
+        );
+        assert_eq!(format!("{}", Value::Irrational(IrrationalValue::Pi)), "π");
+        assert_eq!(
+            format!("{}", Value::Set(vec![Value::Int(1), Value::Int(2)])),
+            "{1, 2}"
+        );
+        assert_eq!(
+            format!("{}", Value::MultiValue(vec![Value::Int(1), Value::Int(2)])),
+            "1|2"
+        );
+        assert_eq!(
+            format!(
+                "{}",
+                Value::Result {
+                    ok: true,
+                    value: Box::new(Value::Int(42))
+                }
+            ),
+            "Ok(42)"
+        );
+        assert_eq!(
+            format!(
+                "{}",
+                Value::Result {
+                    ok: false,
+                    value: Box::new(Value::String("error".to_string()))
+                }
+            ),
+            "Err(error)"
+        );
+        assert_eq!(
+            format!("{}", Value::Option(Some(Box::new(Value::Int(10))))),
+            "Some(10)"
+        );
+        assert_eq!(format!("{}", Value::Option(None)), "None");
+    }
+
+    #[test]
+    fn test_normalize_multi() {
+        let values = vec![Value::Int(3), Value::Int(1), Value::Int(2)];
+        let result = Value::normalize_multi(values);
+        if let Value::MultiValue(v) = result {
+            assert_eq!(v.len(), 3);
+        } else {
+            panic!("Expected MultiValue");
+        }
+    }
+
+    #[test]
+    fn test_expand_multivalue() {
+        let mv = Value::MultiValue(vec![Value::Int(1), Value::Int(2)]);
+        let expanded = mv.expand_multivalue();
+        assert_eq!(expanded.len(), 2);
+
+        let single = Value::Int(42);
+        let expanded_single = single.expand_multivalue();
+        assert_eq!(expanded_single.len(), 1);
+    }
+
+    #[test]
+    fn test_complex_display() {
+        assert_eq!(
+            format!(
+                "{}",
+                Value::Complex(Box::new(Value::Int(0)), Box::new(Value::Int(1)))
+            ),
+            "i"
+        );
+        assert_eq!(
+            format!(
+                "{}",
+                Value::Complex(Box::new(Value::Int(0)), Box::new(Value::Int(-1)))
+            ),
+            "-i"
+        );
+        assert_eq!(
+            format!(
+                "{}",
+                Value::Complex(Box::new(Value::Int(3)), Box::new(Value::Int(1)))
+            ),
+            "3+i"
+        );
+        assert_eq!(
+            format!(
+                "{}",
+                Value::Complex(Box::new(Value::Int(3)), Box::new(Value::Int(-1)))
+            ),
+            "3-i"
+        );
+        assert_eq!(
+            format!(
+                "{}",
+                Value::Complex(Box::new(Value::Int(2)), Box::new(Value::Int(3)))
+            ),
+            "2+3i"
+        );
+    }
+
+    #[test]
+    fn test_irrational_sqrt() {
+        let sqrt_val = Value::Irrational(IrrationalValue::Sqrt(Box::new(Value::Int(4))));
+        let float_val = sqrt_val.to_float().unwrap();
+        assert_eq!(float_val, 2.0);
+    }
+
+    #[test]
+    fn test_array_display() {
+        let arr = Value::Array(Rc::new(RefCell::new(vec![
+            Value::Int(1),
+            Value::Int(2),
+            Value::Int(3),
+        ])));
+        assert_eq!(format!("{}", arr), "[1, 2, 3]");
+    }
+
+    #[test]
+    fn test_struct_display() {
+        let mut map = HashMap::new();
+        map.insert("x".to_string(), Value::Int(10));
+        let s = Value::Struct(Rc::new(RefCell::new(map)));
+        assert!(format!("{}", s).contains("x = 10"));
     }
 }

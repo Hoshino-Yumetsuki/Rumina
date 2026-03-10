@@ -281,3 +281,183 @@ impl Interpreter {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::{Stmt, UnaryOp};
+
+    fn new_interpreter() -> Interpreter {
+        Interpreter::new()
+    }
+
+    #[test]
+    fn test_literals() {
+        let mut interp = new_interpreter();
+        assert_eq!(interp.eval_expr(&Expr::Int(42)).unwrap(), Value::Int(42));
+        assert_eq!(
+            interp.eval_expr(&Expr::Float(3.14)).unwrap(),
+            Value::Float(3.14)
+        );
+        assert_eq!(
+            interp.eval_expr(&Expr::String("test".into())).unwrap(),
+            Value::String("test".into())
+        );
+        assert_eq!(
+            interp.eval_expr(&Expr::Bool(true)).unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(interp.eval_expr(&Expr::Null).unwrap(), Value::Null);
+    }
+
+    #[test]
+    fn test_array() {
+        let mut interp = new_interpreter();
+        let arr = Expr::Array(vec![Expr::Int(1), Expr::Int(2), Expr::Int(3)]);
+        let result = interp.eval_expr(&arr).unwrap();
+        if let Value::Array(a) = result {
+            assert_eq!(a.borrow().len(), 3);
+        } else {
+            panic!("Expected array");
+        }
+    }
+
+    #[test]
+    fn test_struct() {
+        let mut interp = new_interpreter();
+        let fields = vec![("x".into(), Expr::Int(10))];
+        let s = Expr::Struct(fields);
+        let result = interp.eval_expr(&s).unwrap();
+        if let Value::Struct(m) = result {
+            assert_eq!(m.borrow().get("x"), Some(&Value::Int(10)));
+        } else {
+            panic!("Expected struct");
+        }
+    }
+
+    #[test]
+    fn test_unary_neg() {
+        let mut interp = new_interpreter();
+        let expr = Expr::Unary {
+            op: UnaryOp::Neg,
+            expr: Box::new(Expr::Int(5)),
+        };
+        assert_eq!(interp.eval_expr(&expr).unwrap(), Value::Int(-5));
+    }
+
+    #[test]
+    fn test_unary_not() {
+        let mut interp = new_interpreter();
+        let expr = Expr::Unary {
+            op: UnaryOp::Not,
+            expr: Box::new(Expr::Bool(true)),
+        };
+        assert_eq!(interp.eval_expr(&expr).unwrap(), Value::Bool(false));
+    }
+
+    #[test]
+    fn test_index_array_positive() {
+        let mut interp = new_interpreter();
+        let arr = Expr::Array(vec![Expr::Int(10), Expr::Int(20)]);
+        let idx = Expr::Index {
+            object: Box::new(arr),
+            index: Box::new(Expr::Int(0)),
+        };
+        assert_eq!(interp.eval_expr(&idx).unwrap(), Value::Int(10));
+    }
+
+    #[test]
+    fn test_index_array_negative() {
+        let mut interp = new_interpreter();
+        let arr = Expr::Array(vec![Expr::Int(10), Expr::Int(20)]);
+        let idx = Expr::Index {
+            object: Box::new(arr),
+            index: Box::new(Expr::Int(-1)),
+        };
+        assert_eq!(interp.eval_expr(&idx).unwrap(), Value::Int(20));
+    }
+
+    #[test]
+    fn test_index_array_out_of_bounds() {
+        let mut interp = new_interpreter();
+        let arr = Expr::Array(vec![Expr::Int(10)]);
+        let idx = Expr::Index {
+            object: Box::new(arr),
+            index: Box::new(Expr::Int(5)),
+        };
+        assert!(interp.eval_expr(&idx).is_err());
+    }
+
+    #[test]
+    fn test_index_string() {
+        let mut interp = new_interpreter();
+        let s = Expr::String("abc".into());
+        let idx = Expr::Index {
+            object: Box::new(s),
+            index: Box::new(Expr::Int(1)),
+        };
+        assert_eq!(interp.eval_expr(&idx).unwrap(), Value::String("b".into()));
+    }
+
+    #[test]
+    fn test_index_string_negative() {
+        let mut interp = new_interpreter();
+        let s = Expr::String("abc".into());
+        let idx = Expr::Index {
+            object: Box::new(s),
+            index: Box::new(Expr::Int(-1)),
+        };
+        assert_eq!(interp.eval_expr(&idx).unwrap(), Value::String("c".into()));
+    }
+
+    #[test]
+    fn test_index_invalid() {
+        let mut interp = new_interpreter();
+        let idx = Expr::Index {
+            object: Box::new(Expr::Int(5)),
+            index: Box::new(Expr::Int(0)),
+        };
+        assert!(interp.eval_expr(&idx).is_err());
+    }
+
+    #[test]
+    fn test_member_invalid_type() {
+        let mut interp = new_interpreter();
+        let member = Expr::Member {
+            object: Box::new(Expr::Int(5)),
+            member: "x".into(),
+        };
+        assert!(interp.eval_expr(&member).is_err());
+    }
+
+    #[test]
+    fn test_lambda() {
+        let mut interp = new_interpreter();
+        let lambda = Expr::Lambda {
+            params: vec!["x".into()],
+            body: Box::new(Stmt::Expr(Expr::Ident("x".into()))),
+            is_simple: true,
+        };
+        let result = interp.eval_expr(&lambda).unwrap();
+        assert!(matches!(result, Value::Lambda { .. }));
+    }
+
+    #[test]
+    fn test_multi() {
+        let mut interp = new_interpreter();
+        let multi = Expr::Multi(vec![Expr::Int(1), Expr::Int(2)]);
+        let result = interp.eval_expr(&multi).unwrap();
+        if let Value::MultiValue(v) = result {
+            assert_eq!(v.len(), 2);
+        } else {
+            panic!("Expected multi");
+        }
+    }
+
+    #[test]
+    fn test_try_invalid_type() {
+        let mut interp = new_interpreter();
+        let try_expr = Expr::Try(Box::new(Expr::Int(5)));
+        assert!(interp.eval_expr(&try_expr).is_err());
+    }
+}

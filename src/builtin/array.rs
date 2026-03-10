@@ -274,3 +274,208 @@ fn calculate_determinant(matrix: &[Vec<f64>]) -> f64 {
 
     det
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_push() {
+        let arr = Value::Array(Rc::new(RefCell::new(vec![Value::Int(1)])));
+        let result = push(&[arr.clone(), Value::Int(2)]);
+        assert!(result.is_ok());
+        if let Value::Array(a) = arr {
+            assert_eq!(a.borrow().len(), 2);
+        }
+    }
+
+    #[test]
+    fn test_push_wrong_args() {
+        assert!(push(&[Value::Int(1)]).is_err());
+        assert!(push(&[Value::Int(1), Value::Int(2)]).is_err());
+    }
+
+    #[test]
+    fn test_pop() {
+        let arr = Value::Array(Rc::new(RefCell::new(vec![Value::Int(1), Value::Int(2)])));
+        let result = pop(&[arr.clone()]);
+        assert_eq!(result.unwrap(), Value::Int(2));
+    }
+
+    #[test]
+    fn test_pop_empty() {
+        let arr = Value::Array(Rc::new(RefCell::new(vec![])));
+        assert!(pop(&[arr]).is_err());
+    }
+
+    #[test]
+    fn test_range() {
+        let result = range(&[Value::Int(5)]).unwrap();
+        if let Value::Array(arr) = result {
+            assert_eq!(arr.borrow().len(), 5);
+            assert_eq!(arr.borrow()[0], Value::Int(0));
+            assert_eq!(arr.borrow()[4], Value::Int(4));
+        }
+    }
+
+    #[test]
+    fn test_range_negative() {
+        assert!(range(&[Value::Int(-1)]).is_err());
+    }
+
+    #[test]
+    fn test_concat() {
+        let arr1 = Value::Array(Rc::new(RefCell::new(vec![Value::Int(1)])));
+        let arr2 = Value::Array(Rc::new(RefCell::new(vec![Value::Int(2)])));
+        let result = concat(&[arr1, arr2]).unwrap();
+        if let Value::Array(arr) = result {
+            assert_eq!(arr.borrow().len(), 2);
+        }
+    }
+
+    #[test]
+    fn test_concat_empty() {
+        let result = concat(&[]).unwrap();
+        if let Value::Array(arr) = result {
+            assert_eq!(arr.borrow().len(), 0);
+        }
+    }
+
+    #[test]
+    fn test_concat_non_array() {
+        assert!(concat(&[Value::Int(1)]).is_err());
+    }
+
+    #[test]
+    fn test_foreach_wrong_args() {
+        assert!(foreach(&[Value::Int(1)]).is_err());
+    }
+
+    #[test]
+    fn test_foreach_not_implemented() {
+        let arr = Value::Array(Rc::new(RefCell::new(vec![Value::Int(1)])));
+        assert!(foreach(&[arr, Value::Null]).is_err());
+    }
+
+    #[test]
+    fn test_map_wrong_args() {
+        assert!(map(&[Value::Int(1)]).is_err());
+    }
+
+    #[test]
+    fn test_filter_wrong_args() {
+        assert!(filter(&[Value::Int(1)]).is_err());
+    }
+
+    #[test]
+    fn test_reduce_wrong_args() {
+        assert!(reduce(&[Value::Int(1)]).is_err());
+        assert!(reduce(&[Value::Int(1), Value::Int(2), Value::Int(3), Value::Int(4)]).is_err());
+    }
+
+    #[test]
+    fn test_reduce_non_array() {
+        assert!(reduce(&[Value::Int(1), Value::Null]).is_err());
+    }
+
+    #[test]
+    fn test_reduce_array() {
+        let arr = Value::Array(Rc::new(RefCell::new(vec![Value::Int(1)])));
+        assert!(reduce(&[arr, Value::Null]).is_ok());
+    }
+
+    #[test]
+    fn test_dot() {
+        let v1 = Value::Array(Rc::new(RefCell::new(vec![Value::Int(1), Value::Int(2)])));
+        let v2 = Value::Array(Rc::new(RefCell::new(vec![Value::Int(3), Value::Int(4)])));
+        let result = dot(&[v1, v2]).unwrap();
+        assert_eq!(result, Value::Float(11.0));
+    }
+
+    #[test]
+    fn test_dot_wrong_args() {
+        assert!(dot(&[Value::Int(1)]).is_err());
+    }
+
+    #[test]
+    fn test_dot_different_lengths() {
+        let v1 = Value::Array(Rc::new(RefCell::new(vec![Value::Int(1)])));
+        let v2 = Value::Array(Rc::new(RefCell::new(vec![Value::Int(1), Value::Int(2)])));
+        assert!(dot(&[v1, v2]).is_err());
+    }
+
+    #[test]
+    fn test_norm() {
+        let v = Value::Array(Rc::new(RefCell::new(vec![Value::Int(3), Value::Int(4)])));
+        let result = norm(&[v]).unwrap();
+        assert_eq!(result, Value::Float(5.0));
+    }
+
+    #[test]
+    fn test_norm_wrong_args() {
+        assert!(norm(&[]).is_err());
+        assert!(norm(&[Value::Int(1)]).is_err());
+    }
+
+    #[test]
+    fn test_cross() {
+        let v1 = Value::Array(Rc::new(RefCell::new(vec![
+            Value::Int(1),
+            Value::Int(0),
+            Value::Int(0),
+        ])));
+        let v2 = Value::Array(Rc::new(RefCell::new(vec![
+            Value::Int(0),
+            Value::Int(1),
+            Value::Int(0),
+        ])));
+        let result = cross(&[v1, v2]).unwrap();
+        if let Value::Array(arr) = result {
+            let borrowed = arr.borrow();
+            assert_eq!(borrowed[0], Value::Float(0.0));
+            assert_eq!(borrowed[1], Value::Float(0.0));
+            assert_eq!(borrowed[2], Value::Float(1.0));
+        }
+    }
+
+    #[test]
+    fn test_cross_wrong_args() {
+        assert!(cross(&[Value::Int(1)]).is_err());
+    }
+
+    #[test]
+    fn test_cross_wrong_dimensions() {
+        let v1 = Value::Array(Rc::new(RefCell::new(vec![Value::Int(1), Value::Int(2)])));
+        let v2 = Value::Array(Rc::new(RefCell::new(vec![Value::Int(3), Value::Int(4)])));
+        assert!(cross(&[v1, v2]).is_err());
+    }
+
+    #[test]
+    fn test_det_2x2() {
+        let row1 = Value::Array(Rc::new(RefCell::new(vec![Value::Int(1), Value::Int(2)])));
+        let row2 = Value::Array(Rc::new(RefCell::new(vec![Value::Int(3), Value::Int(4)])));
+        let matrix = Value::Array(Rc::new(RefCell::new(vec![row1, row2])));
+        let result = det(&[matrix]).unwrap();
+        assert_eq!(result, Value::Float(-2.0));
+    }
+
+    #[test]
+    fn test_det_wrong_args() {
+        assert!(det(&[]).is_err());
+        assert!(det(&[Value::Int(1)]).is_err());
+    }
+
+    #[test]
+    fn test_det_empty_matrix() {
+        let matrix = Value::Array(Rc::new(RefCell::new(vec![])));
+        assert!(det(&[matrix]).is_err());
+    }
+
+    #[test]
+    fn test_det_non_square() {
+        let row1 = Value::Array(Rc::new(RefCell::new(vec![Value::Int(1), Value::Int(2)])));
+        let row2 = Value::Array(Rc::new(RefCell::new(vec![Value::Int(3)])));
+        let matrix = Value::Array(Rc::new(RefCell::new(vec![row1, row2])));
+        assert!(det(&[matrix]).is_err());
+    }
+}

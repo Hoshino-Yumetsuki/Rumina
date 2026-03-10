@@ -147,3 +147,55 @@ pub fn replace_by_index(args: &[Value]) -> Result<Value, String> {
         _ => Err("string::replace_by_index expects (string, int, string)".to_string()),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_concat() {
+        let result = concat(&[
+            Value::String("hello".to_string()),
+            Value::String(" world".to_string()),
+        ]);
+        assert_eq!(result.unwrap(), Value::String("hello world".to_string()));
+    }
+
+    #[test]
+    fn test_length() {
+        let result = length(&[Value::String("hello".to_string())]);
+        assert_eq!(result.unwrap(), Value::Int(5));
+    }
+
+    #[test]
+    fn test_char_at() {
+        let result = char_at(&[Value::String("hello".to_string()), Value::Int(1)]);
+        assert_eq!(result.unwrap(), Value::Int('e' as i64));
+    }
+
+    #[test]
+    fn test_at() {
+        let result = at(&[Value::String("hello".to_string()), Value::Int(0)]);
+        assert_eq!(result.unwrap(), Value::String("h".to_string()));
+    }
+
+    #[test]
+    fn test_find() {
+        let result = find(&[
+            Value::String("hello".to_string()),
+            Value::Int(0),
+            Value::String("ll".to_string()),
+        ]);
+        assert_eq!(result.unwrap(), Value::Int(2));
+    }
+
+    #[test]
+    fn test_sub() {
+        let result = sub(&[
+            Value::String("hello".to_string()),
+            Value::Int(1),
+            Value::Int(3),
+        ]);
+        assert_eq!(result.unwrap(), Value::String("ell".to_string()));
+    }
+}

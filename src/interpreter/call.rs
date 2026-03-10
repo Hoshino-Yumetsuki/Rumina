@@ -451,3 +451,213 @@ impl Interpreter {
         Ok(accumulator)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::Stmt;
+
+    fn create_test_interpreter() -> Interpreter {
+        Interpreter::new()
+    }
+
+    #[test]
+    fn test_call_function_wrong_arg_count() {
+        let mut interp = create_test_interpreter();
+        let func = Value::Function {
+            name: "test".to_string(),
+            params: vec!["x".to_string()],
+            body: Box::new(Stmt::Block(vec![])),
+            decorators: vec![],
+        };
+
+        let result = interp.call_function(func, vec![]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Expected 1 arguments, got 0"));
+    }
+
+    #[test]
+    fn test_call_non_callable() {
+        let mut interp = create_test_interpreter();
+        let result = interp.call_function(Value::Int(42), vec![]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Cannot call"));
+    }
+
+    #[test]
+    fn test_curried_function_partial_application() {
+        let mut interp = create_test_interpreter();
+        let original = Box::new(Value::Function {
+            name: "add".to_string(),
+            params: vec!["x".to_string(), "y".to_string()],
+            body: Box::new(Stmt::Block(vec![])),
+            decorators: vec![],
+        });
+
+        let curried = Value::CurriedFunction {
+            original,
+            collected_args: vec![],
+            total_params: 2,
+        };
+
+        let result = interp.call_function(curried, vec![Value::Int(5)]);
+        assert!(result.is_ok());
+        match result.unwrap() {
+            Value::CurriedFunction { collected_args, .. } => {
+                assert_eq!(collected_args.len(), 1);
+            }
+            _ => panic!("Expected CurriedFunction"),
+        }
+    }
+
+    #[test]
+    fn test_curried_function_too_many_args() {
+        let mut interp = create_test_interpreter();
+        let original = Box::new(Value::Function {
+            name: "add".to_string(),
+            params: vec!["x".to_string()],
+            body: Box::new(Stmt::Block(vec![])),
+            decorators: vec![],
+        });
+
+        let curried = Value::CurriedFunction {
+            original,
+            collected_args: vec![],
+            total_params: 1,
+        };
+
+        let result = interp.call_function(curried, vec![Value::Int(5), Value::Int(10)]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Too many arguments"));
+    }
+
+    #[test]
+    fn test_memoized_function_caching() {
+        let mut interp = create_test_interpreter();
+        let cache = Rc::new(RefCell::new(HashMap::new()));
+        cache.borrow_mut().insert("5".to_string(), Value::Int(25));
+
+        let original = Box::new(Value::Function {
+            name: "square".to_string(),
+            params: vec!["x".to_string()],
+            body: Box::new(Stmt::Block(vec![])),
+            decorators: vec![],
+        });
+
+        let memoized = Value::MemoizedFunction {
+            original,
+            cache: cache.clone(),
+        };
+
+        let result = interp.call_function(memoized, vec![Value::Int(5)]);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Value::Int(25));
+    }
+
+    #[test]
+    fn test_handle_foreach_wrong_args() {
+        let mut interp = create_test_interpreter();
+        let result = interp.handle_foreach(&[]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("foreach expects 2 arguments"));
+    }
+
+    #[test]
+    fn test_handle_foreach_non_array() {
+        let mut interp = create_test_interpreter();
+        let result = interp.handle_foreach(&[Value::Int(42), Value::Null]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("foreach expects array"));
+    }
+
+    #[test]
+    fn test_handle_map_wrong_args() {
+        let mut interp = create_test_interpreter();
+        let result = interp.handle_map(&[]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("map expects 2 arguments"));
+    }
+
+    #[test]
+    fn test_handle_filter_wrong_args() {
+        let mut interp = create_test_interpreter();
+        let result = interp.handle_filter(&[]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("filter expects 2 arguments"));
+    }
+
+    #[test]
+    fn test_handle_reduce_wrong_args() {
+        let mut interp = create_test_interpreter();
+        let result = interp.handle_reduce(&[]);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .contains("reduce expects 2 or 3 arguments")
+        );
+    }
+
+    #[test]
+    fn test_handle_reduce_empty_array_no_initial() {
+        let mut interp = create_test_interpreter();
+        let empty_array = Value::Array(Rc::new(RefCell::new(vec![])));
+        let func = Value::Null;
+
+        let result = interp.handle_reduce(&[empty_array, func]);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .contains("reduce of empty array with no initial value")
+        );
+    }
+
+    #[test]
+    fn test_handle_reduce_empty_array_with_initial() {
+        let mut interp = create_test_interpreter();
+        let empty_array = Value::Array(Rc::new(RefCell::new(vec![])));
+        let func = Value::Null;
+        let initial = Value::Int(0);
+
+        let result = interp.handle_reduce(&[empty_array, func, initial.clone()]);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), initial);
+    }
+
+    #[test]
+    fn test_call_method_wrong_arg_count() {
+        let mut interp = create_test_interpreter();
+        let func = Value::Function {
+            name: "method".to_string(),
+            params: vec!["x".to_string()],
+            body: Box::new(Stmt::Block(vec![])),
+            decorators: vec![],
+        };
+
+        let result = interp.call_method(func, Value::Null, vec![]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Expected 1 arguments, got 0"));
+    }
+
+    #[test]
+    fn test_call_method_non_callable() {
+        let mut interp = create_test_interpreter();
+        let result = interp.call_method(Value::Int(42), Value::Null, vec![]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Cannot call method"));
+    }
+
+    #[test]
+    fn test_call_array_method_unknown() {
+        let mut interp = create_test_interpreter();
+        let array = Value::Array(Rc::new(RefCell::new(vec![])));
+        let result = interp.call_array_method(array, "unknown", vec![]);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .contains("does not have member 'unknown'")
+        );
+    }
+}

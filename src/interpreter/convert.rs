@@ -134,3 +134,145 @@ pub(super) fn convert_to_bigint(val: Value) -> Result<Value, String> {
         _ => Err(format!("Cannot convert {} to bigint", val.type_name())),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    #[test]
+    fn test_convert_to_int() {
+        assert!(matches!(convert_to_int(Value::Int(42)), Ok(Value::Int(42))));
+        assert!(matches!(
+            convert_to_int(Value::Float(3.14)),
+            Ok(Value::Int(3))
+        ));
+        assert!(matches!(
+            convert_to_int(Value::Bool(true)),
+            Ok(Value::Int(1))
+        ));
+        assert!(matches!(
+            convert_to_int(Value::Bool(false)),
+            Ok(Value::Int(0))
+        ));
+        assert!(matches!(
+            convert_to_int(Value::String("123".to_string())),
+            Ok(Value::Int(123))
+        ));
+        assert!(convert_to_int(Value::String("abc".to_string())).is_err());
+    }
+
+    #[test]
+    fn test_convert_to_float() {
+        assert!(matches!(
+            convert_to_float(Value::Float(3.14)),
+            Ok(Value::Float(_))
+        ));
+        assert!(matches!(
+            convert_to_float(Value::Int(42)),
+            Ok(Value::Float(_))
+        ));
+        assert!(matches!(
+            convert_to_float(Value::Bool(true)),
+            Ok(Value::Float(_))
+        ));
+        assert!(matches!(
+            convert_to_float(Value::String("3.14".to_string())),
+            Ok(Value::Float(_))
+        ));
+        assert!(convert_to_float(Value::String("abc".to_string())).is_err());
+    }
+
+    #[test]
+    fn test_convert_to_bool() {
+        assert!(matches!(
+            convert_to_bool(Value::Int(1)),
+            Ok(Value::Bool(true))
+        ));
+        assert!(matches!(
+            convert_to_bool(Value::Int(0)),
+            Ok(Value::Bool(false))
+        ));
+    }
+
+    #[test]
+    fn test_convert_to_string() {
+        assert!(matches!(
+            convert_to_string(Value::Int(42)),
+            Ok(Value::String(_))
+        ));
+        assert!(matches!(
+            convert_to_string(Value::Float(3.14)),
+            Ok(Value::String(_))
+        ));
+    }
+
+    #[test]
+    fn test_convert_to_rational() {
+        assert!(matches!(
+            convert_to_rational(Value::Int(42)),
+            Ok(Value::Rational(_))
+        ));
+        assert!(matches!(
+            convert_to_rational(Value::Float(3.14)),
+            Ok(Value::Rational(_))
+        ));
+        assert!(matches!(
+            convert_to_rational(Value::Bool(true)),
+            Ok(Value::Rational(_))
+        ));
+        assert!(convert_to_rational(Value::String("test".to_string())).is_err());
+    }
+
+    #[test]
+    fn test_convert_to_irrational() {
+        assert!(matches!(
+            convert_to_irrational(Value::Int(4)),
+            Ok(Value::Irrational(_))
+        ));
+        assert!(convert_to_irrational(Value::Float(3.14)).is_err());
+    }
+
+    #[test]
+    fn test_convert_to_complex() {
+        assert!(matches!(
+            convert_to_complex(Value::Int(42)),
+            Ok(Value::Complex(_, _))
+        ));
+        assert!(matches!(
+            convert_to_complex(Value::Float(3.14)),
+            Ok(Value::Complex(_, _))
+        ));
+        assert!(convert_to_complex(Value::String("test".to_string())).is_err());
+    }
+
+    #[test]
+    fn test_convert_to_array() {
+        assert!(matches!(
+            convert_to_array(Value::Array(Rc::new(RefCell::new(vec![])))),
+            Ok(Value::Array(_))
+        ));
+        assert!(convert_to_array(Value::Int(42)).is_err());
+    }
+
+    #[test]
+    fn test_convert_to_bigint() {
+        assert!(matches!(
+            convert_to_bigint(Value::Int(42)),
+            Ok(Value::BigInt(_))
+        ));
+        assert!(matches!(
+            convert_to_bigint(Value::BigInt(BigInt::from(100))),
+            Ok(Value::BigInt(_))
+        ));
+        assert!(convert_to_bigint(Value::Float(3.14)).is_err());
+    }
+
+    #[test]
+    fn test_convert_to_declared_type() {
+        assert!(convert_to_declared_type(Value::Int(42), &DeclaredType::Int).is_ok());
+        assert!(convert_to_declared_type(Value::Int(42), &DeclaredType::Float).is_ok());
+        assert!(convert_to_declared_type(Value::Int(42), &DeclaredType::String).is_ok());
+    }
+}

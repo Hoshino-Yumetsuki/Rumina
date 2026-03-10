@@ -542,3 +542,211 @@ pub fn to_complex(args: &[Value]) -> Result<Value, String> {
         _ => Err(format!("Cannot convert {} to complex", args[0].type_name())),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_typeof_fn() {
+        assert_eq!(
+            typeof_fn(&[Value::Int(42)]).unwrap(),
+            Value::String("int".to_string())
+        );
+        assert_eq!(
+            typeof_fn(&[Value::Float(3.14)]).unwrap(),
+            Value::String("float".to_string())
+        );
+        assert!(typeof_fn(&[]).is_err());
+        assert!(typeof_fn(&[Value::Int(1), Value::Int(2)]).is_err());
+    }
+
+    #[test]
+    fn test_size() {
+        let arr = Value::Array(Rc::new(RefCell::new(vec![Value::Int(1), Value::Int(2)])));
+        assert_eq!(size(&[arr]).unwrap(), Value::Int(2));
+
+        let s = Value::String("hello".to_string());
+        assert_eq!(size(&[s]).unwrap(), Value::Int(5));
+
+        assert!(size(&[Value::Int(42)]).is_err());
+        assert!(size(&[]).is_err());
+    }
+
+    #[test]
+    fn test_tostring() {
+        assert_eq!(
+            tostring(&[Value::Int(42)]).unwrap(),
+            Value::String("42".to_string())
+        );
+        assert!(tostring(&[]).is_err());
+    }
+
+    #[test]
+    fn test_same() {
+        let s1 = Rc::new(RefCell::new(HashMap::new()));
+        let s2 = Rc::clone(&s1);
+        assert_eq!(
+            same(&[Value::Struct(s1.clone()), Value::Struct(s2)]).unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            same(&[Value::Int(5), Value::Int(5)]).unwrap(),
+            Value::Bool(true)
+        );
+        assert!(same(&[Value::Int(1)]).is_err());
+    }
+
+    #[test]
+    fn test_assert() {
+        assert!(assert(&[Value::Bool(true)]).is_ok());
+        assert!(assert(&[Value::Bool(false)]).is_err());
+        assert!(assert(&[Value::Bool(false), Value::String("custom".to_string())]).is_err());
+        assert!(assert(&[]).is_err());
+    }
+
+    #[test]
+    fn test_to_int() {
+        assert_eq!(to_int(&[Value::Int(42)]).unwrap(), Value::Int(42));
+        assert_eq!(to_int(&[Value::Float(3.7)]).unwrap(), Value::Int(3));
+        assert_eq!(to_int(&[Value::Bool(true)]).unwrap(), Value::Int(1));
+        assert!(to_int(&[Value::String("abc".to_string())]).is_err());
+        assert!(to_int(&[]).is_err());
+    }
+
+    #[test]
+    fn test_to_float() {
+        assert_eq!(to_float(&[Value::Float(3.14)]).unwrap(), Value::Float(3.14));
+        assert_eq!(to_float(&[Value::Int(42)]).unwrap(), Value::Float(42.0));
+        assert!(to_float(&[]).is_err());
+    }
+
+    #[test]
+    fn test_to_bool() {
+        assert_eq!(to_bool(&[Value::Bool(true)]).unwrap(), Value::Bool(true));
+        assert_eq!(to_bool(&[Value::Int(0)]).unwrap(), Value::Bool(false));
+        assert_eq!(to_bool(&[Value::Int(1)]).unwrap(), Value::Bool(true));
+        assert!(to_bool(&[]).is_err());
+    }
+
+    #[test]
+    fn test_to_rational() {
+        use num::BigInt;
+        let result = to_rational(&[Value::Int(5)]).unwrap();
+        if let Value::Rational(r) = result {
+            assert_eq!(*r.numer(), BigInt::from(5));
+            assert_eq!(*r.denom(), BigInt::from(1));
+        } else {
+            panic!("Expected Rational");
+        }
+        assert!(to_rational(&[]).is_err());
+    }
+
+    #[test]
+    fn test_new_fn() {
+        let mut map = HashMap::new();
+        map.insert("x".to_string(), Value::Int(10));
+        let s = Value::Struct(Rc::new(RefCell::new(map)));
+
+        let result = new_fn(&[s.clone()]).unwrap();
+        if let Value::Struct(new_s) = result {
+            assert_eq!(new_s.borrow().get("x"), Some(&Value::Int(10)));
+            assert!(new_s.borrow().contains_key("__parent__"));
+        }
+
+        assert!(new_fn(&[]).is_err());
+        assert!(new_fn(&[Value::Int(1)]).is_err());
+    }
+
+    #[test]
+    fn test_setattr() {
+        let s = Value::Struct(Rc::new(RefCell::new(HashMap::new())));
+        assert!(setattr(&[s.clone(), Value::String("key".to_string()), Value::Int(42)]).is_ok());
+
+        if let Value::Struct(st) = s {
+            assert_eq!(st.borrow().get("key"), Some(&Value::Int(42)));
+        }
+
+        assert!(setattr(&[Value::Int(1), Value::String("k".to_string()), Value::Int(1)]).is_err());
+        assert!(setattr(&[]).is_err());
+    }
+
+    #[test]
+    fn test_update() {
+        let target = Value::Struct(Rc::new(RefCell::new(HashMap::new())));
+        let mut source_map = HashMap::new();
+        source_map.insert("a".to_string(), Value::Int(1));
+        let source = Value::Struct(Rc::new(RefCell::new(source_map)));
+
+        assert!(update(&[target.clone(), source]).is_ok());
+
+        if let Value::Struct(t) = target {
+            assert_eq!(t.borrow().get("a"), Some(&Value::Int(1)));
+        }
+
+        assert!(update(&[Value::Int(1), Value::Int(2)]).is_err());
+    }
+
+    #[test]
+    fn test_fraction() {
+        use num::BigInt;
+
+        let result = fraction(&[Value::Int(5)]).unwrap();
+        if let Value::Rational(r) = result {
+            assert_eq!(*r.numer(), BigInt::from(5));
+        }
+
+        assert!(fraction(&[Value::Float(0.5)]).is_ok());
+        assert!(fraction(&[Value::Float(f64::INFINITY)]).is_err());
+        assert!(fraction(&[]).is_err());
+    }
+
+    #[test]
+    fn test_decimal() {
+        let result = decimal(&[Value::Int(5)]).unwrap();
+        assert_eq!(result, Value::Float(5.0));
+
+        let result2 = decimal(&[Value::Float(3.14159), Value::Int(2)]).unwrap();
+        assert_eq!(result2, Value::Float(3.14));
+
+        assert!(decimal(&[]).is_err());
+        assert!(decimal(&[Value::Int(1), Value::Int(20)]).is_err());
+    }
+
+    #[test]
+    fn test_to_string_fn() {
+        assert_eq!(
+            to_string_fn(&[Value::Int(42)]).unwrap(),
+            Value::String("42".to_string())
+        );
+        assert!(to_string_fn(&[]).is_err());
+    }
+
+    #[test]
+    fn test_to_complex() {
+        let result = to_complex(&[Value::Int(5)]).unwrap();
+        if let Value::Complex(re, im) = result {
+            assert_eq!(*re, Value::Int(5));
+            assert_eq!(*im, Value::Int(0));
+        }
+
+        assert!(to_complex(&[]).is_err());
+    }
+
+    #[test]
+    fn test_to_string() {
+        assert_eq!(
+            to_string(&[Value::Int(99)]).unwrap(),
+            Value::String("99".to_string())
+        );
+    }
+
+    #[test]
+    fn test_size_struct() {
+        let mut map = HashMap::new();
+        map.insert("a".to_string(), Value::Int(1));
+        map.insert("b".to_string(), Value::Int(2));
+        let s = Value::Struct(Rc::new(RefCell::new(map)));
+        assert_eq!(size(&[s]).unwrap(), Value::Int(2));
+    }
+}

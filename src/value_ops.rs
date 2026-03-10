@@ -404,3 +404,299 @@ pub fn value_unary_op(op: UnaryOp, val: &Value) -> Result<Value, String> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use num::BigInt;
+
+    #[test]
+    fn test_int_arithmetic() {
+        assert_eq!(
+            value_binary_op(&Value::Int(5), BinOp::Add, &Value::Int(3)).unwrap(),
+            Value::Int(8)
+        );
+        assert_eq!(
+            value_binary_op(&Value::Int(5), BinOp::Sub, &Value::Int(3)).unwrap(),
+            Value::Int(2)
+        );
+        assert_eq!(
+            value_binary_op(&Value::Int(5), BinOp::Mul, &Value::Int(3)).unwrap(),
+            Value::Int(15)
+        );
+        assert_eq!(
+            value_binary_op(&Value::Int(10), BinOp::Mod, &Value::Int(3)).unwrap(),
+            Value::Int(1)
+        );
+    }
+
+    #[test]
+    fn test_int_division() {
+        let result = value_binary_op(&Value::Int(10), BinOp::Div, &Value::Int(3)).unwrap();
+        match result {
+            Value::Rational(r) => {
+                assert_eq!(r.numer(), &BigInt::from(10));
+                assert_eq!(r.denom(), &BigInt::from(3));
+            }
+            _ => panic!("Expected Rational"),
+        }
+    }
+
+    #[test]
+    fn test_int_division_by_zero() {
+        let result = value_binary_op(&Value::Int(10), BinOp::Div, &Value::Int(0));
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Division by zero");
+    }
+
+    #[test]
+    fn test_int_pow() {
+        assert_eq!(
+            value_binary_op(&Value::Int(2), BinOp::Pow, &Value::Int(3)).unwrap(),
+            Value::Int(8)
+        );
+        assert_eq!(
+            value_binary_op(&Value::Int(2), BinOp::Pow, &Value::Int(10)).unwrap(),
+            Value::Int(1024)
+        );
+    }
+
+    #[test]
+    fn test_int_pow_negative() {
+        let result = value_binary_op(&Value::Int(2), BinOp::Pow, &Value::Int(-2)).unwrap();
+        match result {
+            Value::Float(f) => assert!((f - 0.25).abs() < 1e-10),
+            _ => panic!("Expected Float"),
+        }
+    }
+
+    #[test]
+    fn test_int_pow_overflow() {
+        let result = value_binary_op(&Value::Int(2), BinOp::Pow, &Value::Int(100)).unwrap();
+        match result {
+            Value::BigInt(_) => {}
+            _ => panic!("Expected BigInt on overflow"),
+        }
+    }
+
+    #[test]
+    fn test_int_comparisons() {
+        assert_eq!(
+            value_binary_op(&Value::Int(5), BinOp::Equal, &Value::Int(5)).unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            value_binary_op(&Value::Int(5), BinOp::NotEqual, &Value::Int(3)).unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            value_binary_op(&Value::Int(5), BinOp::Greater, &Value::Int(3)).unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            value_binary_op(&Value::Int(5), BinOp::GreaterEq, &Value::Int(5)).unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            value_binary_op(&Value::Int(3), BinOp::Less, &Value::Int(5)).unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            value_binary_op(&Value::Int(3), BinOp::LessEq, &Value::Int(3)).unwrap(),
+            Value::Bool(true)
+        );
+    }
+
+    #[test]
+    fn test_bigint_arithmetic() {
+        let a = Value::BigInt(BigInt::from(100));
+        let b = Value::BigInt(BigInt::from(50));
+        assert_eq!(
+            value_binary_op(&a, BinOp::Add, &b).unwrap(),
+            Value::BigInt(BigInt::from(150))
+        );
+        assert_eq!(
+            value_binary_op(&a, BinOp::Sub, &b).unwrap(),
+            Value::BigInt(BigInt::from(50))
+        );
+        assert_eq!(
+            value_binary_op(&a, BinOp::Mul, &b).unwrap(),
+            Value::BigInt(BigInt::from(5000))
+        );
+    }
+
+    #[test]
+    fn test_bigint_division() {
+        let a = Value::BigInt(BigInt::from(100));
+        let b = Value::BigInt(BigInt::from(3));
+        let result = value_binary_op(&a, BinOp::Div, &b).unwrap();
+        match result {
+            Value::Rational(_) => {}
+            _ => panic!("Expected Rational"),
+        }
+    }
+
+    #[test]
+    fn test_bigint_division_by_zero() {
+        let a = Value::BigInt(BigInt::from(100));
+        let b = Value::BigInt(BigInt::from(0));
+        assert!(value_binary_op(&a, BinOp::Div, &b).is_err());
+    }
+
+    #[test]
+    fn test_bigint_mod() {
+        let a = Value::BigInt(BigInt::from(100));
+        let b = Value::BigInt(BigInt::from(7));
+        assert_eq!(
+            value_binary_op(&a, BinOp::Mod, &b).unwrap(),
+            Value::BigInt(BigInt::from(2))
+        );
+    }
+
+    #[test]
+    fn test_bigint_mod_by_zero() {
+        let a = Value::BigInt(BigInt::from(100));
+        let b = Value::BigInt(BigInt::from(0));
+        assert!(value_binary_op(&a, BinOp::Mod, &b).is_err());
+    }
+
+    #[test]
+    fn test_bigint_pow() {
+        let a = Value::BigInt(BigInt::from(2));
+        let b = Value::BigInt(BigInt::from(10));
+        assert_eq!(
+            value_binary_op(&a, BinOp::Pow, &b).unwrap(),
+            Value::BigInt(BigInt::from(1024))
+        );
+    }
+
+    #[test]
+    fn test_bigint_comparisons() {
+        let a = Value::BigInt(BigInt::from(100));
+        let b = Value::BigInt(BigInt::from(50));
+        assert_eq!(
+            value_binary_op(&a, BinOp::Equal, &a).unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            value_binary_op(&a, BinOp::NotEqual, &b).unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            value_binary_op(&a, BinOp::Greater, &b).unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            value_binary_op(&a, BinOp::GreaterEq, &a).unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            value_binary_op(&b, BinOp::Less, &a).unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            value_binary_op(&b, BinOp::LessEq, &b).unwrap(),
+            Value::Bool(true)
+        );
+    }
+
+    #[test]
+    fn test_bool_operations() {
+        assert_eq!(
+            value_binary_op(&Value::Bool(true), BinOp::And, &Value::Bool(true)).unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            value_binary_op(&Value::Bool(true), BinOp::And, &Value::Bool(false)).unwrap(),
+            Value::Bool(false)
+        );
+        assert_eq!(
+            value_binary_op(&Value::Bool(false), BinOp::Or, &Value::Bool(true)).unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            value_binary_op(&Value::Bool(false), BinOp::Or, &Value::Bool(false)).unwrap(),
+            Value::Bool(false)
+        );
+        assert_eq!(
+            value_binary_op(&Value::Bool(true), BinOp::Equal, &Value::Bool(true)).unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            value_binary_op(&Value::Bool(true), BinOp::NotEqual, &Value::Bool(false)).unwrap(),
+            Value::Bool(true)
+        );
+    }
+
+    #[test]
+    fn test_null_operations() {
+        assert_eq!(
+            value_binary_op(&Value::Null, BinOp::Equal, &Value::Null).unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            value_binary_op(&Value::Null, BinOp::NotEqual, &Value::Null).unwrap(),
+            Value::Bool(false)
+        );
+        assert_eq!(
+            value_binary_op(&Value::Null, BinOp::Equal, &Value::Int(5)).unwrap(),
+            Value::Bool(false)
+        );
+        assert_eq!(
+            value_binary_op(&Value::Int(5), BinOp::Equal, &Value::Null).unwrap(),
+            Value::Bool(false)
+        );
+        assert_eq!(
+            value_binary_op(&Value::Null, BinOp::NotEqual, &Value::Int(5)).unwrap(),
+            Value::Bool(true)
+        );
+    }
+
+    #[test]
+    fn test_unary_neg() {
+        assert_eq!(
+            value_unary_op(UnaryOp::Neg, &Value::Int(5)).unwrap(),
+            Value::Int(-5)
+        );
+        assert_eq!(
+            value_unary_op(UnaryOp::Neg, &Value::Float(3.14)).unwrap(),
+            Value::Float(-3.14)
+        );
+        assert_eq!(
+            value_unary_op(UnaryOp::Neg, &Value::BigInt(BigInt::from(100))).unwrap(),
+            Value::BigInt(BigInt::from(-100))
+        );
+    }
+
+    #[test]
+    fn test_unary_not() {
+        assert_eq!(
+            value_unary_op(UnaryOp::Not, &Value::Bool(true)).unwrap(),
+            Value::Bool(false)
+        );
+        assert_eq!(
+            value_unary_op(UnaryOp::Not, &Value::Bool(false)).unwrap(),
+            Value::Bool(true)
+        );
+    }
+
+    #[test]
+    fn test_unary_not_error() {
+        let result = value_unary_op(UnaryOp::Not, &Value::Int(5));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_bigint_pow_optimized_small() {
+        let base = BigInt::from(2);
+        let result = bigint_pow_optimized(&base, 10);
+        assert_eq!(result, BigInt::from(1024));
+    }
+
+    #[test]
+    fn test_bigint_pow_parallel_base_cases() {
+        let base = BigInt::from(2);
+        assert_eq!(bigint_pow_parallel(&base, 0), BigInt::from(1));
+        assert_eq!(bigint_pow_parallel(&base, 1), BigInt::from(2));
+    }
+}
