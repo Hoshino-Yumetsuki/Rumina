@@ -315,3 +315,22 @@ pub fn factorial(args: &[Value]) -> Result<Value, String> {
         )),
     }
 }
+
+// LSR-010: Complex number functions
+pub fn abs_complex(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("abs expects 1 argument".to_string());
+    }
+
+    match &args[0] {
+        Value::Complex(re, im) => {
+            let re_f = re.to_float()?;
+            let im_f = im.to_float()?;
+            Ok(Value::Float((re_f * re_f + im_f * im_f).sqrt()))
+        }
+        _ => Err(format!(
+            "abs expects complex number, got {}",
+            args[0].type_name()
+        )),
+    }
+}

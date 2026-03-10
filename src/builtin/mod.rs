@@ -13,6 +13,7 @@ pub mod math;
 pub mod path;
 pub mod process;
 pub mod random;
+pub mod set;
 pub mod stream;
 pub mod string;
 pub mod time;
@@ -34,6 +35,7 @@ pub fn register_builtins(globals: &mut HashMap<String, Value>) {
     register_fn(globals, "factorial", math::factorial);
 
     // LSR-010: 复数函数
+    register_fn(globals, "abs_complex", math::abs_complex);
     register_fn(globals, "arg", math::arg);
     register_fn(globals, "conj", math::conj);
     register_fn(globals, "re", math::re);
@@ -85,6 +87,38 @@ pub fn register_builtins(globals: &mut HashMap<String, Value>) {
     register_fn(globals, "norm", array::norm);
     register_fn(globals, "cross", array::cross);
     register_fn(globals, "det", array::det);
+
+    // LSR-006: Set 函数
+    register_fn(globals, "Set", set::set_constructor);
+    register_fn(globals, "set_get", set::set_get);
+    register_fn(globals, "set_main_value", set::set_main_value);
+    register_fn(globals, "set_get_real", set::set_get_real);
+    register_fn(globals, "set_to_add", set::set_to_add);
+    register_fn(globals, "set_to_sub", set::set_to_sub);
+    register_fn(globals, "set_to_multiply", set::set_to_multiply);
+    register_fn(globals, "set_to_divide", set::set_to_divide);
+    register_fn(globals, "set_to_pow", set::set_to_pow);
+    register_fn(globals, "set_to_sqrt", set::set_to_sqrt);
+    register_fn(globals, "set_to_sin", set::set_to_sin);
+    register_fn(globals, "set_to_cos", set::set_to_cos);
+    register_fn(globals, "set_to_tangent", set::set_to_tangent);
+
+    // LSR-006: Set.isReturnSet 全局标志
+    globals.insert(
+        "Set".to_string(),
+        Value::Module(Rc::new(RefCell::new({
+            let mut set_module = HashMap::new();
+            set_module.insert("isReturnSet".to_string(), Value::Bool(false));
+            set_module.insert(
+                "constructor".to_string(),
+                Value::NativeFunction {
+                    name: "Set".to_string(),
+                    func: set::set_constructor,
+                },
+            );
+            set_module
+        }))),
+    );
 
     // 随机命名空间
     let mut random_ns = HashMap::new();

@@ -67,6 +67,22 @@ impl Interpreter {
                         return self.call_array_method(obj, member, arg_vals);
                     }
 
+                    // LSR-006: Set 方法调用
+                    if let Value::Set(_) = &obj {
+                        let method_name = format!("set_{}", member);
+                        if let Ok(func) = self.get_variable(&method_name) {
+                            return self.call_function(func, arg_vals);
+                        }
+
+                        let alt_method_name =
+                            format!("set_to_{}", member.strip_prefix("to").unwrap_or(member));
+                        if let Ok(func) = self.get_variable(&alt_method_name) {
+                            return self.call_function(func, arg_vals);
+                        }
+
+                        return Err(format!("Set does not have method '{}'", member));
+                    }
+
                     if member == "curried" {
                         let curried =
                             match self.try_call_special_method(obj.clone(), member, Vec::new()) {
@@ -171,6 +187,26 @@ impl Interpreter {
                         self.try_call_special_method(obj.clone(), member, arg_vals.clone())
                     {
                         return result;
+                    }
+
+                    // LSR-006: Set 方法调用
+                    if let Value::Set(_) = &obj {
+                        let mut method_args = vec![obj.clone()];
+                        method_args.extend(arg_vals);
+
+                        let method_name = format!("set_{}", member);
+                        if let Ok(func) = self.get_variable(&method_name) {
+                            return self.call_function(func, method_args);
+                        }
+
+                        // 尝试 set_to_* 形式
+                        let alt_method_name =
+                            format!("set_to_{}", member.strip_prefix("to").unwrap_or(member));
+                        if let Ok(func) = self.get_variable(&alt_method_name) {
+                            return self.call_function(func, method_args);
+                        }
+
+                        return Err(format!("Set does not have method '{}'", member));
                     }
 
                     // 获取方法
