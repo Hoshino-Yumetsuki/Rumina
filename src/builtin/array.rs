@@ -298,7 +298,7 @@ mod tests {
     #[test]
     fn test_pop() {
         let arr = Value::Array(Rc::new(RefCell::new(vec![Value::Int(1), Value::Int(2)])));
-        let result = pop(&[arr.clone()]);
+        let result = pop(std::slice::from_ref(&arr));
         assert_eq!(result.unwrap(), Value::Int(2));
     }
 

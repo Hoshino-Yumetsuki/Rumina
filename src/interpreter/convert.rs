@@ -136,6 +136,7 @@ pub(super) fn convert_to_bigint(val: Value) -> Result<Value, String> {
 }
 
 #[cfg(test)]
+#[allow(clippy::approx_constant)]
 mod tests {
     use super::*;
     use std::cell::RefCell;

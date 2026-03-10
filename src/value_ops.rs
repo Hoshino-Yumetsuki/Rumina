@@ -406,6 +406,7 @@ pub fn value_unary_op(op: UnaryOp, val: &Value) -> Result<Value, String> {
 }
 
 #[cfg(test)]
+#[allow(clippy::approx_constant)]
 mod tests {
     use super::*;
     use num::BigInt;

@@ -47,7 +47,7 @@
     "coverage:rust": "node scripts/run-rust-command.js llvm-cov --workspace --lib --summary-only",
     "coverage:rust:lcov": "node scripts/run-rust-command.js llvm-cov --workspace --lib --lcov --output-path target/llvm-cov/lcov.info",
     "postbuild": "rimraf dist/.gitignore dist/README.md dist/package.json dist/LICENSE",
-    "lint": "biome check && biome lint",
+    "lint": "biome check && biome lint && cargo clippy --workspace --all-targets -- -D warnings",
     "lint-fix": "biome format --write && biome lint --write",
     "test:rust": "node scripts/run-rust-command.js test --workspace --lib",
     "test:rust:all": "node scripts/run-rust-command.js test --workspace",

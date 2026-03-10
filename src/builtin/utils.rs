@@ -544,6 +544,7 @@ pub fn to_complex(args: &[Value]) -> Result<Value, String> {
 }
 
 #[cfg(test)]
+#[allow(clippy::approx_constant)]
 mod tests {
     use super::*;
 
@@ -648,7 +649,7 @@ mod tests {
         map.insert("x".to_string(), Value::Int(10));
         let s = Value::Struct(Rc::new(RefCell::new(map)));
 
-        let result = new_fn(&[s.clone()]).unwrap();
+        let result = new_fn(std::slice::from_ref(&s)).unwrap();
         if let Value::Struct(new_s) = result {
             assert_eq!(new_s.borrow().get("x"), Some(&Value::Int(10)));
             assert!(new_s.borrow().contains_key("__parent__"));

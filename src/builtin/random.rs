@@ -34,7 +34,7 @@ mod tests {
         let result = rand(&[]);
         assert!(result.is_ok());
         if let Ok(Value::Float(f)) = result {
-            assert!(f >= 0.0 && f < 1.0);
+            assert!((0.0..1.0).contains(&f));
         }
     }
 
@@ -43,7 +43,7 @@ mod tests {
         let result = randint(&[Value::Int(1), Value::Int(10)]);
         assert!(result.is_ok());
         if let Ok(Value::Int(i)) = result {
-            assert!(i >= 1 && i <= 10);
+            assert!((1..=10).contains(&i));
         }
     }
 

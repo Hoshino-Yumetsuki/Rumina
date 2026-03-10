@@ -2119,6 +2119,7 @@ impl VM {
 }
 
 #[cfg(test)]
+#[allow(clippy::approx_constant)]
 mod tests {
     use super::*;
 

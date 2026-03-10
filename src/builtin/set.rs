@@ -241,7 +241,7 @@ pub fn set_to_sqrt(args: &[Value]) -> Result<Value, String> {
         Value::Set(values) => {
             let result: Result<Vec<Value>, String> = values
                 .iter()
-                .map(|v| crate::builtin::math::sqrt(&[v.clone()]))
+                .map(|v| crate::builtin::math::sqrt(std::slice::from_ref(v)))
                 .collect();
             Ok(Value::Set(result?))
         }
@@ -258,7 +258,7 @@ pub fn set_to_sin(args: &[Value]) -> Result<Value, String> {
         Value::Set(values) => {
             let result: Result<Vec<Value>, String> = values
                 .iter()
-                .map(|v| crate::builtin::math::sin(&[v.clone()]))
+                .map(|v| crate::builtin::math::sin(std::slice::from_ref(v)))
                 .collect();
             Ok(Value::Set(result?))
         }
@@ -275,7 +275,7 @@ pub fn set_to_cos(args: &[Value]) -> Result<Value, String> {
         Value::Set(values) => {
             let result: Result<Vec<Value>, String> = values
                 .iter()
-                .map(|v| crate::builtin::math::cos(&[v.clone()]))
+                .map(|v| crate::builtin::math::cos(std::slice::from_ref(v)))
                 .collect();
             Ok(Value::Set(result?))
         }
@@ -292,7 +292,7 @@ pub fn set_to_tangent(args: &[Value]) -> Result<Value, String> {
         Value::Set(values) => {
             let result: Result<Vec<Value>, String> = values
                 .iter()
-                .map(|v| crate::builtin::math::tan(&[v.clone()]))
+                .map(|v| crate::builtin::math::tan(std::slice::from_ref(v)))
                 .collect();
             Ok(Value::Set(result?))
         }
