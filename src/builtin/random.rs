@@ -2,7 +2,7 @@
 use crate::value::Value;
 
 pub fn rand(_args: &[Value]) -> Result<Value, String> {
-    use rand::Rng;
+    use rand::RngExt;
     let mut rng = rand::rng();
     Ok(Value::Float(rng.random::<f64>()))
 }
@@ -12,7 +12,7 @@ pub fn randint(args: &[Value]) -> Result<Value, String> {
         return Err("random::randint expects 2 arguments (start, end)".to_string());
     }
 
-    use rand::Rng;
+    use rand::RngExt;
     let start = args[0].to_int()?;
     let end = args[1].to_int()?;
     let mut rng = rand::rng();
@@ -20,7 +20,7 @@ pub fn randint(args: &[Value]) -> Result<Value, String> {
 }
 
 pub fn random(_args: &[Value]) -> Result<Value, String> {
-    use rand::Rng;
+    use rand::RngExt;
     let mut rng = rand::rng();
     Ok(Value::Float(rng.random::<f64>()))
 }

@@ -512,7 +512,7 @@ fn format_irrational(irr: &IrrationalValue) -> String {
         let coef_str = match coef {
             Value::Int(1) => return format_irrational(irr),
             Value::Int(n) => n.to_string(),
-            Value::Rational(r) if r.numer() == BigInt::from(1) && r.denom() == BigInt::from(1) => {
+            Value::Rational(r) if r.numer() == 1 && r.denom() == 1 => {
                 return format_irrational(irr);
             }
             Value::Irrational(i) => format_irrational(i),
