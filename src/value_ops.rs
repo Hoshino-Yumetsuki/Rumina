@@ -1,5 +1,3 @@
-use mathcore::MathCore;
-use num::complex::Complex64;
 /// Standalone value operations module
 ///
 /// This module provides optimized operation implementations for the VM that don't require
@@ -35,7 +33,9 @@ use num::complex::Complex64;
 /// - Threshold: exponents >= 10000 use parallelization
 /// - Uses rayon for parallel chunk processing
 /// - Improves CPU utilization on multi-core systems
-use num::{BigInt, BigRational};
+use crate::numeric::{BigInt, BigIntExt, rational_new};
+use mathcore::MathCore;
+use num::complex::Complex64;
 use rayon::prelude::*;
 
 use crate::ast::{BinOp, UnaryOp};
@@ -51,7 +51,7 @@ const PARALLEL_POW_THRESHOLD: u32 = 10000;
 fn bigint_pow_optimized(base: &BigInt, exponent: u32) -> BigInt {
     // For small exponents, use the standard sequential algorithm
     if exponent < PARALLEL_POW_THRESHOLD {
-        return base.pow(exponent);
+        return base.pow_u32(exponent);
     }
 
     // For large exponents, use parallel divide-and-conquer approach
@@ -70,7 +70,7 @@ fn bigint_pow_parallel(base: &BigInt, exponent: u32) -> BigInt {
 
     // Use sequential for small exponents
     if exponent < 500 {
-        return base.pow(exponent);
+        return base.pow_u32(exponent);
     }
 
     // For large exponents, split into chunks that can be computed independently
@@ -91,7 +91,7 @@ fn bigint_pow_parallel(base: &BigInt, exponent: u32) -> BigInt {
 
     if chunk_size < 100 {
         // Chunks too small, just use sequential
-        return base.pow(exponent);
+        return base.pow_u32(exponent);
     }
 
     // Compute all chunks in parallel
@@ -108,7 +108,7 @@ fn bigint_pow_parallel(base: &BigInt, exponent: u32) -> BigInt {
 
     // Handle remainder
     if remainder > 0 {
-        let remainder_result = base.pow(remainder);
+        let remainder_result = base.pow_u32(remainder);
         result *= remainder_result;
     }
 
@@ -258,15 +258,24 @@ pub fn value_binary_op(left: &Value, op: BinOp, right: &Value) -> Result<Value, 
     match (left, right) {
         (Value::Int(a), Value::Int(b)) => {
             match op {
-                BinOp::Add => Ok(Value::Int(a + b)),
-                BinOp::Sub => Ok(Value::Int(a - b)),
-                BinOp::Mul => Ok(Value::Int(a * b)),
+                BinOp::Add => match a.checked_add(*b) {
+                    Some(result) => Ok(Value::Int(result)),
+                    None => Ok(Value::BigInt(BigInt::from(*a) + BigInt::from(*b))),
+                },
+                BinOp::Sub => match a.checked_sub(*b) {
+                    Some(result) => Ok(Value::Int(result)),
+                    None => Ok(Value::BigInt(BigInt::from(*a) - BigInt::from(*b))),
+                },
+                BinOp::Mul => match a.checked_mul(*b) {
+                    Some(result) => Ok(Value::Int(result)),
+                    None => Ok(Value::BigInt(BigInt::from(*a) * BigInt::from(*b))),
+                },
                 BinOp::Div => {
                     if *b == 0 {
                         return Err("Division by zero".to_string());
                     }
                     // 返回有理数
-                    let rational = BigRational::new(BigInt::from(*a), BigInt::from(*b));
+                    let rational = rational_new(BigInt::from(*a), BigInt::from(*b));
                     Ok(Value::Rational(rational))
                 }
                 BinOp::Mod => Ok(Value::Int(a % b)),
@@ -306,7 +315,7 @@ pub fn value_binary_op(left: &Value, op: BinOp, right: &Value) -> Result<Value, 
                 if b == &BigInt::from(0) {
                     return Err("Division by zero".to_string());
                 }
-                let rational = BigRational::new(a.clone(), b.clone());
+                let rational = rational_new(a.clone(), b.clone());
                 Ok(Value::Rational(rational))
             }
             BinOp::Mod => {
@@ -409,7 +418,7 @@ pub fn value_unary_op(op: UnaryOp, val: &Value) -> Result<Value, String> {
 #[allow(clippy::approx_constant)]
 mod tests {
     use super::*;
-    use num::BigInt;
+    use crate::numeric::{BigInt, BigRationalExt};
 
     #[test]
     fn test_int_arithmetic() {
@@ -436,8 +445,8 @@ mod tests {
         let result = value_binary_op(&Value::Int(10), BinOp::Div, &Value::Int(3)).unwrap();
         match result {
             Value::Rational(r) => {
-                assert_eq!(r.numer(), &BigInt::from(10));
-                assert_eq!(r.denom(), &BigInt::from(3));
+                assert_eq!(r.numer(), BigInt::from(10));
+                assert_eq!(r.denom(), BigInt::from(3));
             }
             _ => panic!("Expected Rational"),
         }

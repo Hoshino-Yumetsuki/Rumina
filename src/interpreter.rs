@@ -303,6 +303,7 @@ impl Default for Interpreter {
 mod tests {
     use super::*;
     use crate::lexer::Lexer;
+    use crate::numeric::BigRationalExt;
     use crate::parser::Parser;
 
     fn eval_expr(code: &str) -> Result<Value, crate::error::RuminaError> {
@@ -770,23 +771,29 @@ mod tests {
 
     #[test]
     fn test_deep_recursion_simple() {
-        // Test that we can handle moderately deep recursion (50 levels)
-        // Note: test runner has limited stack, so we test conservatively
-        let code = r#"
-            func countdown(n) {
-                if (n <= 0) {
-                    return 0;
+        std::thread::Builder::new()
+            .stack_size(8 * 1024 * 1024)
+            .spawn(|| {
+                // Test that we can handle moderately deep recursion (50 levels).
+                let code = r#"
+                    func countdown(n) {
+                        if (n <= 0) {
+                            return 0;
+                        }
+                        return countdown(n - 1);
+                    }
+                    countdown(50);
+                "#;
+                let result = eval_expr(code);
+                assert!(result.is_ok(), "Should handle 50 levels of recursion");
+                match result.unwrap() {
+                    Value::Int(n) => assert_eq!(n, 0, "Expected 0, got {}", n),
+                    other => panic!("Expected Int(0), got {:?}", other),
                 }
-                return countdown(n - 1);
-            }
-            countdown(50);
-        "#;
-        let result = eval_expr(code);
-        assert!(result.is_ok(), "Should handle 50 levels of recursion");
-        match result.unwrap() {
-            Value::Int(n) => assert_eq!(n, 0, "Expected 0, got {}", n),
-            other => panic!("Expected Int(0), got {:?}", other),
-        }
+            })
+            .expect("failed to spawn recursion test thread")
+            .join()
+            .expect("recursion test thread panicked");
     }
 
     #[test]

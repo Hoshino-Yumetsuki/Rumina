@@ -1,3 +1,4 @@
+use crate::numeric::bigint_parse_bytes;
 use crate::token::Token;
 
 pub struct Lexer {
@@ -132,7 +133,13 @@ impl Lexer {
             // Return as Decimal token to preserve precision
             Token::Decimal(num_str)
         } else {
-            Token::Int(num_str.parse().unwrap())
+            match num_str.parse::<i64>() {
+                Ok(n) => Token::Int(n),
+                Err(_) => Token::BigIntLiteral(
+                    bigint_parse_bytes(num_str.as_bytes(), 10)
+                        .expect("lexer collected only decimal digits"),
+                ),
+            }
         }
     }
 

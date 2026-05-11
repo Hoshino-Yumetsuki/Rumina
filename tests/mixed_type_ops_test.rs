@@ -1,6 +1,6 @@
-use num::{BigInt, BigRational};
 use rumina::ast::BinOp;
 use rumina::interpreter::Interpreter;
+use rumina::numeric::{BigInt, rational_from_integer};
 use rumina::value::Value;
 
 #[test]
@@ -51,13 +51,13 @@ fn test_float_int_sub() {
 fn test_int_rational_mod() {
     let mut interpreter = Interpreter::new();
     let int_val = Value::Int(10);
-    let rational_val = Value::Rational(BigRational::from_integer(BigInt::from(3)));
+    let rational_val = Value::Rational(rational_from_integer(BigInt::from(3)));
 
     // 10 % 3 = 1
     let result = interpreter.eval_binary_op(&int_val, BinOp::Mod, &rational_val);
     assert!(result.is_ok(), "Int % Rational should be supported");
     if let Ok(Value::Rational(r)) = result {
-        assert_eq!(r, BigRational::from_integer(BigInt::from(1)));
+        assert_eq!(r, rational_from_integer(BigInt::from(1)));
     } else {
         panic!("Expected Rational result, got {:?}", result);
     }

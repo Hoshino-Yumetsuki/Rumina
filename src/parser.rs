@@ -1,4 +1,5 @@
 use crate::ast::*;
+use crate::numeric::{BigInt, BigIntExt, bigint_parse_bytes};
 use crate::token::Token;
 
 pub struct Parser {
@@ -55,6 +56,15 @@ impl Parser {
     /// Note: This function only receives positive decimal strings. Negative decimals
     /// like `-0.1` are handled by the parser as unary negation applied to the positive
     /// decimal, resulting in `Unary { op: Neg, expr: Decimal("0.1") }`.
+    fn integer_literal_expr(&self, digits: &str) -> Result<Expr, String> {
+        match digits.parse::<i64>() {
+            Ok(n) => Ok(Expr::Int(n)),
+            Err(_) => bigint_parse_bytes(digits.as_bytes(), 10)
+                .map(Expr::BigInt)
+                .ok_or_else(|| format!("Invalid integer literal: {}", digits)),
+        }
+    }
+
     fn decimal_to_rational(&self, decimal_str: &str) -> Result<Expr, String> {
         // Split by decimal point
         let parts: Vec<&str> = decimal_str.split('.').collect();
@@ -65,28 +75,20 @@ impl Parser {
         let integer_part = parts[0];
         let fractional_part = parts[1];
 
-        // Validate decimal places count to prevent overflow
         let num_decimal_places = fractional_part.len();
-        if num_decimal_places > 18 {
-            // More than 18 decimal places would overflow i64 (10^18 < 2^63)
-            return Err(format!("Too many decimal places (max 18): {}", decimal_str));
-        }
-
-        // Calculate denominator (safe because we checked num_decimal_places <= 18)
-        let denominator = 10_i64.pow(num_decimal_places as u32);
+        let denominator = BigInt::from(10u8).pow_u32(num_decimal_places as u32);
 
         // Combine integer and fractional parts to create numerator
         let numerator_str = format!("{}{}", integer_part, fractional_part);
-        let numerator: i64 = numerator_str
-            .parse()
-            .map_err(|_| format!("Failed to parse decimal: {}", decimal_str))?;
+        let numerator_expr = self.integer_literal_expr(&numerator_str)?;
+        let denominator_expr = self.integer_literal_expr(&denominator.to_string())?;
 
         // Create division expression: numerator / denominator
         // The division operation will automatically simplify to a rational
         Ok(Expr::Binary {
-            left: Box::new(Expr::Int(numerator)),
+            left: Box::new(numerator_expr),
             op: BinOp::Div,
-            right: Box::new(Expr::Int(denominator)),
+            right: Box::new(denominator_expr),
         })
     }
 
@@ -835,6 +837,10 @@ impl Parser {
             Token::Int(n) => {
                 self.advance();
                 Ok(Expr::Int(n))
+            }
+            Token::BigIntLiteral(n) => {
+                self.advance();
+                Ok(Expr::BigInt(n))
             }
             Token::Float(f) => {
                 self.advance();

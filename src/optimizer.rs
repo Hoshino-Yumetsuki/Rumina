@@ -241,18 +241,39 @@ impl ASTOptimizer {
                 // Constant folding for binary operations
                 match (&opt_left, &op, &opt_right) {
                     // Integer arithmetic
-                    (Expr::Int(a), BinOp::Add, Expr::Int(b)) => {
-                        self.modified = true;
-                        Ok(Expr::Int(a + b))
-                    }
-                    (Expr::Int(a), BinOp::Sub, Expr::Int(b)) => {
-                        self.modified = true;
-                        Ok(Expr::Int(a - b))
-                    }
-                    (Expr::Int(a), BinOp::Mul, Expr::Int(b)) => {
-                        self.modified = true;
-                        Ok(Expr::Int(a * b))
-                    }
+                    (Expr::Int(a), BinOp::Add, Expr::Int(b)) => match a.checked_add(*b) {
+                        Some(result) => {
+                            self.modified = true;
+                            Ok(Expr::Int(result))
+                        }
+                        None => Ok(Expr::Binary {
+                            left: Box::new(opt_left),
+                            op,
+                            right: Box::new(opt_right),
+                        }),
+                    },
+                    (Expr::Int(a), BinOp::Sub, Expr::Int(b)) => match a.checked_sub(*b) {
+                        Some(result) => {
+                            self.modified = true;
+                            Ok(Expr::Int(result))
+                        }
+                        None => Ok(Expr::Binary {
+                            left: Box::new(opt_left),
+                            op,
+                            right: Box::new(opt_right),
+                        }),
+                    },
+                    (Expr::Int(a), BinOp::Mul, Expr::Int(b)) => match a.checked_mul(*b) {
+                        Some(result) => {
+                            self.modified = true;
+                            Ok(Expr::Int(result))
+                        }
+                        None => Ok(Expr::Binary {
+                            left: Box::new(opt_left),
+                            op,
+                            right: Box::new(opt_right),
+                        }),
+                    },
                     // Note: Integer division is NOT optimized here because in Lamina,
                     // integer division produces a rational number (e.g., 1/10), not integer division.
                     // This is important for decimal precision (e.g., 0.1 is parsed as 1/10).

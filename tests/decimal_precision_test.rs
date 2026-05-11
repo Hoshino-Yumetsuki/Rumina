@@ -1,6 +1,10 @@
-use num::BigRational;
 /// Tests for decimal precision - ensuring 0.1 + 0.2 == 0.3
+use rumina::numeric::{BigInt, BigRational, rational_new};
 use rumina::{Value, run_rumina};
+
+fn expected_rational(numerator: i64, denominator: i64) -> BigRational {
+    rational_new(BigInt::from(numerator), BigInt::from(denominator))
+}
 
 #[test]
 fn test_decimal_addition_precision() {
@@ -12,7 +16,7 @@ fn test_decimal_addition_precision() {
         // Should be a rational: 3/10
         match value {
             Value::Rational(r) => {
-                let expected = BigRational::new(3.into(), 10.into());
+                let expected = expected_rational(3, 10);
                 assert_eq!(r, expected, "0.1 + 0.2 should equal 3/10");
             }
             _ => panic!("Expected Rational, got {:?}", value),
@@ -43,7 +47,7 @@ fn test_simple_decimal_parsing() {
     if let Ok(Some(value)) = result {
         match value {
             Value::Rational(r) => {
-                let expected = BigRational::new(1.into(), 10.into());
+                let expected = expected_rational(1, 10);
                 assert_eq!(r, expected, "0.1 should equal 1/10");
             }
             _ => panic!("Expected Rational, got {:?}", value),
@@ -60,7 +64,7 @@ fn test_decimal_quarter() {
     if let Ok(Some(value)) = result {
         match value {
             Value::Rational(r) => {
-                let expected = BigRational::new(1.into(), 4.into());
+                let expected = expected_rational(1, 4);
                 assert_eq!(r, expected, "0.25 should equal 1/4");
             }
             _ => panic!("Expected Rational, got {:?}", value),
@@ -77,7 +81,7 @@ fn test_decimal_multiplication() {
     if let Ok(Some(value)) = result {
         match value {
             Value::Rational(r) => {
-                let expected = BigRational::new(1.into(), 4.into());
+                let expected = expected_rational(1, 4);
                 assert_eq!(r, expected, "0.5 * 0.5 should equal 1/4");
             }
             _ => panic!("Expected Rational, got {:?}", value),
@@ -94,7 +98,7 @@ fn test_decimal_subtraction() {
     if let Ok(Some(value)) = result {
         match value {
             Value::Rational(r) => {
-                let expected = BigRational::new(1.into(), 5.into());
+                let expected = expected_rational(1, 5);
                 assert_eq!(r, expected, "0.3 - 0.1 should equal 1/5");
             }
             _ => panic!("Expected Rational, got {:?}", value),
@@ -123,7 +127,7 @@ fn test_multiple_decimal_places() {
     if let Ok(Some(value)) = result {
         match value {
             Value::Rational(r) => {
-                let expected = BigRational::new(1.into(), 8.into());
+                let expected = expected_rational(1, 8);
                 assert_eq!(r, expected, "0.125 should equal 1/8");
             }
             _ => panic!("Expected Rational, got {:?}", value),
@@ -140,7 +144,7 @@ fn test_decimal_with_integer_part() {
     if let Ok(Some(value)) = result {
         match value {
             Value::Rational(r) => {
-                let expected = BigRational::new(3.into(), 2.into());
+                let expected = expected_rational(3, 2);
                 assert_eq!(r, expected, "1.5 should equal 3/2");
             }
             _ => panic!("Expected Rational, got {:?}", value),
@@ -157,7 +161,7 @@ fn test_complex_decimal_expression() {
     if let Ok(Some(value)) = result {
         match value {
             Value::Rational(r) => {
-                let expected = BigRational::new(3.into(), 5.into());
+                let expected = expected_rational(3, 5);
                 assert_eq!(r, expected, "(0.1 + 0.2) * 2 should equal 3/5");
             }
             _ => panic!("Expected Rational, got {:?}", value),
@@ -174,7 +178,7 @@ fn test_negative_decimal() {
     if let Ok(Some(value)) = result {
         match value {
             Value::Rational(r) => {
-                let expected = BigRational::new((-1).into(), 10.into());
+                let expected = expected_rational(-1, 10);
                 assert_eq!(r, expected, "-0.1 should equal -1/10");
             }
             _ => panic!("Expected Rational, got {:?}", value),
@@ -207,7 +211,7 @@ fn test_zero_decimal() {
     if let Ok(Some(value)) = result {
         match value {
             Value::Rational(r) => {
-                let expected = BigRational::new(0.into(), 1.into());
+                let expected = expected_rational(0, 1);
                 assert_eq!(r, expected, "0.0 should equal 0/1");
             }
             _ => panic!("Expected Rational, got {:?}", value),

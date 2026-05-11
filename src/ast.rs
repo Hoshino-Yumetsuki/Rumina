@@ -1,4 +1,5 @@
 /// AST节点定义
+use crate::numeric::BigInt;
 use std::fmt;
 
 /// LSR-005: Declared types for type annotations
@@ -109,6 +110,7 @@ pub enum Stmt {
 pub enum Expr {
     // 字面量
     Int(i64),
+    BigInt(BigInt),
     Float(f64),
     String(String),
     Bool(bool),

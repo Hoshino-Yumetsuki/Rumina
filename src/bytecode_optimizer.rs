@@ -130,19 +130,21 @@ impl BytecodeOptimizer {
 
                     if let (Value::Int(a), Value::Int(b)) = (val1, val2) {
                         let result = match third {
-                            OpCode::Add => a + b,
-                            OpCode::Sub => a - b,
-                            OpCode::Mul => a * b,
+                            OpCode::Add => a.checked_add(*b),
+                            OpCode::Sub => a.checked_sub(*b),
+                            OpCode::Mul => a.checked_mul(*b),
                             _ => {
                                 i += 1;
                                 continue;
                             }
                         };
 
-                        changes.push((i, OpCode::PushConst(Value::Int(result)), 3));
-                        self.modified = true;
-                        i += 3;
-                        continue;
+                        if let Some(result) = result {
+                            changes.push((i, OpCode::PushConst(Value::Int(result)), 3));
+                            self.modified = true;
+                            i += 3;
+                            continue;
+                        }
                     }
                 }
             }

@@ -787,6 +787,11 @@ impl Compiler {
                 self.emit(OpCode::PushConstPooled(index));
             }
 
+            Expr::BigInt(n) => {
+                let index = self.bytecode.add_constant(Value::BigInt(n.clone()));
+                self.emit(OpCode::PushConstPooled(index));
+            }
+
             Expr::Float(f) => {
                 let index = self.bytecode.add_constant(Value::Float(*f));
                 self.emit(OpCode::PushConstPooled(index));

@@ -2,15 +2,13 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use num::BigInt;
-use num::BigRational;
-use num::One;
 use num::complex::Complex64;
 
 use mathcore::MathCore;
 
 use crate::ast::BinOp;
 use crate::ast::UnaryOp;
+use crate::numeric::{BigInt, BigIntExt, BigRationalExt, rational_from_integer, rational_new};
 use crate::value::{IrrationalValue, Value, irrational_to_float};
 
 use super::Interpreter;
@@ -167,15 +165,24 @@ impl Interpreter {
         match (left, right) {
             (Value::Int(a), Value::Int(b)) => {
                 match op {
-                    BinOp::Add => Ok(Value::Int(a + b)),
-                    BinOp::Sub => Ok(Value::Int(a - b)),
-                    BinOp::Mul => Ok(Value::Int(a * b)),
+                    BinOp::Add => match a.checked_add(*b) {
+                        Some(result) => Ok(Value::Int(result)),
+                        None => Ok(Value::BigInt(BigInt::from(*a) + BigInt::from(*b))),
+                    },
+                    BinOp::Sub => match a.checked_sub(*b) {
+                        Some(result) => Ok(Value::Int(result)),
+                        None => Ok(Value::BigInt(BigInt::from(*a) - BigInt::from(*b))),
+                    },
+                    BinOp::Mul => match a.checked_mul(*b) {
+                        Some(result) => Ok(Value::Int(result)),
+                        None => Ok(Value::BigInt(BigInt::from(*a) * BigInt::from(*b))),
+                    },
                     BinOp::Div => {
                         if *b == 0 {
                             return Err("Division by zero".to_string());
                         }
                         // 返回有理数
-                        let rational = BigRational::new(BigInt::from(*a), BigInt::from(*b));
+                        let rational = rational_new(BigInt::from(*a), BigInt::from(*b));
                         Ok(Value::Rational(rational))
                     }
                     BinOp::Mod => Ok(Value::Int(a % b)),
@@ -186,7 +193,7 @@ impl Interpreter {
                             None => {
                                 // Overflow: promote to BigInt
                                 let a_big = BigInt::from(*a);
-                                Ok(Value::BigInt(a_big.pow(*b as u32)))
+                                Ok(Value::BigInt(a_big.pow_u32(*b as u32)))
                             }
                         }
                     }
@@ -211,7 +218,7 @@ impl Interpreter {
                             return Err("Division by zero".to_string());
                         }
                         // 返回有理数
-                        let rational = BigRational::new(a.clone(), b.clone());
+                        let rational = rational_new(a.clone(), b.clone());
                         Ok(Value::Rational(rational))
                     }
                     BinOp::Mod => {
@@ -223,7 +230,7 @@ impl Interpreter {
                     BinOp::Pow => {
                         // For BigInt power, convert to i64 for the exponent
                         if let Ok(exp) = b.to_string().parse::<u32>() {
-                            Ok(Value::BigInt(a.pow(exp)))
+                            Ok(Value::BigInt(a.pow_u32(exp)))
                         } else {
                             // If exponent is too large or negative, convert to float
                             let a_float = a.to_string().parse::<f64>().unwrap_or(0.0);
@@ -259,10 +266,10 @@ impl Interpreter {
                             return Err("Division by zero".to_string());
                         }
                         if matches!(left, Value::BigInt(_)) {
-                            let rational = BigRational::new(a.clone(), b_bigint);
+                            let rational = rational_new(a.clone(), b_bigint);
                             Ok(Value::Rational(rational))
                         } else {
-                            let rational = BigRational::new(b_bigint, a.clone());
+                            let rational = rational_new(b_bigint, a.clone());
                             Ok(Value::Rational(rational))
                         }
                     }
@@ -279,7 +286,7 @@ impl Interpreter {
                     BinOp::Pow => {
                         if matches!(left, Value::BigInt(_)) {
                             if *b >= 0 {
-                                Ok(Value::BigInt(a.pow(*b as u32)))
+                                Ok(Value::BigInt(a.pow_u32(*b as u32)))
                             } else {
                                 // Negative exponent
                                 let a_float = a.to_string().parse::<f64>().unwrap_or(0.0);
@@ -288,7 +295,7 @@ impl Interpreter {
                         } else {
                             // Int ^ BigInt
                             if let Ok(exp) = a.to_string().parse::<u32>() {
-                                Ok(Value::BigInt(b_bigint.pow(exp)))
+                                Ok(Value::BigInt(b_bigint.pow_u32(exp)))
                             } else {
                                 let a_float = a.to_string().parse::<f64>().unwrap_or(0.0);
                                 let b_float = *b as f64;
@@ -400,7 +407,7 @@ impl Interpreter {
 
             // BigInt 与 Rational 的运算
             (Value::BigInt(a), Value::Rational(b)) | (Value::Rational(b), Value::BigInt(a)) => {
-                let a_rational = BigRational::from_integer(a.clone());
+                let a_rational = rational_from_integer(a.clone());
                 match op {
                     BinOp::Add => Ok(Value::Rational(&a_rational + b)),
                     BinOp::Sub => {
@@ -548,7 +555,7 @@ impl Interpreter {
 
             // Rational 与其他类型的运算
             (Value::Int(a), Value::Rational(b)) | (Value::Rational(b), Value::Int(a)) => {
-                let a_rational = BigRational::from_integer(BigInt::from(*a));
+                let a_rational = rational_from_integer(BigInt::from(*a));
                 match op {
                     BinOp::Add => Ok(Value::Rational(&a_rational + b)),
                     BinOp::Sub => {
@@ -837,7 +844,7 @@ impl Interpreter {
                                 Ok(Value::Irrational(irr.clone()))
                             } else {
                                 Ok(Value::Irrational(IrrationalValue::Product(
-                                    Box::new(Value::Rational(BigRational::new(
+                                    Box::new(Value::Rational(rational_new(
                                         BigInt::from(1),
                                         BigInt::from(*a),
                                     ))),
@@ -917,7 +924,7 @@ impl Interpreter {
                                 Ok(Value::Irrational(irr.clone()))
                             } else {
                                 Ok(Value::Irrational(IrrationalValue::Product(
-                                    Box::new(Value::Rational(BigRational::new(
+                                    Box::new(Value::Rational(rational_new(
                                         BigInt::from(1),
                                         b.clone(),
                                     ))),
@@ -1434,9 +1441,9 @@ impl Interpreter {
                     if *n < 0 {
                         return Err("Factorial of negative number".to_string());
                     }
-                    let mut result = BigInt::one();
+                    let mut result = BigInt::from(1);
                     for i in 2..=*n {
-                        result *= i;
+                        result *= BigInt::from(i);
                     }
                     Ok(Value::BigInt(result))
                 }

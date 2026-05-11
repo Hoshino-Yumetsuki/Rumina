@@ -1,7 +1,7 @@
 /// Type conversion implementations for LSR-005
 use crate::ast::DeclaredType;
+use crate::numeric::{BigInt, BigIntExt, BigRationalExt, rational_from_f64, rational_new};
 use crate::value::{IrrationalValue, Value};
-use num::BigInt;
 
 pub(crate) fn convert_to_declared_type(val: Value, dtype: &DeclaredType) -> Result<Value, String> {
     match dtype {
@@ -20,12 +20,10 @@ pub(crate) fn convert_to_declared_type(val: Value, dtype: &DeclaredType) -> Resu
 pub(super) fn convert_to_int(val: Value) -> Result<Value, String> {
     match val {
         Value::Int(_) => Ok(val),
-        Value::BigInt(n) => {
-            use num::ToPrimitive;
-            n.to_i64()
-                .map(Value::Int)
-                .ok_or_else(|| "BigInt too large to convert to int".to_string())
-        }
+        Value::BigInt(n) => n
+            .to_i64_checked()
+            .map(Value::Int)
+            .ok_or_else(|| "BigInt too large to convert to int".to_string()),
         Value::Float(f) => Ok(Value::Int(f as i64)),
         Value::Bool(b) => Ok(Value::Int(if b { 1 } else { 0 })),
         Value::String(s) => s
@@ -33,8 +31,9 @@ pub(super) fn convert_to_int(val: Value) -> Result<Value, String> {
             .map(Value::Int)
             .map_err(|_| format!("Cannot convert string '{}' to int", s)),
         Value::Rational(r) => {
-            use num::ToPrimitive;
-            let n = r.to_f64().ok_or("Cannot convert rational to float")? as i64;
+            let n = r
+                .to_f64_checked()
+                .ok_or("Cannot convert rational to float")? as i64;
             Ok(Value::Int(n))
         }
         _ => Err(format!("Cannot convert {} to int", val.type_name())),
@@ -45,20 +44,19 @@ pub(super) fn convert_to_float(val: Value) -> Result<Value, String> {
     match val {
         Value::Float(_) => Ok(val),
         Value::Int(n) => Ok(Value::Float(n as f64)),
-        Value::BigInt(n) => {
-            use num::ToPrimitive;
-            n.to_f64()
-                .map(Value::Float)
-                .ok_or_else(|| "BigInt too large to convert to float".to_string())
-        }
+        Value::BigInt(n) => n
+            .to_f64_checked()
+            .map(Value::Float)
+            .ok_or_else(|| "BigInt too large to convert to float".to_string()),
         Value::Bool(b) => Ok(Value::Float(if b { 1.0 } else { 0.0 })),
         Value::String(s) => s
             .parse::<f64>()
             .map(Value::Float)
             .map_err(|_| format!("Cannot convert string '{}' to float", s)),
         Value::Rational(r) => {
-            use num::ToPrimitive;
-            let n = r.to_f64().ok_or("Cannot convert rational to float")?;
+            let n = r
+                .to_f64_checked()
+                .ok_or("Cannot convert rational to float")?;
             Ok(Value::Float(n))
         }
         _ => Err(format!("Cannot convert {} to float", val.type_name())),
@@ -76,17 +74,18 @@ pub(super) fn convert_to_string(val: Value) -> Result<Value, String> {
 pub(super) fn convert_to_rational(val: Value) -> Result<Value, String> {
     match val {
         Value::Rational(_) => Ok(val),
-        Value::Int(n) => Ok(Value::Rational(num::rational::Ratio::new(
+        Value::Int(n) => Ok(Value::Rational(rational_new(
             BigInt::from(n),
             BigInt::from(1),
         ))),
-        Value::Float(f) => Ok(Value::Rational(
-            num::rational::Ratio::from_float(f)
-                .unwrap_or(num::rational::Ratio::new(BigInt::from(0), BigInt::from(1))),
-        )),
+        Value::Float(f) => {
+            Ok(Value::Rational(rational_from_f64(f).unwrap_or_else(|| {
+                rational_new(BigInt::from(0), BigInt::from(1))
+            })))
+        }
         Value::Bool(b) => {
             let n = if b { 1 } else { 0 };
-            Ok(Value::Rational(num::rational::Ratio::new(
+            Ok(Value::Rational(rational_new(
                 BigInt::from(n),
                 BigInt::from(1),
             )))

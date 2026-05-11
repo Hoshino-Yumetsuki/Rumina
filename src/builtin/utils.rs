@@ -1,4 +1,5 @@
 // 工具函数模块
+use crate::numeric::{BigInt, BigIntExt, BigRationalExt, rational_from_f64, rational_new};
 use crate::value::Value;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -233,8 +234,7 @@ pub fn fraction(args: &[Value]) -> Result<Value, String> {
                 k2 = aux;
 
                 if (f - h1 as f64 / k1 as f64).abs() < precision {
-                    use num::BigInt;
-                    return Ok(Value::Rational(num::rational::Ratio::new(
+                    return Ok(Value::Rational(rational_new(
                         BigInt::from(h1),
                         BigInt::from(k1),
                     )));
@@ -247,19 +247,14 @@ pub fn fraction(args: &[Value]) -> Result<Value, String> {
             }
 
             // Fallback: return as rational approximation
-            use num::BigInt;
-            Ok(Value::Rational(
-                num::rational::Ratio::from_float(*f)
-                    .unwrap_or(num::rational::Ratio::new(BigInt::from(0), BigInt::from(1))),
-            ))
-        }
-        Value::Int(i) => {
-            use num::BigInt;
-            Ok(Value::Rational(num::rational::Ratio::new(
-                BigInt::from(*i),
-                BigInt::from(1),
+            Ok(Value::Rational(rational_from_f64(*f).unwrap_or_else(
+                || rational_new(BigInt::from(0), BigInt::from(1)),
             )))
         }
+        Value::Int(i) => Ok(Value::Rational(rational_new(
+            BigInt::from(*i),
+            BigInt::from(1),
+        ))),
         Value::Rational(r) => Ok(Value::Rational(r.clone())),
         _ => Err(format!(
             "Cannot convert {} to fraction",
@@ -294,11 +289,13 @@ pub fn decimal(args: &[Value]) -> Result<Value, String> {
 
     match &args[0] {
         Value::Rational(r) => {
-            use num::ToPrimitive;
-            let numer = r.numer().to_f64().ok_or("Numerator too large to convert")?;
+            let numer = r
+                .numer()
+                .to_f64_checked()
+                .ok_or("Numerator too large to convert")?;
             let denom = r
                 .denom()
-                .to_f64()
+                .to_f64_checked()
                 .ok_or("Denominator too large to convert")?;
             Ok(apply_precision(numer / denom))
         }
@@ -310,9 +307,8 @@ pub fn decimal(args: &[Value]) -> Result<Value, String> {
                 Value::Int(i) => *i as f64,
                 Value::Float(f) => *f,
                 Value::Rational(r) => {
-                    use num::ToPrimitive;
-                    let numer = r.numer().to_f64().ok_or("Numerator too large")?;
-                    let denom = r.denom().to_f64().ok_or("Denominator too large")?;
+                    let numer = r.numer().to_f64_checked().ok_or("Numerator too large")?;
+                    let denom = r.denom().to_f64_checked().ok_or("Denominator too large")?;
                     numer / denom
                 }
                 Value::Irrational(irr) => {
@@ -346,9 +342,8 @@ pub fn decimal(args: &[Value]) -> Result<Value, String> {
                 Value::Int(i) => *i as f64,
                 Value::Float(f) => *f,
                 Value::Rational(r) => {
-                    use num::ToPrimitive;
-                    let numer = r.numer().to_f64().ok_or("Numerator too large")?;
-                    let denom = r.denom().to_f64().ok_or("Denominator too large")?;
+                    let numer = r.numer().to_f64_checked().ok_or("Numerator too large")?;
+                    let denom = r.denom().to_f64_checked().ok_or("Denominator too large")?;
                     numer / denom
                 }
                 Value::Irrational(irr) => match irr {
@@ -423,12 +418,10 @@ pub fn to_int(args: &[Value]) -> Result<Value, String> {
 
     match &args[0] {
         Value::Int(_) => Ok(args[0].clone()),
-        Value::BigInt(n) => {
-            use num::ToPrimitive;
-            n.to_i64()
-                .map(Value::Int)
-                .ok_or_else(|| "BigInt too large to convert to int".to_string())
-        }
+        Value::BigInt(n) => n
+            .to_i64_checked()
+            .map(Value::Int)
+            .ok_or_else(|| "BigInt too large to convert to int".to_string()),
         Value::Float(f) => Ok(Value::Int(*f as i64)),
         Value::Bool(b) => Ok(Value::Int(if *b { 1 } else { 0 })),
         Value::String(s) => s
@@ -436,8 +429,9 @@ pub fn to_int(args: &[Value]) -> Result<Value, String> {
             .map(Value::Int)
             .map_err(|_| format!("Cannot convert string '{}' to int", s)),
         Value::Rational(r) => {
-            use num::ToPrimitive;
-            let n = r.to_f64().ok_or("Cannot convert rational to float")? as i64;
+            let n = r
+                .to_f64_checked()
+                .ok_or("Cannot convert rational to float")? as i64;
             Ok(Value::Int(n))
         }
         _ => Err(format!("Cannot convert {} to int", args[0].type_name())),
@@ -452,20 +446,19 @@ pub fn to_float(args: &[Value]) -> Result<Value, String> {
     match &args[0] {
         Value::Float(_) => Ok(args[0].clone()),
         Value::Int(n) => Ok(Value::Float(*n as f64)),
-        Value::BigInt(n) => {
-            use num::ToPrimitive;
-            n.to_f64()
-                .map(Value::Float)
-                .ok_or_else(|| "BigInt too large to convert to float".to_string())
-        }
+        Value::BigInt(n) => n
+            .to_f64_checked()
+            .map(Value::Float)
+            .ok_or_else(|| "BigInt too large to convert to float".to_string()),
         Value::Bool(b) => Ok(Value::Float(if *b { 1.0 } else { 0.0 })),
         Value::String(s) => s
             .parse::<f64>()
             .map(Value::Float)
             .map_err(|_| format!("Cannot convert string '{}' to float", s)),
         Value::Rational(r) => {
-            use num::ToPrimitive;
-            let n = r.to_f64().ok_or("Cannot convert rational to float")?;
+            let n = r
+                .to_f64_checked()
+                .ok_or("Cannot convert rational to float")?;
             Ok(Value::Float(n))
         }
         _ => Err(format!("Cannot convert {} to float", args[0].type_name())),
@@ -495,24 +488,16 @@ pub fn to_rational(args: &[Value]) -> Result<Value, String> {
 
     match &args[0] {
         Value::Rational(_) => Ok(args[0].clone()),
-        Value::Int(n) => {
-            use num::BigInt;
-            Ok(Value::Rational(num::rational::Ratio::new(
-                BigInt::from(*n),
-                BigInt::from(1),
-            )))
-        }
-        Value::Float(f) => {
-            use num::BigInt;
-            Ok(Value::Rational(
-                num::rational::Ratio::from_float(*f)
-                    .unwrap_or(num::rational::Ratio::new(BigInt::from(0), BigInt::from(1))),
-            ))
-        }
+        Value::Int(n) => Ok(Value::Rational(rational_new(
+            BigInt::from(*n),
+            BigInt::from(1),
+        ))),
+        Value::Float(f) => Ok(Value::Rational(
+            rational_from_f64(*f).unwrap_or_else(|| rational_new(BigInt::from(0), BigInt::from(1))),
+        )),
         Value::Bool(b) => {
-            use num::BigInt;
             let n = if *b { 1 } else { 0 };
-            Ok(Value::Rational(num::rational::Ratio::new(
+            Ok(Value::Rational(rational_new(
                 BigInt::from(n),
                 BigInt::from(1),
             )))
@@ -632,11 +617,11 @@ mod tests {
 
     #[test]
     fn test_to_rational() {
-        use num::BigInt;
+        use crate::numeric::BigInt;
         let result = to_rational(&[Value::Int(5)]).unwrap();
         if let Value::Rational(r) = result {
-            assert_eq!(*r.numer(), BigInt::from(5));
-            assert_eq!(*r.denom(), BigInt::from(1));
+            assert_eq!(r.numer(), BigInt::from(5));
+            assert_eq!(r.denom(), BigInt::from(1));
         } else {
             panic!("Expected Rational");
         }
@@ -690,11 +675,11 @@ mod tests {
 
     #[test]
     fn test_fraction() {
-        use num::BigInt;
+        use crate::numeric::BigInt;
 
         let result = fraction(&[Value::Int(5)]).unwrap();
         if let Value::Rational(r) = result {
-            assert_eq!(*r.numer(), BigInt::from(5));
+            assert_eq!(r.numer(), BigInt::from(5));
         }
 
         assert!(fraction(&[Value::Float(0.5)]).is_ok());

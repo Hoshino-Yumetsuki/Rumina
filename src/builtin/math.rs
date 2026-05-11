@@ -1,8 +1,7 @@
 // 数学函数模块
+use crate::numeric::BigInt;
 use crate::value::{IrrationalValue, Value};
 use mathcore::MathCore;
-use num::BigInt;
-use num::{One, Zero};
 
 pub fn sqrt(args: &[Value]) -> Result<Value, String> {
     if args.len() != 1 {
@@ -291,21 +290,21 @@ pub fn factorial(args: &[Value]) -> Result<Value, String> {
             if *n < 0 {
                 return Err("Factorial of negative number".to_string());
             }
-            let mut result = BigInt::one();
+            let mut result = BigInt::from(1);
             for i in 2..=*n {
-                result *= i;
+                result *= BigInt::from(i);
             }
             Ok(Value::BigInt(result))
         }
         Value::BigInt(n) => {
-            if n < &BigInt::zero() {
+            if n < &BigInt::from(0) {
                 return Err("Factorial of negative number".to_string());
             }
-            let mut result = BigInt::one();
+            let mut result = BigInt::from(1);
             let mut i = BigInt::from(2);
             while &i <= n {
                 result *= &i;
-                i += 1;
+                i += BigInt::from(1);
             }
             Ok(Value::BigInt(result))
         }

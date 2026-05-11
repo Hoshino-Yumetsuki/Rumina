@@ -1,8 +1,11 @@
+use crate::numeric::BigInt;
+
 /// Token类型定义
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     // 字面量
     Int(i64),
+    BigIntLiteral(BigInt),
     Float(f64),
     Decimal(String), // Decimal literal like "0.1" - will be converted to rational
     String(String),
@@ -93,6 +96,7 @@ impl std::fmt::Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Token::Int(n) => write!(f, "{}", n),
+            Token::BigIntLiteral(n) => write!(f, "{}", n),
             Token::Float(n) => write!(f, "{}", n),
             Token::Decimal(s) => write!(f, "{}", s),
             Token::String(s) => write!(f, "\"{}\"", s),
@@ -113,6 +117,7 @@ mod tests {
     #[test]
     fn test_token_display() {
         assert_eq!(Token::Int(42).to_string(), "42");
+        assert_eq!(Token::BigIntLiteral(BigInt::from(42)).to_string(), "42");
         assert_eq!(Token::Float(3.14).to_string(), "3.14");
         assert_eq!(Token::Decimal("0.1".to_string()).to_string(), "0.1");
         assert_eq!(Token::String("hello".to_string()).to_string(), "\"hello\"");
@@ -126,5 +131,7 @@ mod tests {
     fn test_token_clone() {
         let t = Token::Int(42);
         assert_eq!(t.clone(), Token::Int(42));
+        let t = Token::BigIntLiteral(BigInt::from(42));
+        assert_eq!(t.clone(), Token::BigIntLiteral(BigInt::from(42)));
     }
 }

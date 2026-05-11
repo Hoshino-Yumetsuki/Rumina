@@ -64,6 +64,7 @@ fn stmt_to_expr_string(stmt: &Stmt, var: &str) -> Result<String, String> {
 fn expr_to_string(expr: &Expr, var: &str) -> Result<String, String> {
     match expr {
         Expr::Int(n) => Ok(n.to_string()),
+        Expr::BigInt(n) => Ok(n.to_string()),
         Expr::Float(f) => Ok(f.to_string()),
         Expr::Ident(name) => {
             if name == var {

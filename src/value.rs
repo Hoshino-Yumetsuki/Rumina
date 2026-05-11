@@ -1,5 +1,3 @@
-use num::BigInt;
-use num::BigRational;
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -7,6 +5,7 @@ use std::fmt;
 use std::rc::Rc;
 
 use crate::ast::*;
+use crate::numeric::{BigInt, BigRational, BigRationalExt, rational_from_integer};
 
 /// Lamina运行时值类型
 #[derive(Debug, Clone)]
@@ -474,11 +473,11 @@ fn format_irrational(irr: &IrrationalValue) -> String {
                     return format_product(&combined, inner_irr);
                 }
                 (Value::Int(a), Value::Rational(b)) => {
-                    let combined = Value::Rational(BigRational::from_integer(BigInt::from(*a)) * b);
+                    let combined = Value::Rational(rational_from_integer(BigInt::from(*a)) * b);
                     return format_product(&combined, inner_irr);
                 }
                 (Value::Rational(a), Value::Int(b)) => {
-                    let combined = Value::Rational(a * BigRational::from_integer(BigInt::from(*b)));
+                    let combined = Value::Rational(a * rational_from_integer(BigInt::from(*b)));
                     return format_product(&combined, inner_irr);
                 }
                 // If outer coef is Int/Rational but inner is Irrational, format as outer*inner*innerirr
@@ -513,9 +512,7 @@ fn format_irrational(irr: &IrrationalValue) -> String {
         let coef_str = match coef {
             Value::Int(1) => return format_irrational(irr),
             Value::Int(n) => n.to_string(),
-            Value::Rational(r)
-                if r.numer() == &BigInt::from(1) && r.denom() == &BigInt::from(1) =>
-            {
+            Value::Rational(r) if r.numer() == BigInt::from(1) && r.denom() == BigInt::from(1) => {
                 return format_irrational(irr);
             }
             Value::Irrational(i) => format_irrational(i),
@@ -587,6 +584,7 @@ impl PartialEq for Value {
 #[allow(clippy::approx_constant)]
 mod tests {
     use super::*;
+    use crate::numeric::rational_new;
 
     #[test]
     fn test_type_name() {
@@ -646,7 +644,7 @@ mod tests {
     fn test_type_name_extended() {
         assert_eq!(Value::BigInt(BigInt::from(100)).type_name(), "bigint");
         assert_eq!(
-            Value::Rational(BigRational::from_integer(BigInt::from(5))).type_name(),
+            Value::Rational(rational_from_integer(BigInt::from(5))).type_name(),
             "rational"
         );
         assert_eq!(
@@ -691,7 +689,7 @@ mod tests {
     fn test_to_float_extended() {
         assert_eq!(Value::BigInt(BigInt::from(100)).to_float(), Ok(100.0));
         assert_eq!(
-            Value::Rational(BigRational::new(BigInt::from(1), BigInt::from(2))).to_float(),
+            Value::Rational(rational_new(BigInt::from(1), BigInt::from(2))).to_float(),
             Ok(0.5)
         );
         assert_eq!(
@@ -719,7 +717,7 @@ mod tests {
         assert_eq!(
             format!(
                 "{}",
-                Value::Rational(BigRational::new(BigInt::from(3), BigInt::from(4)))
+                Value::Rational(rational_new(BigInt::from(3), BigInt::from(4)))
             ),
             "3/4"
         );
