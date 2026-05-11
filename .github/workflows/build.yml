@@ -113,10 +113,6 @@ jobs:
             target: arm-unknown-linux-gnueabihf
             artifact_name: rumina-cli
             asset_name: rumina-cli-linux-arm-gnueabihf
-          - os: ubuntu-latest
-            target: armv7-unknown-linux-gnueabihf
-            artifact_name: rumina-cli
-            asset_name: rumina-cli-linux-armv7-gnueabihf
 
           # Android
           - os: ubuntu-latest
