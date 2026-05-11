@@ -1408,7 +1408,7 @@ impl VM {
                                 params.len(),
                                 Default::default(),
                             );
-                            for (param_name, arg_value) in params.iter().zip(args.into_iter()) {
+                            for (param_name, arg_value) in params.iter().zip(args) {
                                 new_locals.insert(param_name.clone(), arg_value);
                             }
                             self.locals = new_locals;
@@ -1495,7 +1495,7 @@ impl VM {
                             new_locals.insert(k.clone(), v.clone());
                         }
                         drop(closure_ref); // Release borrow early
-                        for (param_name, arg_value) in params.iter().zip(args.into_iter()) {
+                        for (param_name, arg_value) in params.iter().zip(args) {
                             new_locals.insert(param_name.clone(), arg_value);
                         }
                         self.locals = new_locals;
@@ -1584,7 +1584,7 @@ impl VM {
                                 params.len(),
                                 Default::default(),
                             );
-                            for (param_name, arg_value) in params.iter().zip(args.into_iter()) {
+                            for (param_name, arg_value) in params.iter().zip(args) {
                                 new_locals.insert(param_name.clone(), arg_value);
                             }
                             self.locals = new_locals;
@@ -1669,7 +1669,7 @@ impl VM {
                             .map(|(k, v)| (k.clone(), v.clone()))
                             .collect();
                         self.immutable_locals = HashSet::new();
-                        for (param_name, arg_value) in params.iter().zip(args.into_iter()) {
+                        for (param_name, arg_value) in params.iter().zip(args) {
                             self.locals.insert(param_name.clone(), arg_value);
                         }
 
@@ -1784,7 +1784,7 @@ impl VM {
                         // Inject self
                         self.locals.insert("self".to_string(), object);
                         // Add parameters
-                        for (param_name, arg_value) in params.iter().zip(args.into_iter()) {
+                        for (param_name, arg_value) in params.iter().zip(args) {
                             self.locals.insert(param_name.clone(), arg_value);
                         }
 
@@ -1836,7 +1836,7 @@ impl VM {
                             // Inject self
                             self.locals.insert("self".to_string(), object);
                             // Add parameters
-                            for (param_name, arg_value) in params.iter().zip(args.into_iter()) {
+                            for (param_name, arg_value) in params.iter().zip(args) {
                                 self.locals.insert(param_name.clone(), arg_value);
                             }
 
