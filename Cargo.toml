@@ -22,26 +22,26 @@ name = "rumina-cli"
 path = "src/main.rs"
 
 [dependencies]
-num = "^0.4"
-rand = "^0.9"
-chrono = "^0.4"
-lazy_static = "^1.4"
-mathcore = "^0.3.1"
-malachite-base = "^0.9"
-malachite-nz = "^0.9"
-malachite-q = "^0.9"
-rustc-hash = "^2.0"
-rayon = "^1.11"
-base64 = "^0.22"
-hex = "^0.4"
-pathdiff = "^0.2"
+rand = "^0.10.1"
+chrono = "0.4.44"
+num = "0.4.3"
+pathdiff = "0.2.3"
+hex = "0.4.3"
+base64 = "0.22.1"
+rayon = "1.12.0"
+rustc-hash = "2.1.2"
+malachite-q = "0.9.1"
+malachite-nz = "0.9.1"
+malachite-base = "0.9.1"
+mathcore = "0.3.1"
+lazy_static = "1.5.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-ctrlc = "^3"
+ctrlc = "^3.5.2"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = "^0.2"
-getrandom = { version = "^0.3", features = ["wasm_js"] }
+wasm-bindgen = "^0.2.121"
+getrandom = { version = "^0.4.2", features = ["wasm_js"] }
 
 [dev-dependencies]
-criterion = "^0.8"
+criterion = "^0.8.2"
