@@ -337,3 +337,9 @@ fn test_lsr000_vector_literal_uses_one_based_indexing() {
 fn test_lsr000_vector_zero_index_is_invalid() {
     assert!(run_rumina("let xs = vec[10, 20, 30]; xs[0];").is_err());
 }
+
+#[test]
+fn test_lsr000_matrix_literal_uses_one_based_indexing() {
+    let result = expect_int(run_rumina("let m = mat[1, 2; 3, 4]; m[1][2];"));
+    assert_eq!(result, 2);
+}

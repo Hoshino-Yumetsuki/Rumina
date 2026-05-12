@@ -151,6 +151,18 @@ impl Interpreter {
                 Ok(Value::Vector(Rc::new(RefCell::new(values))))
             }
 
+            Expr::Matrix(rows) => {
+                let mut matrix = Vec::new();
+                for row in rows {
+                    let mut values = Vec::new();
+                    for elem in row {
+                        values.push(self.eval_expr(elem)?);
+                    }
+                    matrix.push(values);
+                }
+                Ok(Value::Matrix(Rc::new(RefCell::new(matrix))))
+            }
+
             Expr::Struct(fields) => {
                 let mut map = HashMap::new();
                 for (key, value) in fields {
@@ -297,6 +309,17 @@ impl Interpreter {
                             .get((i - 1) as usize)
                             .cloned()
                             .ok_or_else(|| format!("Vector index out of bounds: {}", i))
+                    }
+                    (Value::Matrix(rows), Value::Int(i)) => {
+                        if i <= 0 {
+                            return Err(format!("Matrix row index out of bounds: {}", i));
+                        }
+                        let row = rows
+                            .borrow()
+                            .get((i - 1) as usize)
+                            .cloned()
+                            .ok_or_else(|| format!("Matrix row index out of bounds: {}", i))?;
+                        Ok(Value::Vector(Rc::new(RefCell::new(row))))
                     }
                     (Value::String(s), Value::Int(i)) => {
                         let chars: Vec<char> = s.chars().collect();

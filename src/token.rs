@@ -41,6 +41,7 @@ pub enum Token {
     Match,
     Table,
     Vec,
+    Mat,
 
     // LSR-005: Type keywords for type declarations
     TypeInt,

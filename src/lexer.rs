@@ -250,6 +250,7 @@ impl Lexer {
             "match" => Token::Match,
             "table" => Token::Table,
             "vec" => Token::Vec,
+            "mat" => Token::Mat,
             "and" => Token::And,
             "or" => Token::Or,
             "not" => Token::Not,

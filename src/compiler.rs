@@ -880,6 +880,12 @@ impl Compiler {
                 ));
             }
 
+            Expr::Matrix(_) => {
+                return Err(RuminaError::runtime(
+                    "matrix literals are not yet supported by the bytecode compiler".to_string(),
+                ));
+            }
+
             Expr::Struct(fields) => {
                 // Compile each field (key, value) pair
                 for (key, value) in fields {

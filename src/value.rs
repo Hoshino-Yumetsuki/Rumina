@@ -28,6 +28,7 @@ pub enum Value {
     Option(Option<Box<Value>>),
     Array(Rc<RefCell<Vec<Value>>>),
     Vector(Rc<RefCell<Vec<Value>>>),
+    Matrix(Rc<RefCell<Vec<Vec<Value>>>>),
     Struct(Rc<RefCell<HashMap<String, Value>>>),
     Lambda {
         params: Vec<String>,
@@ -85,6 +86,7 @@ impl Value {
             Value::Option(_) => "option",
             Value::Array(_) => "array",
             Value::Vector(_) => "vector",
+            Value::Matrix(_) => "matrix",
             Value::Struct(_) => "struct",
             Value::Lambda { .. } => "lambda",
             Value::Function { .. } => "function",
@@ -306,6 +308,22 @@ impl fmt::Display for Value {
                         write!(f, ", ")?;
                     }
                     write!(f, "{}", v)?;
+                }
+                write!(f, "]")
+            }
+            Value::Matrix(rows) => {
+                let rows = rows.borrow();
+                write!(f, "mat[")?;
+                for (row_index, row) in rows.iter().enumerate() {
+                    if row_index > 0 {
+                        write!(f, "; ")?;
+                    }
+                    for (col_index, value) in row.iter().enumerate() {
+                        if col_index > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{}", value)?;
+                    }
                 }
                 write!(f, "]")
             }
