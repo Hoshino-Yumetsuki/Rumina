@@ -108,6 +108,11 @@ pub enum Stmt {
         items: Vec<(String, Option<String>)>,
     },
 
+    UnitDecl {
+        name: String,
+        value: Option<Expr>,
+    },
+
     // try/catch
     TryCatch(Box<Stmt>, String, Box<Stmt>),
 

@@ -576,6 +576,14 @@ impl Interpreter {
                 Ok(())
             }
 
+            Stmt::UnitDecl { name, value } => {
+                if let Some(value) = value {
+                    self.eval_expr(value)?;
+                }
+                self.set_variable(format!("__unit_{}", name), Value::Bool(true), true);
+                Ok(())
+            }
+
             Stmt::TryCatch(try_block, error_name, catch_block) => {
                 match self.execute_stmt(try_block) {
                     Ok(()) => Ok(()),

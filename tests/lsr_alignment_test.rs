@@ -357,3 +357,9 @@ fn test_lsr008_strip_dimensionless_num_and_scalar() {
 fn test_lsr008_rejects_legacy_num_unit_syntax() {
     assert!(run_rumina("42 as num<m>;").is_err());
 }
+
+#[test]
+fn test_lsr000_unit_declarations_are_accepted() {
+    let result = expect_int(run_rumina("unit score; unit level = 100; 1;"));
+    assert_eq!(result, 1);
+}

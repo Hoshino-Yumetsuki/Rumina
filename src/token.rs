@@ -35,6 +35,7 @@ pub enum Token {
     Import,
     Use,
     As,
+    Unit,
     Do,
     Try,
     Catch,

@@ -183,6 +183,7 @@ impl Parser {
             Token::Include => self.parse_include(),
             Token::Import => self.parse_import(),
             Token::Use => self.parse_use(),
+            Token::Unit => self.parse_unit_decl(),
             Token::Try => self.parse_try_catch(),
             Token::LBrace => self.parse_block(),
             Token::Ident(_) => self.parse_expression_statement(),
@@ -235,6 +236,26 @@ impl Parser {
             self.match_token(&Token::Semicolon);
             Ok(Stmt::Expr(expr))
         }
+    }
+
+    fn parse_unit_decl(&mut self) -> Result<Stmt, String> {
+        self.expect(Token::Unit)?;
+        let name = if let Token::Ident(name) = self.current_token() {
+            let name = name.clone();
+            self.advance();
+            name
+        } else {
+            return Err(format!("Expected unit name, found {:?}", self.current_token()));
+        };
+
+        let value = if self.match_token(&Token::Equal) {
+            Some(self.parse_expression()?)
+        } else {
+            None
+        };
+
+        self.match_token(&Token::Semicolon);
+        Ok(Stmt::UnitDecl { name, value })
     }
 
     fn parse_var_decl_with_type(

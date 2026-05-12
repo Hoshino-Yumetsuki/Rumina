@@ -49,6 +49,7 @@ fn should_use_interpreter_runtime(statements: &[ast::Stmt]) -> bool {
         match stmt {
             ast::Stmt::Include(path) => path.starts_with("rumina:"),
             ast::Stmt::Import { .. } | ast::Stmt::Use { .. } => true,
+            ast::Stmt::UnitDecl { .. } => true,
             ast::Stmt::TryCatch(_, _, _) => true,
             ast::Stmt::Expr(expr)
             | ast::Stmt::VarDecl { value: expr, .. }

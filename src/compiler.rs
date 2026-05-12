@@ -173,6 +173,8 @@ impl Compiler {
 
             Stmt::Import { .. } | Stmt::Use { .. } => {}
 
+            Stmt::UnitDecl { .. } => {}
+
             Stmt::VarDecl {
                 name,
                 value,

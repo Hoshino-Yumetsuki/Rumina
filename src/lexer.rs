@@ -244,6 +244,7 @@ impl Lexer {
             "import" => Token::Import,
             "use" => Token::Use,
             "as" => Token::As,
+            "unit" => Token::Unit,
             "do" => Token::Do,
             "try" => Token::Try,
             "catch" => Token::Catch,
