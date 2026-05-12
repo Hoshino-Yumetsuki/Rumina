@@ -176,6 +176,11 @@ pub enum Expr {
         mode: UnitStripMode,
     },
 
+    UnitConvert {
+        expr: Box<Expr>,
+        unit: String,
+    },
+
     UnitAttach {
         expr: Box<Expr>,
         unit: String,

@@ -892,6 +892,12 @@ impl Compiler {
                 ));
             }
 
+            Expr::UnitConvert { .. } => {
+                return Err(RuminaError::runtime(
+                    "unit conversion is not yet supported by the bytecode compiler".to_string(),
+                ));
+            }
+
             Expr::UnitAttach { .. } => {
                 return Err(RuminaError::runtime(
                     "unit-attached numeric literals are not yet supported by the bytecode compiler"

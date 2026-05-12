@@ -763,6 +763,18 @@ impl Parser {
         let mut expr = self.parse_pipeline()?;
 
         while self.match_token(&Token::As) {
+            if let Token::Ident(unit) = self.current_token() {
+                if unit != "scalar" {
+                    let unit = unit.clone();
+                    self.advance();
+                    expr = Expr::UnitConvert {
+                        expr: Box::new(expr),
+                        unit,
+                    };
+                    continue;
+                }
+            }
+
             let mode = match self.current_token() {
                 Token::TypeNum => {
                     self.advance();
@@ -1209,7 +1221,7 @@ impl Parser {
         let target = self.parse_expression()?;
         self.expect(Token::LBrace)?;
 
-        let mut arms = Vec::new();
+        let mut arms: Vec<MatchArm> = Vec::new();
         while self.current_token() != &Token::RBrace {
             let pattern = self.parse_match_pattern()?;
             let is_wildcard = matches!(pattern, MatchPattern::Wildcard);
@@ -1220,6 +1232,20 @@ impl Parser {
             };
             self.expect(Token::FatArrow)?;
             let expr = self.parse_expression()?;
+            if let MatchPattern::Literal(pattern_expr) = &pattern {
+                if arms.iter().any(|arm| {
+                    arm.guard.is_none()
+                        && match &arm.pattern {
+                            MatchPattern::Literal(previous) => previous == pattern_expr,
+                            _ => false,
+                        }
+                }) {
+                    return Err(format!(
+                        "UnreachablePattern: duplicate literal match arm {:?}",
+                        pattern_expr
+                    ));
+                }
+            }
             arms.push(MatchArm { pattern, guard, expr });
 
             if !self.match_token(&Token::Comma) {

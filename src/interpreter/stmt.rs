@@ -103,6 +103,13 @@ impl Interpreter {
         ])
     }
 
+    fn lsr004_io_module() -> HashMap<String, Value> {
+        HashMap::from([(
+            "format".to_string(),
+            Self::native_fn("std.io.format", builtin::io::format),
+        )])
+    }
+
     fn lsr004_linalg_module() -> HashMap<String, Value> {
         HashMap::from([
             ("shape".to_string(), Self::native_fn("std.linalg.shape", builtin::linalg::shape)),
@@ -142,6 +149,9 @@ impl Interpreter {
             )))),
             "std.units" => Ok(Value::Module(Rc::new(RefCell::new(
                 Self::lsr004_units_module(),
+            )))),
+            "std.io" => Ok(Value::Module(Rc::new(RefCell::new(
+                Self::lsr004_io_module(),
             )))),
             "std.linalg" => Ok(Value::Module(Rc::new(RefCell::new(
                 Self::lsr004_linalg_module(),

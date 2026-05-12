@@ -33,6 +33,29 @@ impl Interpreter {
         }
     }
 
+    fn divide_unit_value(&self, value: Value, scale: i64) -> Result<Value, String> {
+        match value {
+            Value::Int(n) if n % scale == 0 => Ok(Value::Int(n / scale)),
+            Value::Int(n) => Ok(Value::Rational(crate::numeric::rational_new(
+                crate::numeric::BigInt::from(n),
+                crate::numeric::BigInt::from(scale),
+            ))),
+            Value::BigInt(n) => Ok(Value::Rational(crate::numeric::rational_new(
+                n,
+                crate::numeric::BigInt::from(scale),
+            ))),
+            Value::Float(n) => Ok(Value::Float(n / scale as f64)),
+            Value::Rational(n) => Ok(Value::Rational(
+                n / crate::numeric::rational_from_integer(crate::numeric::BigInt::from(scale)),
+            )),
+            other => Err(format!("Cannot convert units for {}", other.type_name())),
+        }
+    }
+
+    fn units_are_compatible(&self, source: &str, target: &str) -> bool {
+        source == target || (matches!(source, "m" | "km") && matches!(target, "m" | "km"))
+    }
+
     fn try_call_special_method(
         &mut self,
         obj: Value,
@@ -308,6 +331,38 @@ impl Interpreter {
                     | Value::Irrational(_)
                     | Value::Complex(_, _) => Ok(val),
                     other => Err(format!("Cannot strip units from {}", other.type_name())),
+                }
+            }
+
+            Expr::UnitConvert { expr, unit } => {
+                let target_scale = self.unit_scale(unit).map_err(|err| {
+                    format!("UnitStripInvalid: invalid target unit '{}': {}", unit, err)
+                })?;
+                let val = self.eval_expr(expr)?;
+                match val {
+                    Value::UnitNumber {
+                        value,
+                        unit: source_unit,
+                        scale: source_scale,
+                    } => {
+                        if !self.units_are_compatible(&source_unit, unit) {
+                            return Err(format!(
+                                "UnitStripInvalid: cannot convert from '{}' to '{}'",
+                                source_unit, unit
+                            ));
+                        }
+                        let scaled = self.scale_unit_value(*value, source_scale)?;
+                        let converted = self.divide_unit_value(scaled, target_scale)?;
+                        Ok(Value::UnitNumber {
+                            value: Box::new(converted),
+                            unit: unit.clone(),
+                            scale: 1,
+                        })
+                    }
+                    other => Err(format!(
+                        "UnitStripInvalid: cannot convert {} to unit '{}'",
+                        other.type_name(), unit
+                    )),
                 }
             }
 

@@ -127,6 +127,7 @@ fn should_use_interpreter_runtime(statements: &[ast::Stmt]) -> bool {
             }
             ast::Expr::Unary { expr, .. } => expr_requires_interpreter(expr),
             ast::Expr::UnitStrip { .. } => true,
+            ast::Expr::UnitConvert { .. } => true,
             ast::Expr::UnitAttach { .. } => true,
             ast::Expr::Array(items) => items.iter().any(expr_requires_interpreter),
             ast::Expr::Vector(_) => true,

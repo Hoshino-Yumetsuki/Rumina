@@ -35,6 +35,13 @@ fn expect_float(result: Result<Option<Value>, rumina::RuminaError>) -> f64 {
     }
 }
 
+fn expect_string(result: Result<Option<Value>, rumina::RuminaError>) -> String {
+    match result.unwrap() {
+        Some(Value::String(s)) => s,
+        other => panic!("Expected String, got {:?}", other),
+    }
+}
+
 #[test]
 fn test_let_is_immutable() {
     let result = run_rumina("let x = 1; x = 2;");
@@ -267,6 +274,15 @@ fn test_lsr004_std_math_constants() {
 }
 
 #[test]
+fn test_lsr004_std_io_format_is_deterministic() {
+    let imported = expect_string(run_rumina("import std.io; io.format([1, 2, 3]);"));
+    assert_eq!(imported, "[1, 2, 3]");
+
+    let used = expect_string(run_rumina("use std.io.{format}; format(mat[1, 2; 3, 4]);"));
+    assert_eq!(used, "mat[1, 2; 3, 4]");
+}
+
+#[test]
 fn test_lsr004_std_random_seed_is_reproducible() {
     let result = run_rumina(
         "use std.random.{seed, rand, randint}; seed(123); let a = rand(); let b = randint(1, 10); seed(123); a == rand() and b == randint(1, 10);",
@@ -406,6 +422,15 @@ fn test_lsr005_match_vector_destructuring_pattern() {
 #[test]
 fn test_lsr005_match_wildcard_must_be_last() {
     assert!(run_rumina("match 1 { _ => 0, 1 => 1 };").is_err());
+}
+
+#[test]
+fn test_lsr005_match_duplicate_constant_arm_is_unreachable() {
+    let error = run_rumina("match 1 { 1 => 10, 1 => 20, _ => 0 };").unwrap_err();
+    assert!(
+        error.to_string().contains("UnreachablePattern"),
+        "expected UnreachablePattern diagnostic, got {error}"
+    );
 }
 
 #[test]
@@ -625,6 +650,37 @@ fn test_lsr008_strip_abstract_declared_unit_literal_as_num() {
         Some(Value::Bool(b)) => assert!(b),
         other => panic!("Expected Bool(true), got {:?}", other),
     }
+}
+
+#[test]
+fn test_lsr008_convert_metric_unit_literal_to_target_unit() {
+    let meters = run_rumina("10<km> as m;").unwrap();
+    assert_eq!(
+        meters,
+        Some(Value::UnitNumber {
+            value: Box::new(Value::Int(10000)),
+            unit: "m".to_string(),
+            scale: 1,
+        })
+    );
+}
+
+#[test]
+fn test_lsr008_strip_after_metric_unit_conversion_uses_target_scale() {
+    let result = run_rumina("((10<km> as m) as num) == 10000 and ((10<m> as km) as num) == (1 / 100);").unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_lsr008_rejects_incompatible_unit_conversion() {
+    let err = run_rumina("unit score; 10<m> as score;").unwrap_err();
+    assert!(
+        err.to_string().contains("UnitStripInvalid"),
+        "expected UnitStripInvalid diagnostic, got {err}"
+    );
 }
 
 #[test]

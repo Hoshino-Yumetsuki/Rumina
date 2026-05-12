@@ -9,6 +9,7 @@ pub mod buffer;
 pub mod cas;
 pub mod env;
 pub mod fs;
+pub mod io;
 pub mod linalg;
 pub mod math;
 pub mod path;
