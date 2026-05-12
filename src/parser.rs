@@ -62,6 +62,12 @@ impl Parser {
         }
     }
 
+    fn consume_optional_declared_type(&mut self) {
+        if self.declared_type_from_current_token().is_some() {
+            self.advance();
+        }
+    }
+
     /// Convert decimal string to rational expression (division)
     ///
     /// Converts decimal literals to exact rational representations:
@@ -382,6 +388,7 @@ impl Parser {
                     if let Token::Ident(param) = self.current_token() {
                         params.push(param.clone());
                         self.advance();
+                        self.consume_optional_declared_type();
                     } else {
                         return Err(format!(
                             "Expected parameter name, found {:?}",
@@ -1327,6 +1334,7 @@ impl Parser {
                     if let Token::Ident(param) = self.current_token() {
                         params.push(param.clone());
                         self.advance();
+                        self.consume_optional_declared_type();
                     } else {
                         return Err(format!(
                             "Expected parameter name, found {:?}",

@@ -363,3 +363,9 @@ fn test_lsr000_unit_declarations_are_accepted() {
     let result = expect_int(run_rumina("unit score; unit level = 100; 1;"));
     assert_eq!(result, 1);
 }
+
+#[test]
+fn test_lsr006_lambda_accepts_typed_params() {
+    let result = expect_int(run_rumina("let inc = |x num| -> x + 1; inc(41);"));
+    assert_eq!(result, 42);
+}
