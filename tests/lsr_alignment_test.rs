@@ -375,6 +375,12 @@ fn test_lsr005_match_binding_and_guard_patterns() {
 }
 
 #[test]
+fn test_lsr005_match_vector_destructuring_pattern() {
+    let result = expect_int(run_rumina("match vec[20, 22] { vec[a, b] => a + b, _ => 0 };"));
+    assert_eq!(result, 42);
+}
+
+#[test]
 fn test_lsr005_match_wildcard_must_be_last() {
     assert!(run_rumina("match 1 { _ => 0, 1 => 1 };").is_err());
 }

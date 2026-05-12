@@ -1210,6 +1210,25 @@ impl Parser {
                 self.advance();
                 Ok(MatchPattern::Binding(name))
             }
+            Token::Vec => {
+                self.advance();
+                self.expect(Token::LBracket)?;
+                let mut names = Vec::new();
+                if self.current_token() != &Token::RBracket {
+                    loop {
+                        let Token::Ident(name) = self.current_token() else {
+                            return Err(format!("Expected vector pattern binding, found {:?}", self.current_token()));
+                        };
+                        names.push(name.clone());
+                        self.advance();
+                        if !self.match_token(&Token::Comma) {
+                            break;
+                        }
+                    }
+                }
+                self.expect(Token::RBracket)?;
+                Ok(MatchPattern::Vector(names))
+            }
             Token::Int(_) | Token::BigIntLiteral(_) | Token::Float(_) | Token::Decimal(_) | Token::String(_) | Token::True | Token::False | Token::Null => {
                 Ok(MatchPattern::Literal(self.parse_primary()?))
             }

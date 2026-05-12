@@ -381,25 +381,38 @@ impl Interpreter {
             Expr::Match { target, arms } => {
                 let target = self.eval_expr(target)?;
                 for arm in arms {
-                    let binding = match &arm.pattern {
-                        MatchPattern::Wildcard => Some(None),
-                        MatchPattern::Binding(name) => Some(Some(name.clone())),
+                    let bindings = match &arm.pattern {
+                        MatchPattern::Wildcard => Some(HashMap::new()),
+                        MatchPattern::Binding(name) => Some(HashMap::from([(name.clone(), target.clone())])),
                         MatchPattern::Literal(pattern) => {
                             let pattern = self.eval_expr(pattern)?;
-                            if pattern == target { Some(None) } else { None }
+                            if pattern == target { Some(HashMap::new()) } else { None }
+                        }
+                        MatchPattern::Vector(names) => {
+                            let Value::Vector(values) = &target else {
+                                continue;
+                            };
+                            let values = values.borrow();
+                            if values.len() != names.len() {
+                                continue;
+                            }
+                            Some(
+                                names
+                                    .iter()
+                                    .cloned()
+                                    .zip(values.iter().cloned())
+                                    .collect(),
+                            )
                         }
                     };
 
-                    let Some(binding_name) = binding else {
+                    let Some(bindings) = bindings else {
                         continue;
                     };
 
-                    let has_binding = binding_name.is_some();
-                    if let Some(name) = binding_name {
-                        self.locals.push(Rc::new(RefCell::new(HashMap::from([(
-                            name,
-                            target.clone(),
-                        )]))));
+                    let has_binding = !bindings.is_empty();
+                    if has_binding {
+                        self.locals.push(Rc::new(RefCell::new(bindings)));
                         self.immutable_locals.push(Default::default());
                     }
 

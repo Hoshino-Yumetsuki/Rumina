@@ -222,6 +222,7 @@ pub enum MatchPattern {
     Wildcard,
     Binding(String),
     Literal(Expr),
+    Vector(Vec<String>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
