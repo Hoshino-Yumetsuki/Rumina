@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::value::Value;
@@ -110,6 +111,47 @@ pub fn solve_right(args: &[Value]) -> Result<Value, String> {
     let b = numeric_matrix(&b_rows.borrow(), "solve_right")?;
     let inverse = invert_matrix(numeric_matrix(&a_rows.borrow(), "solve_right")?)?;
     Ok(float_matrix_value(multiply_matrices(&b, &inverse)?))
+}
+
+pub fn eig(args: &[Value]) -> Result<Value, String> {
+    let rows = matrix_arg(args, "eig")?;
+    let values = numeric_matrix(&rows, "eig")?;
+    if !is_diagonal(&values) {
+        return Err("linalg.eig currently supports diagonal matrices".to_string());
+    }
+
+    let eigenvalues = values
+        .iter()
+        .enumerate()
+        .map(|(index, row)| vec![row[index]])
+        .collect();
+    let mut result = HashMap::new();
+    result.insert("values".to_string(), float_matrix_value(eigenvalues));
+    result.insert("vectors".to_string(), float_matrix_value(identity(values.len())));
+    Ok(Value::Struct(Rc::new(RefCell::new(result))))
+}
+
+pub fn svd(args: &[Value]) -> Result<Value, String> {
+    let rows = matrix_arg(args, "svd")?;
+    let values = numeric_matrix(&rows, "svd")?;
+    if !is_diagonal(&values) {
+        return Err("linalg.svd currently supports diagonal matrices".to_string());
+    }
+
+    let singular_values = values
+        .iter()
+        .enumerate()
+        .map(|(index, row)| {
+            let mut out = vec![0.0; row.len()];
+            out[index] = row[index].abs();
+            out
+        })
+        .collect();
+    let mut result = HashMap::new();
+    result.insert("U".to_string(), float_matrix_value(identity(values.len())));
+    result.insert("S".to_string(), float_matrix_value(singular_values));
+    result.insert("V".to_string(), float_matrix_value(identity(values.first().map_or(0, Vec::len))));
+    Ok(Value::Struct(Rc::new(RefCell::new(result))))
 }
 
 fn determinant(rows: &[Vec<Value>]) -> Result<f64, String> {
@@ -268,6 +310,14 @@ fn multiply_matrices(left: &[Vec<f64>], right: &[Vec<f64>]) -> Result<Vec<Vec<f6
         }
     }
     Ok(result)
+}
+
+fn is_diagonal(values: &[Vec<f64>]) -> bool {
+    values.iter().enumerate().all(|(row_index, row)| {
+        row.iter()
+            .enumerate()
+            .all(|(col_index, value)| row_index == col_index || value.abs() < EPSILON)
+    })
 }
 
 fn float_matrix_value(rows: Vec<Vec<f64>>) -> Value {

@@ -123,6 +123,8 @@ impl Interpreter {
                 "solve_right".to_string(),
                 Self::native_fn("std.linalg.solve_right", builtin::linalg::solve_right),
             ),
+            ("eig".to_string(), Self::native_fn("std.linalg.eig", builtin::linalg::eig)),
+            ("svd".to_string(), Self::native_fn("std.linalg.svd", builtin::linalg::svd)),
         ])
     }
 

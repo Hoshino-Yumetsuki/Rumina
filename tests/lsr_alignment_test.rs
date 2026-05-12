@@ -336,6 +336,30 @@ fn test_lsr004_std_linalg_solve_left_and_right() {
 }
 
 #[test]
+fn test_lsr004_std_linalg_eig_diagonal_matrix() {
+    let result = run_rumina(
+        "import std.linalg as la; let e = la.eig(mat[2, 0; 0, 3]); e.values[1][1] == 2 and e.values[2][1] == 3 and e.vectors[1][1] == 1 and e.vectors[2][2] == 1;",
+    )
+    .unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_lsr004_std_linalg_svd_diagonal_matrix() {
+    let result = run_rumina(
+        "import std.linalg as la; let s = la.svd(mat[4, 0; 0, 2]); s.S[1][1] == 4 and s.S[2][2] == 2 and s.U[1][1] == 1 and s.V[2][2] == 1;",
+    )
+    .unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
 fn test_lsr005_match_constant_and_wildcard_patterns() {
     let result = expect_int(run_rumina("match 2 { 1 => 10, 2 => 20, _ => 0 };"));
     assert_eq!(result, 20);
