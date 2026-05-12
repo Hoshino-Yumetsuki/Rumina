@@ -130,6 +130,7 @@ fn should_use_interpreter_runtime(statements: &[ast::Stmt]) -> bool {
             ast::Expr::Array(items) => items.iter().any(expr_requires_interpreter),
             ast::Expr::Vector(_) => true,
             ast::Expr::Matrix(_) => true,
+            ast::Expr::Set(_) => true,
             ast::Expr::Struct(fields) => fields
                 .iter()
                 .any(|(_, expr)| expr_requires_interpreter(expr)),

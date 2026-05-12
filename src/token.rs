@@ -79,6 +79,7 @@ pub enum Token {
     And,
     Or,
     Not,
+    In,
 
     // 分隔符
     Semicolon,   // ;

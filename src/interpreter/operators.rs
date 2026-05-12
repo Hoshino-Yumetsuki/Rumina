@@ -163,6 +163,16 @@ impl Interpreter {
         }
 
         match (left, right) {
+            (_, Value::Set(values)) if matches!(op, BinOp::In | BinOp::NotIn) => {
+                let contains = values.contains(left);
+                Ok(Value::Bool(if op == BinOp::In { contains } else { !contains }))
+            }
+
+            (Value::Set(_), Value::Set(_)) if matches!(op, BinOp::Equal | BinOp::NotEqual) => {
+                let equal = left == right;
+                Ok(Value::Bool(if op == BinOp::Equal { equal } else { !equal }))
+            }
+
             (Value::Int(a), Value::Int(b)) => {
                 match op {
                     BinOp::Add => match a.checked_add(*b) {

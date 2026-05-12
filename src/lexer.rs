@@ -255,6 +255,7 @@ impl Lexer {
             "and" => Token::And,
             "or" => Token::Or,
             "not" => Token::Not,
+            "in" => Token::In,
             "true" => Token::True,
             "false" => Token::False,
             "null" => Token::Null,

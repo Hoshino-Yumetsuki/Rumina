@@ -821,7 +821,7 @@ impl Compiler {
             }
 
             Expr::Binary { left, op, right } => {
-                if matches!(op, BinOp::Pipe | BinOp::Equivalent) {
+                if matches!(op, BinOp::Pipe | BinOp::Equivalent | BinOp::In | BinOp::NotIn) {
                     return Err(RuminaError::runtime(
                         format!("{} operator is not yet supported by the bytecode compiler", op),
                     ));
@@ -847,6 +847,8 @@ impl Compiler {
                     BinOp::LessEq => OpCode::Lte,
                     BinOp::And => OpCode::And,
                     BinOp::Or => OpCode::Or,
+                    BinOp::In => unreachable!("in handled before opcode emission"),
+                    BinOp::NotIn => unreachable!("not in handled before opcode emission"),
                     BinOp::Equivalent => unreachable!("equivalent handled before opcode emission"),
                     BinOp::Pipe => unreachable!("pipe handled before opcode emission"),
                 };
@@ -891,6 +893,12 @@ impl Compiler {
             Expr::Matrix(_) => {
                 return Err(RuminaError::runtime(
                     "matrix literals are not yet supported by the bytecode compiler".to_string(),
+                ));
+            }
+
+            Expr::Set(_) => {
+                return Err(RuminaError::runtime(
+                    "set literals are not yet supported by the bytecode compiler".to_string(),
                 ));
             }
 

@@ -367,6 +367,24 @@ fn test_lsr000_matrix_literal_uses_one_based_indexing() {
 }
 
 #[test]
+fn test_lsr000_set_literal_deduplicates_values() {
+    let result = run_rumina("let a = {1, 2, 2}; let b = {1, 2}; a == b;").unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_lsr000_set_membership_operators() {
+    let result = run_rumina("2 in {1, 2, 3} and 4 not in {1, 2, 3};").unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
 fn test_lsr008_strip_dimensionless_num_and_scalar() {
     let result = run_rumina("(42 as num) == 42 and (42 as scalar) == 42;").unwrap();
     match result {

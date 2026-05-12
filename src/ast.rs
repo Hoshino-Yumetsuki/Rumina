@@ -142,6 +142,8 @@ pub enum Expr {
 
     Matrix(Vec<Vec<Expr>>),
 
+    Set(Vec<Expr>),
+
     // 结构体字面量
     Struct(Vec<(String, Expr)>),
 
@@ -246,6 +248,8 @@ pub enum BinOp {
     GreaterEq, // >=
     Less,      // <
     LessEq,    // <=
+    In,
+    NotIn,
 
     And, // &&
     Or,  // ||
@@ -276,6 +280,8 @@ impl fmt::Display for BinOp {
             BinOp::GreaterEq => write!(f, ">="),
             BinOp::Less => write!(f, "<"),
             BinOp::LessEq => write!(f, "<="),
+            BinOp::In => write!(f, "in"),
+            BinOp::NotIn => write!(f, "not in"),
             BinOp::And => write!(f, "&&"),
             BinOp::Or => write!(f, "||"),
         }

@@ -606,6 +606,9 @@ impl PartialEq for Value {
             (Value::Bool(a), Value::Bool(b)) => a == b,
             (Value::String(a), Value::String(b)) => a == b,
             (Value::Null, Value::Null) => true,
+            (Value::Set(a), Value::Set(b)) => {
+                a.len() == b.len() && a.iter().all(|value| b.contains(value))
+            }
             _ => false,
         }
     }

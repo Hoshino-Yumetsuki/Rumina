@@ -163,6 +163,17 @@ impl Interpreter {
                 Ok(Value::Matrix(Rc::new(RefCell::new(matrix))))
             }
 
+            Expr::Set(elements) => {
+                let mut values = Vec::new();
+                for elem in elements {
+                    let value = self.eval_expr(elem)?;
+                    if !values.contains(&value) {
+                        values.push(value);
+                    }
+                }
+                Ok(Value::Set(values))
+            }
+
             Expr::Struct(fields) => {
                 let mut map = HashMap::new();
                 for (key, value) in fields {

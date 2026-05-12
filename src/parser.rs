@@ -869,6 +869,11 @@ impl Parser {
                 Token::GreaterEqual => BinOp::GreaterEq,
                 Token::Less => BinOp::Less,
                 Token::LessEqual => BinOp::LessEq,
+                Token::In => BinOp::In,
+                Token::Not if self.tokens.get(self.current + 1) == Some(&Token::In) => {
+                    self.advance();
+                    BinOp::NotIn
+                }
                 _ => break,
             };
             self.advance();
@@ -1146,7 +1151,7 @@ impl Parser {
             Token::Vec => self.parse_vector(),
             Token::Mat => self.parse_matrix(),
             Token::Table => self.parse_table(),
-            Token::LBrace => self.parse_struct(),
+            Token::LBrace => self.parse_brace_literal(),
             Token::LParen => {
                 self.advance();
                 let expr = self.parse_expression()?;
@@ -1293,6 +1298,30 @@ impl Parser {
 
         self.expect(Token::RBrace)?;
         Ok(Expr::Table(entries))
+    }
+
+    fn parse_brace_literal(&mut self) -> Result<Expr, String> {
+        if matches!(self.current_token(), Token::LBrace)
+            && matches!(self.tokens.get(self.current + 1), Some(Token::Ident(_)))
+            && self.tokens.get(self.current + 2) == Some(&Token::Equal)
+        {
+            return self.parse_struct();
+        }
+
+        self.expect(Token::LBrace)?;
+        let mut elements = Vec::new();
+
+        if self.current_token() != &Token::RBrace {
+            loop {
+                elements.push(self.parse_expression()?);
+                if !self.match_token(&Token::Comma) {
+                    break;
+                }
+            }
+        }
+
+        self.expect(Token::RBrace)?;
+        Ok(Expr::Set(elements))
     }
 
     fn parse_struct(&mut self) -> Result<Expr, String> {
