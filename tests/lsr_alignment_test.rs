@@ -275,3 +275,18 @@ fn test_lsr004_std_units_dimensionless_helpers() {
         other => panic!("Expected Bool(true), got {:?}", other),
     }
 }
+
+#[test]
+fn test_lsr005_match_constant_and_wildcard_patterns() {
+    let result = expect_int(run_rumina("match 2 { 1 => 10, 2 => 20, _ => 0 };"));
+    assert_eq!(result, 20);
+
+    let fallback = expect_int(run_rumina("match 9 { 1 => 10, 2 => 20, _ => 0 };"));
+    assert_eq!(fallback, 0);
+}
+
+#[test]
+fn test_lsr005_match_binding_and_guard_patterns() {
+    let result = expect_int(run_rumina("match 5 { v if v > 3 => v + 1, _ => 0 };"));
+    assert_eq!(result, 6);
+}

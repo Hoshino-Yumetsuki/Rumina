@@ -38,6 +38,7 @@ pub enum Token {
     Do,
     Try,
     Catch,
+    Match,
 
     // LSR-005: Type keywords for type declarations
     TypeInt,
@@ -93,8 +94,9 @@ pub enum Token {
     RBracket, // ]
 
     // 特殊
-    Arrow, // ->
-    At,    // @ (decorator)
+    Arrow,    // ->
+    FatArrow, // =>
+    At,       // @ (decorator)
     Eof,
 }
 

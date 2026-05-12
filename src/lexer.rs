@@ -247,6 +247,7 @@ impl Lexer {
             "do" => Token::Do,
             "try" => Token::Try,
             "catch" => Token::Catch,
+            "match" => Token::Match,
             "and" => Token::And,
             "or" => Token::Or,
             "not" => Token::Not,
@@ -333,6 +334,9 @@ impl Lexer {
                     if self.current_char == Some('=') {
                         self.advance();
                         Token::EqualEqual
+                    } else if self.current_char == Some('>') {
+                        self.advance();
+                        Token::FatArrow
                     } else {
                         Token::Equal
                     }

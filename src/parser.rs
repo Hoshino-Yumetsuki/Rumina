@@ -1090,7 +1090,55 @@ impl Parser {
             }
             Token::Do => self.parse_lambda(false),
             Token::Pipe => self.parse_lambda(true),
+            Token::Match => self.parse_match(),
             _ => Err(format!("Unexpected token: {:?}", self.current_token())),
+        }
+    }
+
+    fn parse_match(&mut self) -> Result<Expr, String> {
+        self.expect(Token::Match)?;
+        let target = self.parse_expression()?;
+        self.expect(Token::LBrace)?;
+
+        let mut arms = Vec::new();
+        while self.current_token() != &Token::RBrace {
+            let pattern = self.parse_match_pattern()?;
+            let guard = if self.match_token(&Token::If) {
+                Some(self.parse_expression()?)
+            } else {
+                None
+            };
+            self.expect(Token::FatArrow)?;
+            let expr = self.parse_expression()?;
+            arms.push(MatchArm { pattern, guard, expr });
+
+            if !self.match_token(&Token::Comma) {
+                break;
+            }
+        }
+
+        self.expect(Token::RBrace)?;
+        Ok(Expr::Match {
+            target: Box::new(target),
+            arms,
+        })
+    }
+
+    fn parse_match_pattern(&mut self) -> Result<MatchPattern, String> {
+        match self.current_token() {
+            Token::Ident(name) if name == "_" => {
+                self.advance();
+                Ok(MatchPattern::Wildcard)
+            }
+            Token::Ident(name) => {
+                let name = name.clone();
+                self.advance();
+                Ok(MatchPattern::Binding(name))
+            }
+            Token::Int(_) | Token::BigIntLiteral(_) | Token::Float(_) | Token::Decimal(_) | Token::String(_) | Token::True | Token::False | Token::Null => {
+                Ok(MatchPattern::Literal(self.parse_primary()?))
+            }
+            _ => Err(format!("Expected match pattern, found {:?}", self.current_token())),
         }
     }
 

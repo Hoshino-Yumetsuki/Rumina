@@ -177,6 +177,11 @@ pub enum Expr {
         is_simple: bool, // 简单形式 |a, b| a + b
     },
 
+    Match {
+        target: Box<Expr>,
+        arms: Vec<MatchArm>,
+    },
+
     // 命名空间访问
     Namespace {
         module: String,
@@ -185,6 +190,20 @@ pub enum Expr {
 
     // ? 错误传播
     Try(Box<Expr>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MatchArm {
+    pub pattern: MatchPattern,
+    pub guard: Option<Expr>,
+    pub expr: Expr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MatchPattern {
+    Wildcard,
+    Binding(String),
+    Literal(Expr),
 }
 
 /// 二元运算符

@@ -130,6 +130,7 @@ fn should_use_interpreter_runtime(statements: &[ast::Stmt]) -> bool {
                 .iter()
                 .any(|(_, expr)| expr_requires_interpreter(expr)),
             ast::Expr::Lambda { body, .. } => stmt_requires_interpreter(body),
+            ast::Expr::Match { .. } => true,
             ast::Expr::Multi(_) => true,
             _ => false,
         }

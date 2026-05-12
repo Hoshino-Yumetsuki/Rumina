@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::ast::Expr;
+use crate::ast::{Expr, MatchPattern};
 use crate::value::Value;
 
 use super::Interpreter;
@@ -295,6 +295,55 @@ impl Interpreter {
                     body: body.clone(),
                     closure,
                 })
+            }
+
+            Expr::Match { target, arms } => {
+                let target = self.eval_expr(target)?;
+                for arm in arms {
+                    let binding = match &arm.pattern {
+                        MatchPattern::Wildcard => Some(None),
+                        MatchPattern::Binding(name) => Some(Some(name.clone())),
+                        MatchPattern::Literal(pattern) => {
+                            let pattern = self.eval_expr(pattern)?;
+                            if pattern == target { Some(None) } else { None }
+                        }
+                    };
+
+                    let Some(binding_name) = binding else {
+                        continue;
+                    };
+
+                    let has_binding = binding_name.is_some();
+                    if let Some(name) = binding_name {
+                        self.locals.push(Rc::new(RefCell::new(HashMap::from([(
+                            name,
+                            target.clone(),
+                        )]))));
+                        self.immutable_locals.push(Default::default());
+                    }
+
+                    let guard_matches = if let Some(guard) = &arm.guard {
+                        self.eval_expr(guard)?.is_truthy()
+                    } else {
+                        true
+                    };
+
+                    if guard_matches {
+                        let result = self.eval_expr(&arm.expr);
+                        if has_binding {
+                            self.locals.pop();
+                            self.immutable_locals.pop();
+                        }
+                        return result;
+                    }
+
+                    if has_binding {
+                        self.locals.pop();
+                        self.immutable_locals.pop();
+                    }
+                }
+
+                Err("Match expression did not match any arm".to_string())
             }
 
             Expr::Namespace { module, name } => {

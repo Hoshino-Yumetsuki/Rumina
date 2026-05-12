@@ -997,6 +997,12 @@ impl Compiler {
                 self.emit(OpCode::PushVar(prefixed_name));
             }
 
+            Expr::Match { .. } => {
+                return Err(RuminaError::runtime(
+                    "match expressions are not yet supported by the bytecode compiler".to_string(),
+                ));
+            }
+
             Expr::Try(_) => {
                 return Err(RuminaError::runtime(
                     "? operator is not yet supported by the bytecode compiler".to_string(),
