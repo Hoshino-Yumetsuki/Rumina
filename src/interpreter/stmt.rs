@@ -605,10 +605,16 @@ impl Interpreter {
             }
 
             Stmt::UnitDecl { name, value } => {
-                if let Some(value) = value {
-                    self.eval_expr(value)?;
-                }
-                self.set_variable(format!("__unit_{}", name), Value::Bool(true), true);
+                let scale = if let Some(value) = value {
+                    match self.eval_expr(value)? {
+                        Value::UnitNumber { value, scale, .. } => self.scale_unit_value(*value, scale)?,
+                        Value::Int(n) => Value::Int(n),
+                        other => return Err(format!("Invalid unit declaration scale: {}", other.type_name())),
+                    }
+                } else {
+                    Value::Bool(true)
+                };
+                self.set_variable(format!("__unit_{}", name), scale, true);
                 Ok(())
             }
 

@@ -16,6 +16,11 @@ pub enum Value {
     Rational(BigRational),
     Irrational(IrrationalValue),
     Complex(Box<Value>, Box<Value>), // (real, imaginary) - symbolic representation
+    UnitNumber {
+        value: Box<Value>,
+        unit: String,
+        scale: i64,
+    },
     Bool(bool),
     String(String),
     Null,
@@ -77,6 +82,7 @@ impl Value {
             Value::Rational(_) => "rational",
             Value::Irrational(_) => "irrational",
             Value::Complex(_, _) => "complex",
+            Value::UnitNumber { .. } => "unit_number",
             Value::Bool(_) => "bool",
             Value::String(_) => "string",
             Value::Null => "null",
@@ -253,6 +259,7 @@ impl fmt::Display for Value {
                     }
                 }
             }
+            Value::UnitNumber { value, unit, .. } => write!(f, "{}<{}>", value, unit),
             Value::Bool(b) => write!(f, "{}", b),
             Value::String(s) => write!(f, "{}", s),
             Value::Null => write!(f, "null"),
@@ -603,6 +610,18 @@ impl PartialEq for Value {
             (Value::Complex(a_re, a_im), Value::Complex(b_re, b_im)) => {
                 a_re == b_re && a_im == b_im
             }
+            (
+                Value::UnitNumber {
+                    value: a_value,
+                    unit: a_unit,
+                    scale: a_scale,
+                },
+                Value::UnitNumber {
+                    value: b_value,
+                    unit: b_unit,
+                    scale: b_scale,
+                },
+            ) => a_value == b_value && a_unit == b_unit && a_scale == b_scale,
             (Value::Bool(a), Value::Bool(b)) => a == b,
             (Value::String(a), Value::String(b)) => a == b,
             (Value::Null, Value::Null) => true,

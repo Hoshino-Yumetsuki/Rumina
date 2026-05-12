@@ -45,6 +45,15 @@ fn test_lsr_declaration_type_annotation_after_name() {
 }
 
 #[test]
+fn test_lsr_comparison_with_identifier_is_not_unit_attach() {
+    let result = run_rumina("let x = 2; 1 < x;").unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
 fn test_lsr_logical_keywords() {
     let result = run_rumina("true and not false or false;").unwrap();
     match result {
@@ -459,6 +468,33 @@ fn test_lsr000_set_membership_operators() {
 #[test]
 fn test_lsr008_strip_dimensionless_num_and_scalar() {
     let result = run_rumina("(42 as num) == 42 and (42 as scalar) == 42;").unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_lsr008_strip_metric_unit_literal_as_num() {
+    let result = run_rumina("(10<m> as num) == 10 and (10<km> as num) == 10000;").unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_lsr008_strip_metric_unit_literal_as_scalar() {
+    let result = run_rumina("(10<km> as scalar) == 10;").unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_lsr008_strip_abstract_declared_unit_literal_as_num() {
+    let result = run_rumina("unit score; (10<score> as num) == 10;").unwrap();
     match result {
         Some(Value::Bool(b)) => assert!(b),
         other => panic!("Expected Bool(true), got {:?}", other),

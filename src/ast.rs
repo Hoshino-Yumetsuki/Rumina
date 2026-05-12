@@ -170,6 +170,11 @@ pub enum Expr {
         mode: UnitStripMode,
     },
 
+    UnitAttach {
+        expr: Box<Expr>,
+        unit: String,
+    },
+
     // 函数调用
     Call {
         func: Box<Expr>,

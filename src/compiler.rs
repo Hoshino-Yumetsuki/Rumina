@@ -874,6 +874,13 @@ impl Compiler {
                 ));
             }
 
+            Expr::UnitAttach { .. } => {
+                return Err(RuminaError::runtime(
+                    "unit-attached numeric literals are not yet supported by the bytecode compiler"
+                        .to_string(),
+                ));
+            }
+
             Expr::Array(elements) => {
                 // Compile each element
                 for elem in elements {

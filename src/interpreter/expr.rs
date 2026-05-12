@@ -9,6 +9,30 @@ use crate::value::Value;
 use super::Interpreter;
 
 impl Interpreter {
+    fn unit_scale(&self, unit: &str) -> Result<i64, String> {
+        match unit {
+            "m" => Ok(1),
+            "km" => Ok(1000),
+            _ => match self.get_variable(&format!("__unit_{}", unit))? {
+                Value::Int(scale) => Ok(scale),
+                Value::Bool(true) => Ok(1),
+                other => Err(format!("Invalid unit declaration for {}: {}", unit, other.type_name())),
+            },
+        }
+    }
+
+    pub(super) fn scale_unit_value(&self, value: Value, scale: i64) -> Result<Value, String> {
+        match value {
+            Value::Int(n) => Ok(Value::Int(n * scale)),
+            Value::BigInt(n) => Ok(Value::BigInt(n * crate::numeric::BigInt::from(scale))),
+            Value::Float(n) => Ok(Value::Float(n * scale as f64)),
+            Value::Rational(n) => Ok(Value::Rational(
+                n * crate::numeric::rational_from_integer(crate::numeric::BigInt::from(scale)),
+            )),
+            other => Err(format!("Cannot strip units from {}", other.type_name())),
+        }
+    }
+
     fn try_call_special_method(
         &mut self,
         obj: Value,
@@ -218,9 +242,13 @@ impl Interpreter {
                 self.eval_unary_op(*op, &val)
             }
 
-            Expr::UnitStrip { expr, .. } => {
+            Expr::UnitStrip { expr, mode } => {
                 let val = self.eval_expr(expr)?;
                 match val {
+                    Value::UnitNumber { value, scale, .. } => match mode {
+                        crate::ast::UnitStripMode::Num => self.scale_unit_value(*value, scale),
+                        crate::ast::UnitStripMode::Scalar => Ok(*value),
+                    },
                     Value::Int(_)
                     | Value::BigInt(_)
                     | Value::Float(_)
@@ -228,6 +256,23 @@ impl Interpreter {
                     | Value::Irrational(_)
                     | Value::Complex(_, _) => Ok(val),
                     other => Err(format!("Cannot strip units from {}", other.type_name())),
+                }
+            }
+
+            Expr::UnitAttach { expr, unit } => {
+                let value = self.eval_expr(expr)?;
+                match value {
+                    Value::Int(_)
+                    | Value::BigInt(_)
+                    | Value::Float(_)
+                    | Value::Rational(_)
+                    | Value::Irrational(_)
+                    | Value::Complex(_, _) => Ok(Value::UnitNumber {
+                        value: Box::new(value),
+                        unit: unit.clone(),
+                        scale: self.unit_scale(unit)?,
+                    }),
+                    other => Err(format!("Cannot attach unit to {}", other.type_name())),
                 }
             }
 

@@ -1014,6 +1014,27 @@ impl Parser {
                     self.advance();
                     expr = Expr::Try(Box::new(expr));
                 }
+                Token::Less
+                    if matches!(self.tokens.get(self.current + 1), Some(Token::Ident(_)))
+                        && self.tokens.get(self.current + 2) == Some(&Token::Greater) =>
+                {
+                    self.advance();
+                    let unit = if let Token::Ident(unit) = self.current_token() {
+                        let unit = unit.clone();
+                        self.advance();
+                        unit
+                    } else {
+                        return Err(format!(
+                            "Expected unit name, found {:?}",
+                            self.current_token()
+                        ));
+                    };
+                    self.expect(Token::Greater)?;
+                    expr = Expr::UnitAttach {
+                        expr: Box::new(expr),
+                        unit,
+                    };
+                }
                 _ => break,
             }
         }
