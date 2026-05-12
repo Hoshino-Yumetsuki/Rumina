@@ -218,6 +218,18 @@ fn test_lsr004_import_std_math() {
 }
 
 #[test]
+fn test_lsr004_import_alias() {
+    let result = expect_int(run_rumina("import std.math as m; m.sqrt(9);"));
+    assert_eq!(result, 3);
+}
+
+#[test]
+fn test_lsr004_use_alias() {
+    let result = expect_float(run_rumina("use std.constants.{G as GRAVITY}; GRAVITY;"));
+    assert!((result - 6.67430e-11).abs() < 1e-20, "unexpected GRAVITY: {}", result);
+}
+
+#[test]
 fn test_lsr004_use_std_math_functions() {
     let result = expect_float(run_rumina(
         "use std.math.{pow, log, log10, floor, ceil, round, clamp}; pow(2, 3) + log(1) + log10(100) + floor(1.9) + ceil(1.1) + round(1.6) + clamp(10, 0, 3);",
