@@ -70,12 +70,25 @@ impl Interpreter {
         ])
     }
 
+    fn lsr004_random_module() -> HashMap<String, Value> {
+        HashMap::from([
+            ("seed".to_string(), Self::native_fn("std.random.seed", builtin::random::seed)),
+            ("rand".to_string(), Self::native_fn("std.random.rand", builtin::random::rand)),
+            ("randint".to_string(), Self::native_fn("std.random.randint", builtin::random::randint)),
+            ("normal".to_string(), Self::native_fn("std.random.normal", builtin::random::normal)),
+            ("choice".to_string(), Self::native_fn("std.random.choice", builtin::random::choice)),
+        ])
+    }
+
     fn lsr_standard_module(path: &[String]) -> Result<Value, String> {
         match path.join(".").as_str() {
             "std.constants" => Ok(Value::Module(Rc::new(RefCell::new(
                 Self::lsr002_constants_module(),
             )))),
             "std.math" => Ok(Value::Module(Rc::new(RefCell::new(Self::lsr004_math_module())))),
+            "std.random" => Ok(Value::Module(Rc::new(RefCell::new(
+                Self::lsr004_random_module(),
+            )))),
             module => Err(format!("Unknown module: {}", module)),
         }
     }

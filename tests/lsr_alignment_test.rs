@@ -225,3 +225,24 @@ fn test_lsr004_std_math_constants() {
     let result = expect_float(run_rumina("import std.math; math.phi;"));
     assert!((result - 1.618033988749895).abs() < 1e-12, "unexpected phi: {}", result);
 }
+
+#[test]
+fn test_lsr004_std_random_seed_is_reproducible() {
+    let result = run_rumina(
+        "use std.random.{seed, rand, randint}; seed(123); let a = rand(); let b = randint(1, 10); seed(123); a == rand() and b == randint(1, 10);",
+    )
+    .unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_lsr004_std_random_normal_and_choice() {
+    let normal = expect_float(run_rumina("use std.random.{seed, normal}; seed(7); normal(0, 1);"));
+    assert!(normal.is_finite(), "normal sample should be finite: {}", normal);
+
+    let choice = expect_int(run_rumina("use std.random.{seed, choice}; seed(7); choice([10, 20, 30]);"));
+    assert!([10, 20, 30].contains(&choice), "choice returned unexpected value: {}", choice);
+}
