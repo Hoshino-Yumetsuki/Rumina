@@ -112,6 +112,17 @@ impl Interpreter {
             ),
             ("trace".to_string(), Self::native_fn("std.linalg.trace", builtin::linalg::trace)),
             ("det".to_string(), Self::native_fn("std.linalg.det", builtin::linalg::det)),
+            ("adjoint".to_string(), Self::native_fn("std.linalg.adjoint", builtin::linalg::adjoint)),
+            ("inv".to_string(), Self::native_fn("std.linalg.inv", builtin::linalg::inv)),
+            ("rank".to_string(), Self::native_fn("std.linalg.rank", builtin::linalg::rank)),
+            (
+                "solve_left".to_string(),
+                Self::native_fn("std.linalg.solve_left", builtin::linalg::solve_left),
+            ),
+            (
+                "solve_right".to_string(),
+                Self::native_fn("std.linalg.solve_right", builtin::linalg::solve_right),
+            ),
         ])
     }
 

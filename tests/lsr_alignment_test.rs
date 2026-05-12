@@ -312,6 +312,30 @@ fn test_lsr004_std_linalg_det() {
 }
 
 #[test]
+fn test_lsr004_std_linalg_adjoint_inverse_rank() {
+    let result = run_rumina(
+        "import std.linalg as la; let m = mat[4, 7; 2, 6]; let a = la.adjoint(m); let inv = la.inv(m); a[1][2] == 2 and inv[1][1] == 0.6 and inv[1][2] == -0.7 and la.rank(m) == 2;",
+    )
+    .unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_lsr004_std_linalg_solve_left_and_right() {
+    let result = run_rumina(
+        "import std.linalg as la; let a = mat[2, 0; 0, 4]; let b = mat[8; 12]; let x = la.solve_left(a, b); let y = la.solve_right(mat[8, 12], a); x[1][1] == 4 and x[2][1] == 3 and y[1][1] == 4 and y[1][2] == 3;",
+    )
+    .unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
 fn test_lsr005_match_constant_and_wildcard_patterns() {
     let result = expect_int(run_rumina("match 2 { 1 => 10, 2 => 20, _ => 0 };"));
     assert_eq!(result, 20);
