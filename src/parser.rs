@@ -1168,6 +1168,7 @@ impl Parser {
         let mut arms = Vec::new();
         while self.current_token() != &Token::RBrace {
             let pattern = self.parse_match_pattern()?;
+            let is_wildcard = matches!(pattern, MatchPattern::Wildcard);
             let guard = if self.match_token(&Token::If) {
                 Some(self.parse_expression()?)
             } else {
@@ -1179,6 +1180,10 @@ impl Parser {
 
             if !self.match_token(&Token::Comma) {
                 break;
+            }
+
+            if is_wildcard && self.current_token() != &Token::RBrace {
+                return Err("Wildcard match arm must be last".to_string());
             }
         }
 

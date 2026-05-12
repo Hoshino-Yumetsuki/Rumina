@@ -309,6 +309,11 @@ fn test_lsr005_match_binding_and_guard_patterns() {
 }
 
 #[test]
+fn test_lsr005_match_wildcard_must_be_last() {
+    assert!(run_rumina("match 1 { _ => 0, 1 => 1 };").is_err());
+}
+
+#[test]
 fn test_lsr007_core_equivalence_identities() {
     let result = run_rumina("let x = 9; x + 0 === x and x * 1 === x and x - x === 0;").unwrap();
     match result {
