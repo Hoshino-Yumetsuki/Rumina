@@ -34,6 +34,11 @@ fn test_const_is_immutable() {
 }
 
 #[test]
+fn test_const_requires_initializer() {
+    assert!(run_rumina("const x;").is_err(), "const declarations must initialize");
+}
+
+#[test]
 fn test_lsr_declaration_type_annotation_after_name() {
     let result = expect_int(run_rumina("let x num = 42; x;"));
     assert_eq!(result, 42);
