@@ -323,3 +323,17 @@ fn test_lsr000_table_missing_key_returns_null() {
         other => panic!("Expected Bool(true), got {:?}", other),
     }
 }
+
+#[test]
+fn test_lsr000_vector_literal_uses_one_based_indexing() {
+    let first = expect_int(run_rumina("let xs = vec[10, 20, 30]; xs[1];"));
+    assert_eq!(first, 10);
+
+    let third = expect_int(run_rumina("let xs = vec[10, 20, 30]; xs[3];"));
+    assert_eq!(third, 30);
+}
+
+#[test]
+fn test_lsr000_vector_zero_index_is_invalid() {
+    assert!(run_rumina("let xs = vec[10, 20, 30]; xs[0];").is_err());
+}

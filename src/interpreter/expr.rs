@@ -143,6 +143,14 @@ impl Interpreter {
                 Ok(Value::Array(Rc::new(RefCell::new(arr))))
             }
 
+            Expr::Vector(elements) => {
+                let mut values = Vec::new();
+                for elem in elements {
+                    values.push(self.eval_expr(elem)?);
+                }
+                Ok(Value::Vector(Rc::new(RefCell::new(values))))
+            }
+
             Expr::Struct(fields) => {
                 let mut map = HashMap::new();
                 for (key, value) in fields {
@@ -279,6 +287,16 @@ impl Interpreter {
                         arr.get(index)
                             .cloned()
                             .ok_or_else(|| format!("Array index out of bounds: {}", i))
+                    }
+                    (Value::Vector(values), Value::Int(i)) => {
+                        if i <= 0 {
+                            return Err(format!("Vector index out of bounds: {}", i));
+                        }
+                        values
+                            .borrow()
+                            .get((i - 1) as usize)
+                            .cloned()
+                            .ok_or_else(|| format!("Vector index out of bounds: {}", i))
                     }
                     (Value::String(s), Value::Int(i)) => {
                         let chars: Vec<char> = s.chars().collect();

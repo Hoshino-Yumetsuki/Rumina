@@ -249,6 +249,7 @@ impl Lexer {
             "catch" => Token::Catch,
             "match" => Token::Match,
             "table" => Token::Table,
+            "vec" => Token::Vec,
             "and" => Token::And,
             "or" => Token::Or,
             "not" => Token::Not,

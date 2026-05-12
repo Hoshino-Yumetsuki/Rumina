@@ -874,6 +874,12 @@ impl Compiler {
                 self.emit(OpCode::MakeArray(elements.len()));
             }
 
+            Expr::Vector(_) => {
+                return Err(RuminaError::runtime(
+                    "vector literals are not yet supported by the bytecode compiler".to_string(),
+                ));
+            }
+
             Expr::Struct(fields) => {
                 // Compile each field (key, value) pair
                 for (key, value) in fields {

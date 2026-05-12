@@ -133,6 +133,8 @@ pub enum Expr {
     // 数组字面量
     Array(Vec<Expr>),
 
+    Vector(Vec<Expr>),
+
     // 结构体字面量
     Struct(Vec<(String, Expr)>),
 
