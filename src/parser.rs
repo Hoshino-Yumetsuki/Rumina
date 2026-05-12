@@ -407,6 +407,10 @@ impl Parser {
             Vec::new()
         };
 
+        if self.match_token(&Token::Arrow) {
+            self.consume_optional_declared_type();
+        }
+
         self.expect(Token::LBrace)?;
         let body = self.parse_block_statements()?;
         self.expect(Token::RBrace)?;

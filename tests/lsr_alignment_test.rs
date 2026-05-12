@@ -369,3 +369,9 @@ fn test_lsr006_lambda_accepts_typed_params() {
     let result = expect_int(run_rumina("let inc = |x num| -> x + 1; inc(41);"));
     assert_eq!(result, 42);
 }
+
+#[test]
+fn test_lsr000_function_accepts_typed_signature() {
+    let result = expect_int(run_rumina("func add(x num, y num) -> num { return x + y; } add(20, 22);"));
+    assert_eq!(result, 42);
+}
