@@ -80,6 +80,18 @@ impl Interpreter {
         ])
     }
 
+    fn lsr004_stats_module() -> HashMap<String, Value> {
+        HashMap::from([
+            ("mean".to_string(), Self::native_fn("std.stats.mean", builtin::stats::mean)),
+            ("median".to_string(), Self::native_fn("std.stats.median", builtin::stats::median)),
+            ("var".to_string(), Self::native_fn("std.stats.var", builtin::stats::var)),
+            ("std".to_string(), Self::native_fn("std.stats.std", builtin::stats::std)),
+            ("quantile".to_string(), Self::native_fn("std.stats.quantile", builtin::stats::quantile)),
+            ("cov".to_string(), Self::native_fn("std.stats.cov", builtin::stats::cov)),
+            ("corr".to_string(), Self::native_fn("std.stats.corr", builtin::stats::corr)),
+        ])
+    }
+
     fn lsr_standard_module(path: &[String]) -> Result<Value, String> {
         match path.join(".").as_str() {
             "std.constants" => Ok(Value::Module(Rc::new(RefCell::new(
@@ -88,6 +100,9 @@ impl Interpreter {
             "std.math" => Ok(Value::Module(Rc::new(RefCell::new(Self::lsr004_math_module())))),
             "std.random" => Ok(Value::Module(Rc::new(RefCell::new(
                 Self::lsr004_random_module(),
+            )))),
+            "std.stats" => Ok(Value::Module(Rc::new(RefCell::new(
+                Self::lsr004_stats_module(),
             )))),
             module => Err(format!("Unknown module: {}", module)),
         }

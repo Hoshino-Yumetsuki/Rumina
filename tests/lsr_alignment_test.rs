@@ -246,3 +246,20 @@ fn test_lsr004_std_random_normal_and_choice() {
     let choice = expect_int(run_rumina("use std.random.{seed, choice}; seed(7); choice([10, 20, 30]);"));
     assert!([10, 20, 30].contains(&choice), "choice returned unexpected value: {}", choice);
 }
+
+#[test]
+fn test_lsr004_std_stats_descriptive_functions() {
+    let result = expect_float(run_rumina(
+        "use std.stats.{mean, median, var as variance, std, quantile}; mean([1, 2, 3, 4]) + median([1, 2, 3, 4]) + variance([1, 2, 3, 4]) + std([1, 2, 3, 4]) + quantile([1, 2, 3, 4], 0.5);",
+    ));
+    let expected = 2.5 + 2.5 + 1.25 + 1.25_f64.sqrt() + 2.5;
+    assert!((result - expected).abs() < 1e-10, "expected {}, got {}", expected, result);
+}
+
+#[test]
+fn test_lsr004_std_stats_cov_corr() {
+    let result = expect_float(run_rumina(
+        "use std.stats.{cov, corr}; cov([1, 2, 3], [2, 4, 6]) + corr([1, 2, 3], [2, 4, 6]);",
+    ));
+    assert!((result - (4.0 / 3.0 + 1.0)).abs() < 1e-10, "unexpected cov+corr: {}", result);
+}

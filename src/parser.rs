@@ -624,16 +624,7 @@ impl Parser {
         let mut items = Vec::new();
         if self.current_token() != &Token::RBrace {
             loop {
-                let name = if let Token::Ident(name) = self.current_token() {
-                    let name = name.clone();
-                    self.advance();
-                    name
-                } else {
-                    return Err(format!(
-                        "Expected imported symbol, found {:?}",
-                        self.current_token()
-                    ));
-                };
+                let name = self.parse_imported_symbol()?;
 
                 let alias = if self.match_token(&Token::As) {
                     if let Token::Ident(alias) = self.current_token() {
@@ -661,6 +652,21 @@ impl Parser {
         self.expect(Token::RBrace)?;
         self.match_token(&Token::Semicolon);
         Ok(Stmt::Use { path, items })
+    }
+
+    fn parse_imported_symbol(&mut self) -> Result<String, String> {
+        let name = match self.current_token() {
+            Token::Ident(name) => name.clone(),
+            Token::Var => "var".to_string(),
+            _ => {
+                return Err(format!(
+                    "Expected imported symbol, found {:?}",
+                    self.current_token()
+                ));
+            }
+        };
+        self.advance();
+        Ok(name)
     }
 
     fn parse_try_catch(&mut self) -> Result<Stmt, String> {

@@ -14,6 +14,7 @@ pub mod path;
 pub mod process;
 pub mod random;
 pub mod set;
+pub mod stats;
 pub mod stream;
 pub mod string;
 pub mod time;
