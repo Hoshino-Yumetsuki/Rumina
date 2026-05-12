@@ -294,6 +294,24 @@ fn test_lsr004_std_units_dimensionless_helpers() {
 }
 
 #[test]
+fn test_lsr004_std_linalg_shape_transpose_trace() {
+    let result = run_rumina(
+        "import std.linalg as la; let m = mat[1, 2; 3, 4]; let s = la.shape(m); let t = la.transpose(m); s[1] == 2 and s[2] == 2 and t[1][2] == 3 and la.trace(m) == 5;",
+    )
+    .unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_lsr004_std_linalg_det() {
+    let result = expect_int(run_rumina("use std.linalg.{det}; det(mat[1, 2; 3, 4]);"));
+    assert_eq!(result, -2);
+}
+
+#[test]
 fn test_lsr005_match_constant_and_wildcard_patterns() {
     let result = expect_int(run_rumina("match 2 { 1 => 10, 2 => 20, _ => 0 };"));
     assert_eq!(result, 20);

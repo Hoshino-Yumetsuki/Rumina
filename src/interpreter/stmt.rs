@@ -103,6 +103,18 @@ impl Interpreter {
         ])
     }
 
+    fn lsr004_linalg_module() -> HashMap<String, Value> {
+        HashMap::from([
+            ("shape".to_string(), Self::native_fn("std.linalg.shape", builtin::linalg::shape)),
+            (
+                "transpose".to_string(),
+                Self::native_fn("std.linalg.transpose", builtin::linalg::transpose),
+            ),
+            ("trace".to_string(), Self::native_fn("std.linalg.trace", builtin::linalg::trace)),
+            ("det".to_string(), Self::native_fn("std.linalg.det", builtin::linalg::det)),
+        ])
+    }
+
     fn lsr_standard_module(path: &[String]) -> Result<Value, String> {
         match path.join(".").as_str() {
             "std.constants" => Ok(Value::Module(Rc::new(RefCell::new(
@@ -117,6 +129,9 @@ impl Interpreter {
             )))),
             "std.units" => Ok(Value::Module(Rc::new(RefCell::new(
                 Self::lsr004_units_module(),
+            )))),
+            "std.linalg" => Ok(Value::Module(Rc::new(RefCell::new(
+                Self::lsr004_linalg_module(),
             )))),
             module => Err(format!("Unknown module: {}", module)),
         }
