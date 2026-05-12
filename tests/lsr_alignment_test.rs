@@ -263,3 +263,15 @@ fn test_lsr004_std_stats_cov_corr() {
     ));
     assert!((result - (4.0 / 3.0 + 1.0)).abs() < 1e-10, "unexpected cov+corr: {}", result);
 }
+
+#[test]
+fn test_lsr004_std_units_dimensionless_helpers() {
+    let result = run_rumina(
+        "use std.units.{strip, is_dimensionless, convert}; strip(42) == 42 and is_dimensionless(42) and convert(42, \"\") == 42;",
+    )
+    .unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}

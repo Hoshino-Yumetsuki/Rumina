@@ -92,6 +92,17 @@ impl Interpreter {
         ])
     }
 
+    fn lsr004_units_module() -> HashMap<String, Value> {
+        HashMap::from([
+            ("convert".to_string(), Self::native_fn("std.units.convert", builtin::units::convert)),
+            ("strip".to_string(), Self::native_fn("std.units.strip", builtin::units::strip)),
+            (
+                "is_dimensionless".to_string(),
+                Self::native_fn("std.units.is_dimensionless", builtin::units::is_dimensionless),
+            ),
+        ])
+    }
+
     fn lsr_standard_module(path: &[String]) -> Result<Value, String> {
         match path.join(".").as_str() {
             "std.constants" => Ok(Value::Module(Rc::new(RefCell::new(
@@ -103,6 +114,9 @@ impl Interpreter {
             )))),
             "std.stats" => Ok(Value::Module(Rc::new(RefCell::new(
                 Self::lsr004_stats_module(),
+            )))),
+            "std.units" => Ok(Value::Module(Rc::new(RefCell::new(
+                Self::lsr004_units_module(),
             )))),
             module => Err(format!("Unknown module: {}", module)),
         }

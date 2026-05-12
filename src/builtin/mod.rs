@@ -18,6 +18,7 @@ pub mod stats;
 pub mod stream;
 pub mod string;
 pub mod time;
+pub mod units;
 pub mod utils;
 
 pub fn register_builtins(globals: &mut HashMap<String, Value>) {
