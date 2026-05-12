@@ -5,9 +5,10 @@ use std::fs;
 use std::rc::Rc;
 
 use crate::ast::{Expr, Stmt};
+use crate::builtin;
 use crate::lexer::Lexer;
 use crate::parser::Parser;
-use crate::value::Value;
+use crate::value::{IrrationalValue, Value};
 
 use super::Interpreter;
 use super::convert;
@@ -38,11 +39,43 @@ impl Interpreter {
         ])
     }
 
+    fn native_fn(name: &str, func: fn(&[Value]) -> Result<Value, String>) -> Value {
+        Value::NativeFunction {
+            name: name.to_string(),
+            func,
+        }
+    }
+
+    fn lsr004_math_module() -> HashMap<String, Value> {
+        HashMap::from([
+            ("abs".to_string(), Self::native_fn("std.math.abs", builtin::math::abs_fn)),
+            ("sqrt".to_string(), Self::native_fn("std.math.sqrt", builtin::math::sqrt)),
+            ("pow".to_string(), Self::native_fn("std.math.pow", builtin::math::pow)),
+            ("exp".to_string(), Self::native_fn("std.math.exp", builtin::math::exp)),
+            ("log".to_string(), Self::native_fn("std.math.log", builtin::math::std_log)),
+            ("log10".to_string(), Self::native_fn("std.math.log10", builtin::math::log10)),
+            ("sin".to_string(), Self::native_fn("std.math.sin", builtin::math::sin)),
+            ("cos".to_string(), Self::native_fn("std.math.cos", builtin::math::cos)),
+            ("tan".to_string(), Self::native_fn("std.math.tan", builtin::math::tan)),
+            ("asin".to_string(), Self::native_fn("std.math.asin", builtin::math::asin)),
+            ("acos".to_string(), Self::native_fn("std.math.acos", builtin::math::acos)),
+            ("atan".to_string(), Self::native_fn("std.math.atan", builtin::math::atan)),
+            ("floor".to_string(), Self::native_fn("std.math.floor", builtin::math::floor)),
+            ("ceil".to_string(), Self::native_fn("std.math.ceil", builtin::math::ceil)),
+            ("round".to_string(), Self::native_fn("std.math.round", builtin::math::round)),
+            ("clamp".to_string(), Self::native_fn("std.math.clamp", builtin::math::clamp)),
+            ("pi".to_string(), Value::Irrational(IrrationalValue::Pi)),
+            ("e".to_string(), Value::Irrational(IrrationalValue::E)),
+            ("phi".to_string(), Value::Float(1.618033988749895)),
+        ])
+    }
+
     fn lsr_standard_module(path: &[String]) -> Result<Value, String> {
         match path.join(".").as_str() {
             "std.constants" => Ok(Value::Module(Rc::new(RefCell::new(
                 Self::lsr002_constants_module(),
             )))),
+            "std.math" => Ok(Value::Module(Rc::new(RefCell::new(Self::lsr004_math_module())))),
             module => Err(format!("Unknown module: {}", module)),
         }
     }

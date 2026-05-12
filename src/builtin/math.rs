@@ -114,6 +114,72 @@ pub fn exp(args: &[Value]) -> Result<Value, String> {
     }
 }
 
+pub fn pow(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 2 {
+        return Err("pow expects 2 arguments".to_string());
+    }
+
+    Ok(Value::Float(args[0].to_float()?.powf(args[1].to_float()?)))
+}
+
+pub fn asin(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("asin expects 1 argument".to_string());
+    }
+
+    Ok(Value::Float(args[0].to_float()?.asin()))
+}
+
+pub fn acos(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("acos expects 1 argument".to_string());
+    }
+
+    Ok(Value::Float(args[0].to_float()?.acos()))
+}
+
+pub fn atan(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("atan expects 1 argument".to_string());
+    }
+
+    Ok(Value::Float(args[0].to_float()?.atan()))
+}
+
+pub fn floor(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("floor expects 1 argument".to_string());
+    }
+
+    Ok(Value::Float(args[0].to_float()?.floor()))
+}
+
+pub fn ceil(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("ceil expects 1 argument".to_string());
+    }
+
+    Ok(Value::Float(args[0].to_float()?.ceil()))
+}
+
+pub fn round(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("round expects 1 argument".to_string());
+    }
+
+    Ok(Value::Float(args[0].to_float()?.round()))
+}
+
+pub fn clamp(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 3 {
+        return Err("clamp expects 3 arguments".to_string());
+    }
+
+    Ok(Value::Float(
+        args[0].to_float()?.clamp(args[1].to_float()?, args[2].to_float()?),
+    ))
+}
+
 pub fn abs_fn(args: &[Value]) -> Result<Value, String> {
     if args.len() != 1 {
         return Err("abs expects 1 argument".to_string());
@@ -249,6 +315,21 @@ pub fn log(args: &[Value]) -> Result<Value, String> {
         return Err("log domain error: input must be positive".to_string());
     }
     Ok(Value::Float(val.log10()))
+}
+
+pub fn std_log(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("log expects 1 argument".to_string());
+    }
+    let val = args[0].to_float()?;
+    if val <= 0.0 {
+        return Err("log domain error: input must be positive".to_string());
+    }
+    Ok(Value::Float(val.ln()))
+}
+
+pub fn log10(args: &[Value]) -> Result<Value, String> {
+    log(args)
 }
 
 pub fn ln(args: &[Value]) -> Result<Value, String> {

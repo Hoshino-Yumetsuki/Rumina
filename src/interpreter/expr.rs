@@ -221,6 +221,13 @@ impl Interpreter {
                         _ => return Err(format!("Cannot access member of {}", obj.type_name())),
                     };
 
+                    if matches!(
+                        &method,
+                        Value::NativeFunction { name, .. } if name.starts_with("std.")
+                    ) {
+                        return self.call_function(method, arg_vals);
+                    }
+
                     // 调用方法，并注入self
                     self.call_method(method, obj, arg_vals)
                 } else {

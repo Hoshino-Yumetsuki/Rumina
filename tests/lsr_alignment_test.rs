@@ -205,3 +205,23 @@ fn test_lsr004_import_std_constants() {
     let g = expect_float(run_rumina("import std.constants; constants.EARTH_GRAVITY;"));
     assert!((g - 9.80665).abs() < 1e-12, "unexpected EARTH_GRAVITY: {}", g);
 }
+
+#[test]
+fn test_lsr004_import_std_math() {
+    let result = expect_int(run_rumina("import std.math; math.sqrt(9);"));
+    assert_eq!(result, 3);
+}
+
+#[test]
+fn test_lsr004_use_std_math_functions() {
+    let result = expect_float(run_rumina(
+        "use std.math.{pow, log, log10, floor, ceil, round, clamp}; pow(2, 3) + log(1) + log10(100) + floor(1.9) + ceil(1.1) + round(1.6) + clamp(10, 0, 3);",
+    ));
+    assert!((result - 18.0).abs() < 1e-10, "expected 18.0, got {}", result);
+}
+
+#[test]
+fn test_lsr004_std_math_constants() {
+    let result = expect_float(run_rumina("import std.math; math.phi;"));
+    assert!((result - 1.618033988749895).abs() < 1e-12, "unexpected phi: {}", result);
+}
