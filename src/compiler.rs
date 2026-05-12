@@ -888,6 +888,12 @@ impl Compiler {
                 self.emit(OpCode::MakeStruct(fields.len()));
             }
 
+            Expr::Table(_) => {
+                return Err(RuminaError::runtime(
+                    "table literals are not yet supported by the bytecode compiler".to_string(),
+                ));
+            }
+
             Expr::Call { func, args } => {
                 // Check if it's a simple function call
                 if let Expr::Ident(name) = &**func {

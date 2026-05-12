@@ -1082,6 +1082,7 @@ impl Parser {
                 Ok(Expr::Ident("array".to_string()))
             }
             Token::LBracket => self.parse_array(),
+            Token::Table => self.parse_table(),
             Token::LBrace => self.parse_struct(),
             Token::LParen => {
                 self.advance();
@@ -1158,6 +1159,28 @@ impl Parser {
 
         self.expect(Token::RBracket)?;
         Ok(Expr::Array(elements))
+    }
+
+    fn parse_table(&mut self) -> Result<Expr, String> {
+        self.expect(Token::Table)?;
+        self.expect(Token::LBrace)?;
+        let mut entries = Vec::new();
+
+        if self.current_token() != &Token::RBrace {
+            loop {
+                let key = self.parse_expression()?;
+                self.expect(Token::FatArrow)?;
+                let value = self.parse_expression()?;
+                entries.push((key, value));
+
+                if !self.match_token(&Token::Comma) {
+                    break;
+                }
+            }
+        }
+
+        self.expect(Token::RBrace)?;
+        Ok(Expr::Table(entries))
     }
 
     fn parse_struct(&mut self) -> Result<Expr, String> {

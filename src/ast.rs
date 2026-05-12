@@ -136,6 +136,8 @@ pub enum Expr {
     // 结构体字面量
     Struct(Vec<(String, Expr)>),
 
+    Table(Vec<(Expr, Expr)>),
+
     // 二元运算
     Binary {
         left: Box<Expr>,

@@ -39,6 +39,7 @@ pub enum Token {
     Try,
     Catch,
     Match,
+    Table,
 
     // LSR-005: Type keywords for type declarations
     TypeInt,

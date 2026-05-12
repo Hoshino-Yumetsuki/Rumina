@@ -308,3 +308,18 @@ fn test_lsr007_equivalence_is_not_structural_equality() {
         other => panic!("Expected Bool(true), got {:?}", other),
     }
 }
+
+#[test]
+fn test_lsr000_table_literal_and_read() {
+    let result = expect_int(run_rumina("let scores = table{\"alice\" => 98}; scores[\"alice\"];"));
+    assert_eq!(result, 98);
+}
+
+#[test]
+fn test_lsr000_table_missing_key_returns_null() {
+    let result = run_rumina("let scores = table{\"alice\" => 98}; scores[\"bob\"] == null;").unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}

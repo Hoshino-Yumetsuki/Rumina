@@ -152,6 +152,16 @@ impl Interpreter {
                 Ok(Value::Struct(Rc::new(RefCell::new(map))))
             }
 
+            Expr::Table(entries) => {
+                let mut map = HashMap::new();
+                for (key, value) in entries {
+                    let key = self.eval_expr(key)?.to_string();
+                    let value = self.eval_expr(value)?;
+                    map.insert(key, value);
+                }
+                Ok(Value::Struct(Rc::new(RefCell::new(map))))
+            }
+
             Expr::Binary { left, op, right } => {
                 if *op == crate::ast::BinOp::Pipe {
                     self.eval_pipe_expr(left, right)
@@ -281,6 +291,10 @@ impl Interpreter {
                             .get(index)
                             .map(|c| Value::String(c.to_string()))
                             .ok_or_else(|| format!("String index out of bounds: {}", i))
+                    }
+                    (Value::Struct(map) | Value::Module(map), key) => {
+                        let key = key.to_string();
+                        Ok(map.borrow().get(&key).cloned().unwrap_or(Value::Null))
                     }
                     _ => Err("Invalid indexing operation".to_string()),
                 }

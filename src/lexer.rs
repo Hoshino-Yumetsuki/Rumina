@@ -248,6 +248,7 @@ impl Lexer {
             "try" => Token::Try,
             "catch" => Token::Catch,
             "match" => Token::Match,
+            "table" => Token::Table,
             "and" => Token::And,
             "or" => Token::Or,
             "not" => Token::Not,
