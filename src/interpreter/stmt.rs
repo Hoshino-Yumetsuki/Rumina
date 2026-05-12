@@ -13,6 +13,40 @@ use super::Interpreter;
 use super::convert;
 
 impl Interpreter {
+    fn lsr002_constants_module() -> HashMap<String, Value> {
+        HashMap::from([
+            ("EARTH_GRAVITY".to_string(), Value::Float(9.80665)),
+            ("MOON_GRAVITY".to_string(), Value::Float(1.625)),
+            ("MARS_GRAVITY".to_string(), Value::Float(3.72076)),
+            ("WATER_DENSITY".to_string(), Value::Float(1000.0)),
+            ("STANDARD_PRESSURE".to_string(), Value::Float(101325.0)),
+            ("STANDARD_TEMPERATURE".to_string(), Value::Float(273.15)),
+            ("AIR_DENSITY".to_string(), Value::Float(1.225)),
+            ("C".to_string(), Value::Float(2.99792458e8)),
+            ("G".to_string(), Value::Float(6.67430e-11)),
+            ("H".to_string(), Value::Float(6.62607015e-34)),
+            ("KB".to_string(), Value::Float(1.380649e-23)),
+            ("EPSILON_0".to_string(), Value::Float(8.8541878128e-12)),
+            ("MU_0".to_string(), Value::Float(1.25663706212e-6)),
+            ("AVOGADRO".to_string(), Value::Float(6.02214076e23)),
+            ("R".to_string(), Value::Float(8.314462618)),
+            ("FARADAY".to_string(), Value::Float(9.648533212e4)),
+            ("AMU".to_string(), Value::Float(1.66053906660e-27)),
+            ("MOLAR_VOLUME_IDEAL".to_string(), Value::Float(0.024465)),
+            ("ROOM_PRESSURE".to_string(), Value::Float(1.0e5)),
+            ("ROOM_TEMPERATURE".to_string(), Value::Float(297.15)),
+        ])
+    }
+
+    fn lsr_standard_module(path: &[String]) -> Result<Value, String> {
+        match path.join(".").as_str() {
+            "std.constants" => Ok(Value::Module(Rc::new(RefCell::new(
+                Self::lsr002_constants_module(),
+            )))),
+            module => Err(format!("Unknown module: {}", module)),
+        }
+    }
+
     pub(super) fn execute_stmt(&mut self, stmt: &Stmt) -> Result<(), String> {
         match stmt {
             Stmt::VarDecl {
@@ -439,6 +473,34 @@ impl Interpreter {
 
                 Ok(())
             }
+
+            Stmt::Import { path, alias } => {
+                let module = Self::lsr_standard_module(path)?;
+                let binding = alias
+                    .clone()
+                    .or_else(|| path.last().cloned())
+                    .ok_or_else(|| "Import path cannot be empty".to_string())?;
+                self.set_variable(binding, module, true);
+                Ok(())
+            }
+
+            Stmt::Use { path, items } => {
+                let module = Self::lsr_standard_module(path)?;
+                let Value::Module(module_values) = module else {
+                    return Err(format!("{} is not a module", path.join(".")));
+                };
+                let module_values = module_values.borrow();
+
+                for (name, alias) in items {
+                    let value = module_values.get(name).cloned().ok_or_else(|| {
+                        format!("Module {} has no symbol {}", path.join("."), name)
+                    })?;
+                    self.set_variable(alias.clone().unwrap_or_else(|| name.clone()), value, true);
+                }
+
+                Ok(())
+            }
+
             Stmt::TryCatch(try_block, error_name, catch_block) => {
                 match self.execute_stmt(try_block) {
                     Ok(()) => Ok(()),

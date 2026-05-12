@@ -5,6 +5,7 @@ use std::fmt;
 /// LSR-005: Declared types for type annotations
 #[derive(Debug, Clone, PartialEq)]
 pub enum DeclaredType {
+    Num,
     Int,
     Float,
     Bool,
@@ -96,6 +97,16 @@ pub enum Stmt {
 
     // Include模块
     Include(String),
+
+    Import {
+        path: Vec<String>,
+        alias: Option<String>,
+    },
+
+    Use {
+        path: Vec<String>,
+        items: Vec<(String, Option<String>)>,
+    },
 
     // try/catch
     TryCatch(Box<Stmt>, String, Box<Stmt>),

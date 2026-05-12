@@ -46,6 +46,22 @@ impl Parser {
         }
     }
 
+    fn declared_type_from_current_token(&self) -> Option<DeclaredType> {
+        match self.current_token() {
+            Token::TypeNum => Some(DeclaredType::Num),
+            Token::TypeInt => Some(DeclaredType::Int),
+            Token::TypeFloat => Some(DeclaredType::Float),
+            Token::TypeBool => Some(DeclaredType::Bool),
+            Token::TypeString => Some(DeclaredType::String),
+            Token::TypeRational => Some(DeclaredType::Rational),
+            Token::TypeIrrational => Some(DeclaredType::Irrational),
+            Token::TypeComplex => Some(DeclaredType::Complex),
+            Token::TypeArray => Some(DeclaredType::Array),
+            Token::BigInt => Some(DeclaredType::BigInt),
+            _ => None,
+        }
+    }
+
     /// Convert decimal string to rational expression (division)
     ///
     /// Converts decimal literals to exact rational representations:
@@ -101,15 +117,22 @@ impl Parser {
     }
 
     fn parse_statement(&mut self) -> Result<Stmt, String> {
+        if self.starts_type_first_declaration() {
+            return Err(
+                "Type-first declarations are not supported; use let|var|const name type = expr"
+                    .to_string(),
+            );
+        }
+
         match self.current_token() {
             Token::Var => self.parse_var_decl_with_type(None, false),
             Token::Let => self.parse_var_decl_with_type(None, true),
-            Token::BigInt => self.parse_var_decl_with_type(Some(DeclaredType::BigInt), false),
-            // LSR-005: Type declaration support
-            // But also check for namespace access (type::member)
-            Token::TypeInt => self.parse_var_decl_with_type(Some(DeclaredType::Int), false),
-            Token::TypeFloat => self.parse_var_decl_with_type(Some(DeclaredType::Float), false),
-            Token::TypeBool => self.parse_var_decl_with_type(Some(DeclaredType::Bool), false),
+            Token::Const => self.parse_var_decl_with_type(None, true),
+            Token::BigInt
+            | Token::TypeNum
+            | Token::TypeInt
+            | Token::TypeFloat
+            | Token::TypeBool => self.parse_expression_statement(),
             Token::TypeString => {
                 // Check if this is namespace access (string::func) or type declaration (string x = ...)
                 if self.tokens.get(self.current + 1) == Some(&Token::DoubleColon) {
@@ -133,17 +156,12 @@ impl Parser {
                         Ok(Stmt::Expr(expr))
                     }
                 } else {
-                    self.parse_var_decl_with_type(Some(DeclaredType::String), false)
+                    self.parse_expression_statement()
                 }
             }
-            Token::TypeRational => {
-                self.parse_var_decl_with_type(Some(DeclaredType::Rational), false)
+            Token::TypeRational | Token::TypeIrrational | Token::TypeComplex | Token::TypeArray => {
+                self.parse_expression_statement()
             }
-            Token::TypeIrrational => {
-                self.parse_var_decl_with_type(Some(DeclaredType::Irrational), false)
-            }
-            Token::TypeComplex => self.parse_var_decl_with_type(Some(DeclaredType::Complex), false),
-            Token::TypeArray => self.parse_var_decl_with_type(Some(DeclaredType::Array), false),
             Token::Struct => self.parse_struct_decl(),
             Token::At => self.parse_decorated_func_def(), // LSR-011: Decorator support
             Token::Func => self.parse_func_def_with_decorators(Vec::new()),
@@ -163,34 +181,11 @@ impl Parser {
                 Ok(Stmt::Continue)
             }
             Token::Include => self.parse_include(),
+            Token::Import => self.parse_import(),
+            Token::Use => self.parse_use(),
             Token::Try => self.parse_try_catch(),
             Token::LBrace => self.parse_block(),
-            Token::Ident(_) => {
-                // 可能是赋值、成员赋值或表达式语句
-                // 先解析表达式（可能是标识符或成员访问）
-                let expr = self.parse_expression()?;
-
-                // 检查是否是赋值
-                if self.match_token(&Token::Equal) {
-                    let value = self.parse_expression()?;
-                    self.match_token(&Token::Semicolon);
-
-                    // 判断是简单赋值还是成员赋值
-                    match expr {
-                        Expr::Ident(name) => Ok(Stmt::Assign { name, value }),
-                        Expr::Member { object, member } => Ok(Stmt::MemberAssign {
-                            object: *object,
-                            member,
-                            value,
-                        }),
-                        _ => Err("Invalid assignment target".to_string()),
-                    }
-                } else {
-                    // 表达式语句
-                    self.match_token(&Token::Semicolon);
-                    Ok(Stmt::Expr(expr))
-                }
-            }
+            Token::Ident(_) => self.parse_expression_statement(),
             Token::Semicolon => {
                 self.advance();
                 Ok(Stmt::Empty)
@@ -200,6 +195,45 @@ impl Parser {
                 self.match_token(&Token::Semicolon);
                 Ok(Stmt::Expr(expr))
             }
+        }
+    }
+
+    fn starts_type_first_declaration(&self) -> bool {
+        matches!(
+            self.current_token(),
+            Token::BigInt
+                | Token::TypeNum
+                | Token::TypeInt
+                | Token::TypeFloat
+                | Token::TypeBool
+                | Token::TypeString
+                | Token::TypeRational
+                | Token::TypeIrrational
+                | Token::TypeComplex
+                | Token::TypeArray
+        ) && matches!(self.tokens.get(self.current + 1), Some(Token::Ident(_)))
+            && self.tokens.get(self.current + 2) == Some(&Token::Equal)
+    }
+
+    fn parse_expression_statement(&mut self) -> Result<Stmt, String> {
+        let expr = self.parse_expression()?;
+
+        if self.match_token(&Token::Equal) {
+            let value = self.parse_expression()?;
+            self.match_token(&Token::Semicolon);
+
+            match expr {
+                Expr::Ident(name) => Ok(Stmt::Assign { name, value }),
+                Expr::Member { object, member } => Ok(Stmt::MemberAssign {
+                    object: *object,
+                    member,
+                    value,
+                }),
+                _ => Err("Invalid assignment target".to_string()),
+            }
+        } else {
+            self.match_token(&Token::Semicolon);
+            Ok(Stmt::Expr(expr))
         }
     }
 
@@ -219,6 +253,16 @@ impl Parser {
             ));
         };
         self.advance();
+
+        let declared_type = if declared_type.is_none() {
+            let dtype = self.declared_type_from_current_token();
+            if dtype.is_some() {
+                self.advance();
+            }
+            dtype
+        } else {
+            declared_type
+        };
 
         self.expect(Token::Equal)?;
         let value = self.parse_expression()?;
@@ -524,6 +568,101 @@ impl Parser {
         Ok(Stmt::Include(path))
     }
 
+    fn parse_module_path(&mut self) -> Result<Vec<String>, String> {
+        let mut path = Vec::new();
+
+        loop {
+            if let Token::Ident(segment) = self.current_token() {
+                path.push(segment.clone());
+                self.advance();
+            } else {
+                return Err(format!(
+                    "Expected module path segment, found {:?}",
+                    self.current_token()
+                ));
+            }
+
+            if self.current_token() != &Token::Dot
+                || self.tokens.get(self.current + 1) == Some(&Token::LBrace)
+            {
+                break;
+            }
+
+            self.advance();
+        }
+
+        Ok(path)
+    }
+
+    fn parse_import(&mut self) -> Result<Stmt, String> {
+        self.expect(Token::Import)?;
+        let path = self.parse_module_path()?;
+        let alias = if self.match_token(&Token::As) {
+            if let Token::Ident(name) = self.current_token() {
+                let alias = name.clone();
+                self.advance();
+                Some(alias)
+            } else {
+                return Err(format!(
+                    "Expected import alias, found {:?}",
+                    self.current_token()
+                ));
+            }
+        } else {
+            None
+        };
+        self.match_token(&Token::Semicolon);
+        Ok(Stmt::Import { path, alias })
+    }
+
+    fn parse_use(&mut self) -> Result<Stmt, String> {
+        self.expect(Token::Use)?;
+        let path = self.parse_module_path()?;
+        self.expect(Token::Dot)?;
+        self.expect(Token::LBrace)?;
+
+        let mut items = Vec::new();
+        if self.current_token() != &Token::RBrace {
+            loop {
+                let name = if let Token::Ident(name) = self.current_token() {
+                    let name = name.clone();
+                    self.advance();
+                    name
+                } else {
+                    return Err(format!(
+                        "Expected imported symbol, found {:?}",
+                        self.current_token()
+                    ));
+                };
+
+                let alias = if self.match_token(&Token::As) {
+                    if let Token::Ident(alias) = self.current_token() {
+                        let alias = alias.clone();
+                        self.advance();
+                        Some(alias)
+                    } else {
+                        return Err(format!(
+                            "Expected imported symbol alias, found {:?}",
+                            self.current_token()
+                        ));
+                    }
+                } else {
+                    None
+                };
+
+                items.push((name, alias));
+
+                if !self.match_token(&Token::Comma) {
+                    break;
+                }
+            }
+        }
+
+        self.expect(Token::RBrace)?;
+        self.match_token(&Token::Semicolon);
+        Ok(Stmt::Use { path, items })
+    }
+
     fn parse_try_catch(&mut self) -> Result<Stmt, String> {
         self.expect(Token::Try)?;
 
@@ -744,7 +883,7 @@ impl Parser {
                     expr: Box::new(expr),
                 })
             }
-            Token::Bang => {
+            Token::Not => {
                 self.advance();
                 let expr = self.parse_unary()?;
                 Ok(Expr::Unary {
@@ -797,14 +936,6 @@ impl Parser {
                             self.current_token()
                         ));
                     }
-                }
-                Token::Bang => {
-                    // 阶乘（后缀）
-                    self.advance();
-                    expr = Expr::Unary {
-                        op: UnaryOp::Factorial,
-                        expr: Box::new(expr),
-                    };
                 }
                 Token::Question => {
                     self.advance();
@@ -893,6 +1024,10 @@ impl Parser {
             Token::TypeInt => {
                 self.advance();
                 Ok(Expr::Ident("int".to_string()))
+            }
+            Token::TypeNum => {
+                self.advance();
+                Ok(Expr::Ident("num".to_string()))
             }
             Token::TypeFloat => {
                 self.advance();
@@ -1034,7 +1169,7 @@ impl Parser {
         }
 
         let body = if is_simple {
-            // 简单形式: |a, b| a + b
+            self.expect(Token::Arrow)?;
             let expr = self.parse_expression()?;
             Box::new(Stmt::Return(Some(expr)))
         } else {

@@ -28,6 +28,49 @@ fn test_let_is_immutable() {
 }
 
 #[test]
+fn test_const_is_immutable() {
+    let result = run_rumina("const x = 1; x = 2;");
+    assert!(result.is_err(), "reassigning const should error");
+}
+
+#[test]
+fn test_lsr_declaration_type_annotation_after_name() {
+    let result = expect_int(run_rumina("let x num = 42; x;"));
+    assert_eq!(result, 42);
+}
+
+#[test]
+fn test_lsr_logical_keywords() {
+    let result = run_rumina("true and not false or false;").unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_legacy_logical_operators_are_rejected() {
+    assert!(run_rumina("true && true;").is_err(), "&& should be rejected");
+    assert!(run_rumina("true || false;").is_err(), "|| should be rejected");
+    assert!(run_rumina("!false;").is_err(), "! should be rejected");
+}
+
+#[test]
+fn test_legacy_type_first_declaration_is_rejected() {
+    assert!(run_rumina("num x = 42;").is_err(), "type-first declarations should be rejected");
+    assert!(run_rumina("int x = 42;").is_err(), "type-first declarations should be rejected");
+}
+
+#[test]
+fn test_lsr_lambda_requires_arrow() {
+    let values = expect_array(run_rumina("var nums = [1, 2, 3]; nums.map(|x| -> x * x);"));
+    assert_eq!(values, vec![Value::Int(1), Value::Int(4), Value::Int(9)]);
+
+    let legacy = run_rumina("var nums = [1, 2, 3]; nums.map(|x| x * x);");
+    assert!(legacy.is_err(), "lambda without -> should be rejected");
+}
+
+#[test]
 fn test_let_member_assign_is_immutable() {
     let result = run_rumina("let s = null; s.a = 1;");
     assert!(
@@ -47,14 +90,14 @@ fn test_pipeline_operator_basic() {
 
 #[test]
 fn test_array_instance_map() {
-    let values = expect_array(run_rumina("var nums = [1, 2, 3]; nums.map(|x| x * x);"));
+    let values = expect_array(run_rumina("var nums = [1, 2, 3]; nums.map(|x| -> x * x);"));
     assert_eq!(values, vec![Value::Int(1), Value::Int(4), Value::Int(9)]);
 }
 
 #[test]
 fn test_array_instance_filter() {
     let values = expect_array(run_rumina(
-        "var nums = [1, 2, 3, 4]; nums.filter(|x| x % 2 == 0);",
+        "var nums = [1, 2, 3, 4]; nums.filter(|x| -> x % 2 == 0);",
     ));
     assert_eq!(values, vec![Value::Int(2), Value::Int(4)]);
 }
@@ -62,7 +105,7 @@ fn test_array_instance_filter() {
 #[test]
 fn test_array_instance_reduce() {
     let result = expect_int(run_rumina(
-        "var nums = [1, 2, 3, 4]; nums.reduce(|acc, x| acc + x, 0);",
+        "var nums = [1, 2, 3, 4]; nums.reduce(|acc, x| -> acc + x, 0);",
     ));
     assert_eq!(result, 10);
 }
@@ -149,4 +192,16 @@ fn test_lsr002_constants_available() {
         "unexpected AVOGADRO: {}",
         avogadro
     );
+}
+
+#[test]
+fn test_lsr004_use_std_constants() {
+    let g = expect_float(run_rumina("use std.constants.{EARTH_GRAVITY}; EARTH_GRAVITY;"));
+    assert!((g - 9.80665).abs() < 1e-12, "unexpected EARTH_GRAVITY: {}", g);
+}
+
+#[test]
+fn test_lsr004_import_std_constants() {
+    let g = expect_float(run_rumina("import std.constants; constants.EARTH_GRAVITY;"));
+    assert!((g - 9.80665).abs() < 1e-12, "unexpected EARTH_GRAVITY: {}", g);
 }

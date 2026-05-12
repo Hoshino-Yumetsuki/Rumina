@@ -171,6 +171,8 @@ impl Compiler {
                 // Keep expression result on stack for potential return value
             }
 
+            Stmt::Import { .. } | Stmt::Use { .. } => {}
+
             Stmt::VarDecl {
                 name,
                 value,

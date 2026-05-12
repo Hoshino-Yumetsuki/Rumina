@@ -815,6 +815,7 @@ impl ByteCode {
             .and_then(|s| s.strip_suffix(")"))
         {
             let dtype = match dtype_str {
+                "Num" => DeclaredType::Num,
                 "Int" => DeclaredType::Int,
                 "Float" => DeclaredType::Float,
                 "Bool" => DeclaredType::Bool,

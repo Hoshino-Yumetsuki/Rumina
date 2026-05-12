@@ -19,6 +19,7 @@ pub enum Token {
     // 关键字
     Var,
     Let,
+    Const,
     BigInt,
     Struct,
     Func,
@@ -31,12 +32,16 @@ pub enum Token {
     Break,
     Continue,
     Include,
+    Import,
+    Use,
+    As,
     Do,
     Try,
     Catch,
 
     // LSR-005: Type keywords for type declarations
     TypeInt,
+    TypeNum,
     TypeFloat,
     TypeBool,
     TypeString,
@@ -52,7 +57,7 @@ pub enum Token {
     Slash,    // /
     Percent,  // %
     Caret,    // ^ (幂运算)
-    Bang,     // ! (阶乘或逻辑非)
+    Bang,     // !
     Question, // ?
 
     // 比较运算符
@@ -65,8 +70,9 @@ pub enum Token {
     LessEqual,    // <=
 
     // 逻辑运算符
-    And, // &&
-    Or,  // ||
+    And,
+    Or,
+    Not,
 
     // 分隔符
     Semicolon,   // ;

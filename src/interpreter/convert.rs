@@ -5,6 +5,7 @@ use crate::value::{IrrationalValue, Value};
 
 pub(crate) fn convert_to_declared_type(val: Value, dtype: &DeclaredType) -> Result<Value, String> {
     match dtype {
+        DeclaredType::Num => convert_to_num(val),
         DeclaredType::Int => convert_to_int(val),
         DeclaredType::Float => convert_to_float(val),
         DeclaredType::Bool => convert_to_bool(val),
@@ -14,6 +15,18 @@ pub(crate) fn convert_to_declared_type(val: Value, dtype: &DeclaredType) -> Resu
         DeclaredType::Complex => convert_to_complex(val),
         DeclaredType::Array => convert_to_array(val),
         DeclaredType::BigInt => convert_to_bigint(val),
+    }
+}
+
+fn convert_to_num(val: Value) -> Result<Value, String> {
+    match val {
+        Value::Int(_)
+        | Value::BigInt(_)
+        | Value::Float(_)
+        | Value::Rational(_)
+        | Value::Irrational(_)
+        | Value::Complex(_, _) => Ok(val),
+        _ => Err(format!("Cannot convert {} to num", val.type_name())),
     }
 }
 

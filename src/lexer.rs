@@ -228,6 +228,7 @@ impl Lexer {
         match ident.as_str() {
             "var" => Token::Var,
             "let" => Token::Let,
+            "const" => Token::Const,
             "bigint" => Token::BigInt,
             "struct" => Token::Struct,
             "func" => Token::Func,
@@ -240,13 +241,20 @@ impl Lexer {
             "break" => Token::Break,
             "continue" => Token::Continue,
             "include" => Token::Include,
+            "import" => Token::Import,
+            "use" => Token::Use,
+            "as" => Token::As,
             "do" => Token::Do,
             "try" => Token::Try,
             "catch" => Token::Catch,
+            "and" => Token::And,
+            "or" => Token::Or,
+            "not" => Token::Not,
             "true" => Token::True,
             "false" => Token::False,
             "null" => Token::Null,
             // LSR-005: Type keywords
+            "num" => Token::TypeNum,
             "int" => Token::TypeInt,
             "float" => Token::TypeFloat,
             "bool" => Token::TypeBool,
@@ -351,21 +359,16 @@ impl Lexer {
                     self.advance();
                     if self.current_char == Some('&') {
                         self.advance();
-                        Token::And
+                        Token::Ident("&&".to_string())
                     } else {
-                        eprintln!(
-                            "Lexer error: Expected '&' after '&', found {:?}. at ({}:{})",
-                            self.current_char, self.line, self.col
-                        );
-                        eprintln!("Note: Lamina uses '&&' for logical AND");
-                        std::process::exit(1);
+                        Token::Ident("&".to_string())
                     }
                 }
                 '|' => {
                     self.advance();
                     if self.current_char == Some('|') {
                         self.advance();
-                        Token::Or
+                        Token::Ident("||".to_string())
                     } else if self.current_char == Some('>') {
                         self.advance();
                         Token::PipeForward
