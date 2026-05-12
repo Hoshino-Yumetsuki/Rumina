@@ -819,9 +819,9 @@ impl Compiler {
             }
 
             Expr::Binary { left, op, right } => {
-                if matches!(op, BinOp::Pipe) {
+                if matches!(op, BinOp::Pipe | BinOp::Equivalent) {
                     return Err(RuminaError::runtime(
-                        "|> operator is not yet supported by the bytecode compiler".to_string(),
+                        format!("{} operator is not yet supported by the bytecode compiler", op),
                     ));
                 }
 
@@ -845,6 +845,7 @@ impl Compiler {
                     BinOp::LessEq => OpCode::Lte,
                     BinOp::And => OpCode::And,
                     BinOp::Or => OpCode::Or,
+                    BinOp::Equivalent => unreachable!("equivalent handled before opcode emission"),
                     BinOp::Pipe => unreachable!("pipe handled before opcode emission"),
                 };
 

@@ -333,7 +333,12 @@ impl Lexer {
                     self.advance();
                     if self.current_char == Some('=') {
                         self.advance();
-                        Token::EqualEqual
+                        if self.current_char == Some('=') {
+                            self.advance();
+                            Token::EqualEqualEqual
+                        } else {
+                            Token::EqualEqual
+                        }
                     } else if self.current_char == Some('>') {
                         self.advance();
                         Token::FatArrow

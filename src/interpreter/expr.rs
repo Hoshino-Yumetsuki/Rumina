@@ -155,6 +155,8 @@ impl Interpreter {
             Expr::Binary { left, op, right } => {
                 if *op == crate::ast::BinOp::Pipe {
                     self.eval_pipe_expr(left, right)
+                } else if *op == crate::ast::BinOp::Equivalent {
+                    Ok(Value::Bool(self.expr_equivalent(left, right)))
                 } else {
                     let l = self.eval_expr(left)?;
                     let r = self.eval_expr(right)?;
@@ -371,6 +373,42 @@ impl Interpreter {
                     )),
                 }
             }
+        }
+    }
+
+    fn expr_equivalent(&self, left: &Expr, right: &Expr) -> bool {
+        Self::normalize_equivalence_expr(left) == Self::normalize_equivalence_expr(right)
+    }
+
+    fn normalize_equivalence_expr(expr: &Expr) -> Expr {
+        match expr {
+            Expr::Binary { left, op, right } => {
+                let left = Self::normalize_equivalence_expr(left);
+                let right = Self::normalize_equivalence_expr(right);
+
+                match (left, *op, right) {
+                    (Expr::Int(a), crate::ast::BinOp::Add, Expr::Int(b)) => Expr::Int(a + b),
+                    (Expr::Int(a), crate::ast::BinOp::Sub, Expr::Int(b)) => Expr::Int(a - b),
+                    (Expr::Int(a), crate::ast::BinOp::Mul, Expr::Int(b)) => Expr::Int(a * b),
+                    (expr, crate::ast::BinOp::Add, Expr::Int(0))
+                    | (Expr::Int(0), crate::ast::BinOp::Add, expr) => expr,
+                    (expr, crate::ast::BinOp::Mul, Expr::Int(1))
+                    | (Expr::Int(1), crate::ast::BinOp::Mul, expr) => expr,
+                    (_, crate::ast::BinOp::Mul, Expr::Int(0))
+                    | (Expr::Int(0), crate::ast::BinOp::Mul, _) => Expr::Int(0),
+                    (left, crate::ast::BinOp::Sub, right) if left == right => Expr::Int(0),
+                    (left, op, right) => Expr::Binary {
+                        left: Box::new(left),
+                        op,
+                        right: Box::new(right),
+                    },
+                }
+            }
+            Expr::Unary { op, expr } => Expr::Unary {
+                op: *op,
+                expr: Box::new(Self::normalize_equivalence_expr(expr)),
+            },
+            other => other.clone(),
         }
     }
 }

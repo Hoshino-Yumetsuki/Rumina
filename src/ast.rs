@@ -218,6 +218,7 @@ pub enum BinOp {
     Pipe, // |>
 
     Equal,     // ==
+    Equivalent, // ===
     NotEqual,  // !=
     Greater,   // >
     GreaterEq, // >=
@@ -247,6 +248,7 @@ impl fmt::Display for BinOp {
             BinOp::Pow => write!(f, "^"),
             BinOp::Pipe => write!(f, "|>"),
             BinOp::Equal => write!(f, "=="),
+            BinOp::Equivalent => write!(f, "==="),
             BinOp::NotEqual => write!(f, "!="),
             BinOp::Greater => write!(f, ">"),
             BinOp::GreaterEq => write!(f, ">="),

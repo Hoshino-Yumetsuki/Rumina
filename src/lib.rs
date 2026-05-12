@@ -115,7 +115,7 @@ fn should_use_interpreter_runtime(statements: &[ast::Stmt]) -> bool {
                 matches!(
                     expr,
                     ast::Expr::Binary {
-                        op: ast::BinOp::Pipe,
+                        op: ast::BinOp::Pipe | ast::BinOp::Equivalent,
                         ..
                     }
                 ) || expr_requires_interpreter(left)

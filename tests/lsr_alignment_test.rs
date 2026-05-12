@@ -290,3 +290,21 @@ fn test_lsr005_match_binding_and_guard_patterns() {
     let result = expect_int(run_rumina("match 5 { v if v > 3 => v + 1, _ => 0 };"));
     assert_eq!(result, 6);
 }
+
+#[test]
+fn test_lsr007_core_equivalence_identities() {
+    let result = run_rumina("let x = 9; x + 0 === x and x * 1 === x and x - x === 0;").unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_lsr007_equivalence_is_not_structural_equality() {
+    let result = run_rumina("1 + 2 === 3 and not (1 + 2 === 4);").unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}

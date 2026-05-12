@@ -63,6 +63,7 @@ pub enum Token {
 
     // 比较运算符
     Equal,        // =
+    EqualEqualEqual, // ===
     EqualEqual,   // ==
     BangEqual,    // !=
     Greater,      // >
