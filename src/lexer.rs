@@ -256,6 +256,8 @@ impl Lexer {
             "or" => Token::Or,
             "not" => Token::Not,
             "in" => Token::In,
+            "subset" => Token::Subset,
+            "xor" => Token::Xor,
             "true" => Token::True,
             "false" => Token::False,
             "null" => Token::Null,
@@ -375,7 +377,7 @@ impl Lexer {
                         self.advance();
                         Token::Ident("&&".to_string())
                     } else {
-                        Token::Ident("&".to_string())
+                        Token::Ampersand
                     }
                 }
                 '|' => {

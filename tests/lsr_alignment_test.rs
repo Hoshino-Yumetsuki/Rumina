@@ -21,6 +21,13 @@ fn expect_vector(result: Result<Option<Value>, rumina::RuminaError>) -> Vec<Valu
     }
 }
 
+fn expect_set(result: Result<Option<Value>, rumina::RuminaError>) -> Value {
+    match result.unwrap() {
+        Some(value @ Value::Set(_)) => value,
+        other => panic!("Expected Set, got {:?}", other),
+    }
+}
+
 fn expect_float(result: Result<Option<Value>, rumina::RuminaError>) -> f64 {
     match result.unwrap() {
         Some(Value::Float(f)) => f,
@@ -547,6 +554,41 @@ fn test_lsr000_set_membership_operators() {
         Some(Value::Bool(b)) => assert!(b),
         other => panic!("Expected Bool(true), got {:?}", other),
     }
+}
+
+#[test]
+fn test_lsr000_set_subset_operator() {
+    let contained = run_rumina("let a = {1, 2}; let b = {1, 2, 3}; a subset b;").unwrap();
+    match contained {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+
+    let missing = run_rumina("let a = {1, 4}; let b = {1, 2, 3}; a subset b;").unwrap();
+    match missing {
+        Some(Value::Bool(b)) => assert!(!b),
+        other => panic!("Expected Bool(false), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_lsr000_set_binary_operators_return_sets() {
+    assert_eq!(
+        expect_set(run_rumina("let a = {1, 2}; let b = {2, 3}; a | b;")),
+        Value::Set(vec![Value::Int(1), Value::Int(2), Value::Int(3)])
+    );
+    assert_eq!(
+        expect_set(run_rumina("let a = {1, 2}; let b = {2, 3}; a & b;")),
+        Value::Set(vec![Value::Int(2)])
+    );
+    assert_eq!(
+        expect_set(run_rumina("let a = {1, 2, 3}; let b = {2}; a - b;")),
+        Value::Set(vec![Value::Int(1), Value::Int(3)])
+    );
+    assert_eq!(
+        expect_set(run_rumina("let a = {1, 2}; let b = {2, 3}; a xor b;")),
+        Value::Set(vec![Value::Int(1), Value::Int(3)])
+    );
 }
 
 #[test]

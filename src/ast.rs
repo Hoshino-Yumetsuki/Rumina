@@ -252,6 +252,9 @@ pub enum BinOp {
     Mod,  // %
     Pow,  // ^
     Pipe, // |>
+    SetUnion,
+    SetIntersection,
+    SetSymmetricDifference,
 
     Equal,     // ==
     Equivalent, // ===
@@ -262,6 +265,7 @@ pub enum BinOp {
     LessEq,    // <=
     In,
     NotIn,
+    Subset,
 
     And, // &&
     Or,  // ||
@@ -285,6 +289,9 @@ impl fmt::Display for BinOp {
             BinOp::Mod => write!(f, "%"),
             BinOp::Pow => write!(f, "^"),
             BinOp::Pipe => write!(f, "|>"),
+            BinOp::SetUnion => write!(f, "|"),
+            BinOp::SetIntersection => write!(f, "&"),
+            BinOp::SetSymmetricDifference => write!(f, "xor"),
             BinOp::Equal => write!(f, "=="),
             BinOp::Equivalent => write!(f, "==="),
             BinOp::NotEqual => write!(f, "!="),
@@ -294,6 +301,7 @@ impl fmt::Display for BinOp {
             BinOp::LessEq => write!(f, "<="),
             BinOp::In => write!(f, "in"),
             BinOp::NotIn => write!(f, "not in"),
+            BinOp::Subset => write!(f, "subset"),
             BinOp::And => write!(f, "&&"),
             BinOp::Or => write!(f, "||"),
         }

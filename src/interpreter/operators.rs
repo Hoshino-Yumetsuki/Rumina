@@ -14,6 +14,25 @@ use crate::value::{IrrationalValue, Value, irrational_to_float};
 use super::Interpreter;
 
 impl Interpreter {
+    fn set_union(left: &[Value], right: &[Value]) -> Value {
+        let mut values = left.to_vec();
+        for value in right {
+            if !values.contains(value) {
+                values.push(value.clone());
+            }
+        }
+        Value::Set(values)
+    }
+
+    fn set_difference(left: &[Value], right: &[Value]) -> Value {
+        Value::Set(
+            left.iter()
+                .filter(|value| !right.contains(value))
+                .cloned()
+                .collect(),
+        )
+    }
+
     fn map_binary_multivalue(
         &mut self,
         left: &[Value],
@@ -154,6 +173,14 @@ impl Interpreter {
         op: BinOp,
         right: &Value,
     ) -> Result<Value, String> {
+        if op == BinOp::SetUnion
+            && (matches!(left, Value::MultiValue(_)) || matches!(right, Value::MultiValue(_)))
+        {
+            let mut values = left.expand_multivalue();
+            values.extend(right.expand_multivalue());
+            return Ok(Value::normalize_multi(values));
+        }
+
         if matches!(left, Value::MultiValue(_)) || matches!(right, Value::MultiValue(_)) {
             return self.map_binary_multivalue(
                 &left.expand_multivalue(),
@@ -172,6 +199,29 @@ impl Interpreter {
                 let equal = left == right;
                 Ok(Value::Bool(if op == BinOp::Equal { equal } else { !equal }))
             }
+
+            (Value::Set(left), Value::Set(right)) => match op {
+                BinOp::Subset => Ok(Value::Bool(left.iter().all(|value| right.contains(value)))),
+                BinOp::SetUnion => Ok(Self::set_union(left, right)),
+                BinOp::SetIntersection => Ok(Value::Set(
+                    left.iter()
+                        .filter(|value| right.contains(value))
+                        .cloned()
+                        .collect(),
+                )),
+                BinOp::Sub => Ok(Self::set_difference(left, right)),
+                BinOp::SetSymmetricDifference => {
+                    let Value::Set(mut values) = Self::set_difference(left, right) else {
+                        unreachable!()
+                    };
+                    let Value::Set(right_only) = Self::set_difference(right, left) else {
+                        unreachable!()
+                    };
+                    values.extend(right_only);
+                    Ok(Value::Set(values))
+                }
+                _ => Err(format!("Unsupported set operation: {}", op)),
+            },
 
             (Value::Int(a), Value::Int(b)) => {
                 match op {

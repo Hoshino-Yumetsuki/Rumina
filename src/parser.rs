@@ -810,12 +810,17 @@ impl Parser {
             return Ok(first);
         }
 
-        let mut values = vec![first];
+        let mut expr = first;
         while self.match_token(&Token::Pipe) {
-            values.push(self.parse_or()?);
+            let right = self.parse_or()?;
+            expr = Expr::Binary {
+                left: Box::new(expr),
+                op: BinOp::SetUnion,
+                right: Box::new(right),
+            };
         }
 
-        Ok(Expr::Multi(values))
+        Ok(expr)
     }
 
     fn parse_or(&mut self) -> Result<Expr, String> {
@@ -880,6 +885,7 @@ impl Parser {
                 Token::Less => BinOp::Less,
                 Token::LessEqual => BinOp::LessEq,
                 Token::In => BinOp::In,
+                Token::Subset => BinOp::Subset,
                 Token::Not if self.tokens.get(self.current + 1) == Some(&Token::In) => {
                     self.advance();
                     BinOp::NotIn
@@ -905,6 +911,7 @@ impl Parser {
             let op = match self.current_token() {
                 Token::Plus => BinOp::Add,
                 Token::Minus => BinOp::Sub,
+                Token::Xor => BinOp::SetSymmetricDifference,
                 _ => break,
             };
             self.advance();
@@ -927,6 +934,7 @@ impl Parser {
                 Token::Star => BinOp::Mul,
                 Token::Slash => BinOp::Div,
                 Token::Percent => BinOp::Mod,
+                Token::Ampersand => BinOp::SetIntersection,
                 _ => break,
             };
             self.advance();

@@ -80,6 +80,8 @@ pub enum Token {
     Or,
     Not,
     In,
+    Subset,
+    Xor,
 
     // 分隔符
     Semicolon,   // ;
@@ -89,6 +91,7 @@ pub enum Token {
     DoubleColon, // ::
     Pipe,        // |
     PipeForward, // |>
+    Ampersand,   // &
     Backslash,   // \ (续行符)
 
     // 括号

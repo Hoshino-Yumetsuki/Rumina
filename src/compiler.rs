@@ -821,7 +821,17 @@ impl Compiler {
             }
 
             Expr::Binary { left, op, right } => {
-                if matches!(op, BinOp::Pipe | BinOp::Equivalent | BinOp::In | BinOp::NotIn) {
+                if matches!(
+                    op,
+                    BinOp::Pipe
+                        | BinOp::Equivalent
+                        | BinOp::In
+                        | BinOp::NotIn
+                        | BinOp::Subset
+                        | BinOp::SetUnion
+                        | BinOp::SetIntersection
+                        | BinOp::SetSymmetricDifference
+                ) {
                     return Err(RuminaError::runtime(
                         format!("{} operator is not yet supported by the bytecode compiler", op),
                     ));
@@ -849,6 +859,14 @@ impl Compiler {
                     BinOp::Or => OpCode::Or,
                     BinOp::In => unreachable!("in handled before opcode emission"),
                     BinOp::NotIn => unreachable!("not in handled before opcode emission"),
+                    BinOp::Subset => unreachable!("subset handled before opcode emission"),
+                    BinOp::SetUnion => unreachable!("set union handled before opcode emission"),
+                    BinOp::SetIntersection => {
+                        unreachable!("set intersection handled before opcode emission")
+                    }
+                    BinOp::SetSymmetricDifference => {
+                        unreachable!("set symmetric difference handled before opcode emission")
+                    }
                     BinOp::Equivalent => unreachable!("equivalent handled before opcode emission"),
                     BinOp::Pipe => unreachable!("pipe handled before opcode emission"),
                 };
