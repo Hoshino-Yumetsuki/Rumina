@@ -343,3 +343,17 @@ fn test_lsr000_matrix_literal_uses_one_based_indexing() {
     let result = expect_int(run_rumina("let m = mat[1, 2; 3, 4]; m[1][2];"));
     assert_eq!(result, 2);
 }
+
+#[test]
+fn test_lsr008_strip_dimensionless_num_and_scalar() {
+    let result = run_rumina("(42 as num) == 42 and (42 as scalar) == 42;").unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_lsr008_rejects_legacy_num_unit_syntax() {
+    assert!(run_rumina("42 as num<m>;").is_err());
+}

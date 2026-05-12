@@ -207,6 +207,19 @@ impl Interpreter {
                 self.eval_unary_op(*op, &val)
             }
 
+            Expr::UnitStrip { expr, .. } => {
+                let val = self.eval_expr(expr)?;
+                match val {
+                    Value::Int(_)
+                    | Value::BigInt(_)
+                    | Value::Float(_)
+                    | Value::Rational(_)
+                    | Value::Irrational(_)
+                    | Value::Complex(_, _) => Ok(val),
+                    other => Err(format!("Cannot strip units from {}", other.type_name())),
+                }
+            }
+
             Expr::Call { func, args } => {
                 // 检查是否是成员调用 (obj.method())
                 if let Expr::Member { object, member } = &**func {

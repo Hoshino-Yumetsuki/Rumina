@@ -158,6 +158,11 @@ pub enum Expr {
         expr: Box<Expr>,
     },
 
+    UnitStrip {
+        expr: Box<Expr>,
+        mode: UnitStripMode,
+    },
+
     // 函数调用
     Call {
         func: Box<Expr>,
@@ -210,6 +215,12 @@ pub enum MatchPattern {
     Wildcard,
     Binding(String),
     Literal(Expr),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnitStripMode {
+    Num,
+    Scalar,
 }
 
 /// 二元运算符

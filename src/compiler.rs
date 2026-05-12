@@ -864,6 +864,12 @@ impl Compiler {
                 self.emit(opcode);
             }
 
+            Expr::UnitStrip { .. } => {
+                return Err(RuminaError::runtime(
+                    "unit stripping is not yet supported by the bytecode compiler".to_string(),
+                ));
+            }
+
             Expr::Array(elements) => {
                 // Compile each element
                 for elem in elements {

@@ -714,7 +714,36 @@ impl Parser {
 
     // 表达式解析（优先级从低到高）
     fn parse_expression(&mut self) -> Result<Expr, String> {
-        self.parse_pipeline()
+        self.parse_as_expression()
+    }
+
+    fn parse_as_expression(&mut self) -> Result<Expr, String> {
+        let mut expr = self.parse_pipeline()?;
+
+        while self.match_token(&Token::As) {
+            let mode = match self.current_token() {
+                Token::TypeNum => {
+                    self.advance();
+                    UnitStripMode::Num
+                }
+                Token::Ident(name) if name == "scalar" => {
+                    self.advance();
+                    UnitStripMode::Scalar
+                }
+                _ => return Err(format!("Expected num or scalar after as, found {:?}", self.current_token())),
+            };
+
+            if self.current_token() == &Token::Less {
+                return Err("legacy as num<_> syntax is not supported".to_string());
+            }
+
+            expr = Expr::UnitStrip {
+                expr: Box::new(expr),
+                mode,
+            };
+        }
+
+        Ok(expr)
     }
 
     fn parse_pipeline(&mut self) -> Result<Expr, String> {
