@@ -250,6 +250,42 @@ impl Interpreter {
                 }
             }
 
+            Stmt::IndexAssign {
+                object,
+                index,
+                value,
+            } => {
+                let val = self.eval_expr(value)?;
+                let key = self.eval_expr(index)?.to_string();
+
+                if let Expr::Ident(var_name) = object {
+                    if self.is_immutable_binding(var_name) {
+                        return Err(format!(
+                            "Cannot assign to immutable variable '{}'",
+                            var_name
+                        ));
+                    }
+
+                    let obj = self.eval_expr(object)?;
+                    match obj {
+                        Value::Struct(s) => {
+                            s.borrow_mut().insert(key, val);
+                            Ok(())
+                        }
+                        _ => Err(format!("Cannot assign index to {}", obj.type_name())),
+                    }
+                } else {
+                    let obj = self.eval_expr(object)?;
+                    match obj {
+                        Value::Struct(s) => {
+                            s.borrow_mut().insert(key, val);
+                            Ok(())
+                        }
+                        _ => Err(format!("Cannot assign index to {}", obj.type_name())),
+                    }
+                }
+            }
+
             Stmt::Expr(expr) => {
                 self.eval_expr(expr)?;
                 Ok(())

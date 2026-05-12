@@ -43,6 +43,58 @@ impl Interpreter {
             return Some(self.call_array_method(obj, member, args));
         }
 
+        if let Value::Struct(map) = &obj {
+            return match member {
+                "has" => {
+                    if args.len() != 1 {
+                        Some(Err(format!("has() expects 1 argument, got {}", args.len())))
+                    } else {
+                        let key = args[0].to_string();
+                        Some(Ok(Value::Bool(map.borrow().contains_key(&key))))
+                    }
+                }
+                "keys" => {
+                    if !args.is_empty() {
+                        Some(Err(format!("keys() expects 0 arguments, got {}", args.len())))
+                    } else {
+                        let keys = map
+                            .borrow()
+                            .keys()
+                            .cloned()
+                            .map(Value::String)
+                            .collect();
+                        Some(Ok(Value::Vector(Rc::new(RefCell::new(keys)))))
+                    }
+                }
+                "values" => {
+                    if !args.is_empty() {
+                        Some(Err(format!("values() expects 0 arguments, got {}", args.len())))
+                    } else {
+                        let values = map.borrow().values().cloned().collect();
+                        Some(Ok(Value::Vector(Rc::new(RefCell::new(values)))))
+                    }
+                }
+                "items" => {
+                    if !args.is_empty() {
+                        Some(Err(format!("items() expects 0 arguments, got {}", args.len())))
+                    } else {
+                        let items = map
+                            .borrow()
+                            .iter()
+                            .map(|(key, value)| {
+                                Value::Vector(Rc::new(RefCell::new(vec![
+                                    Value::String(key.clone()),
+                                    value.clone(),
+                                ])))
+                            })
+                            .collect();
+                        Some(Ok(Value::Vector(Rc::new(RefCell::new(items)))))
+                    }
+                }
+                _ => None,
+            };
+        }
+
         if member == "curried" {
             if !args.is_empty() {
                 return Some(Err("curried() does not take arguments".to_string()));

@@ -14,6 +14,13 @@ fn expect_array(result: Result<Option<Value>, rumina::RuminaError>) -> Vec<Value
     }
 }
 
+fn expect_vector(result: Result<Option<Value>, rumina::RuminaError>) -> Vec<Value> {
+    match result.unwrap() {
+        Some(Value::Vector(values)) => values.borrow().clone(),
+        other => panic!("Expected Vector, got {:?}", other),
+    }
+}
+
 fn expect_float(result: Result<Option<Value>, rumina::RuminaError>) -> f64 {
     match result.unwrap() {
         Some(Value::Float(f)) => f,
@@ -425,6 +432,83 @@ fn test_lsr000_table_missing_key_returns_null() {
         Some(Value::Bool(b)) => assert!(b),
         other => panic!("Expected Bool(true), got {:?}", other),
     }
+}
+
+#[test]
+fn test_lsr000_table_write_overwrites_existing_key() {
+    let result = run_rumina(
+        "var scores = table{\"alice\" => 98}; scores[\"alice\"] = 100; scores[\"alice\"] == 100;",
+    )
+    .unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_lsr000_table_write_adds_new_key() {
+    let result = run_rumina(
+        "var scores = table{\"alice\" => 98}; scores[\"bob\"] = 91; scores[\"bob\"] == 91;",
+    )
+    .unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_lsr000_table_write_requires_mutable_binding() {
+    let result = run_rumina("let scores = table{\"alice\" => 98}; scores[\"alice\"] = 100;");
+    assert!(result.is_err(), "table writes through let bindings should error");
+}
+
+#[test]
+fn test_lsr000_table_has_helper_returns_bool() {
+    let result = run_rumina(
+        "let scores = table{\"alice\" => 98}; scores.has(\"alice\") and not scores.has(\"bob\");",
+    )
+    .unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_lsr000_table_keys_helper_returns_keys() {
+    let mut keys = expect_vector(run_rumina(
+        "let scores = table{\"alice\" => 98, \"bob\" => 91}; scores.keys();",
+    ));
+    keys.sort_by_key(|value| value.to_string());
+    assert_eq!(
+        keys,
+        vec![
+            Value::String("alice".to_string()),
+            Value::String("bob".to_string()),
+        ]
+    );
+}
+
+#[test]
+fn test_lsr000_table_values_helper_returns_values() {
+    let mut values = expect_vector(run_rumina(
+        "let scores = table{\"alice\" => 98, \"bob\" => 91}; scores.values();",
+    ));
+    values.sort_by_key(|value| value.to_string());
+    assert_eq!(values, vec![Value::Int(91), Value::Int(98)]);
+}
+
+#[test]
+fn test_lsr000_table_items_helper_returns_key_value_vectors() {
+    let mut items = expect_vector(run_rumina(
+        "let scores = table{\"alice\" => 98, \"bob\" => 91}; scores.items();",
+    ));
+    items.sort_by_key(|value| value.to_string());
+
+    let rendered: Vec<String> = items.into_iter().map(|value| value.to_string()).collect();
+    assert_eq!(rendered, vec!["vec[alice, 98]", "vec[bob, 91]"]);
 }
 
 #[test]

@@ -149,14 +149,19 @@ impl Parser {
                         self.match_token(&Token::Semicolon);
                         match expr {
                             Expr::Ident(name) => Ok(Stmt::Assign { name, value }),
-                            Expr::Member { object, member } => Ok(Stmt::MemberAssign {
-                                object: *object,
-                                member,
-                                value,
-                            }),
-                            Expr::Namespace { .. } => Err("Cannot assign to namespace".to_string()),
-                            _ => Err("Invalid assignment target".to_string()),
-                        }
+                Expr::Member { object, member } => Ok(Stmt::MemberAssign {
+                    object: *object,
+                    member,
+                    value,
+                }),
+                Expr::Index { object, index } => Ok(Stmt::IndexAssign {
+                    object: *object,
+                    index: *index,
+                    value,
+                }),
+                Expr::Namespace { .. } => Err("Cannot assign to namespace".to_string()),
+                _ => Err("Invalid assignment target".to_string()),
+            }
                     } else {
                         self.match_token(&Token::Semicolon);
                         Ok(Stmt::Expr(expr))
@@ -234,6 +239,11 @@ impl Parser {
                 Expr::Member { object, member } => Ok(Stmt::MemberAssign {
                     object: *object,
                     member,
+                    value,
+                }),
+                Expr::Index { object, index } => Ok(Stmt::IndexAssign {
+                    object: *object,
+                    index: *index,
                     value,
                 }),
                 _ => Err("Invalid assignment target".to_string()),

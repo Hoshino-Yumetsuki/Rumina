@@ -49,6 +49,12 @@ pub enum Stmt {
         value: Expr,
     },
 
+    IndexAssign {
+        object: Expr,
+        index: Expr,
+        value: Expr,
+    },
+
     // 表达式语句
     Expr(Expr),
 
