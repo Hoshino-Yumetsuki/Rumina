@@ -13,6 +13,10 @@ impl Interpreter {
         match unit {
             "m" => Ok(1),
             "km" => Ok(1000),
+            "s" => Ok(1),
+            "h" => Ok(3600),
+            "m/s" => Ok(1),
+            "km/h" => Ok(1),
             _ => match self.get_variable(&format!("__unit_{}", unit))? {
                 Value::Int(scale) => Ok(scale),
                 Value::Bool(true) => Ok(1),
@@ -56,8 +60,39 @@ impl Interpreter {
         }
     }
 
+    fn multiply_unit_value_by_ratio(
+        &self,
+        value: Value,
+        numerator: i64,
+        denominator: i64,
+    ) -> Result<Value, String> {
+        match value {
+            Value::Int(n) if (n * numerator) % denominator == 0 => {
+                Ok(Value::Int((n * numerator) / denominator))
+            }
+            Value::Int(n) => Ok(Value::Rational(crate::numeric::rational_new(
+                crate::numeric::BigInt::from(n * numerator),
+                crate::numeric::BigInt::from(denominator),
+            ))),
+            Value::BigInt(n) => Ok(Value::Rational(crate::numeric::rational_new(
+                n * crate::numeric::BigInt::from(numerator),
+                crate::numeric::BigInt::from(denominator),
+            ))),
+            Value::Float(n) => Ok(Value::Float(n * numerator as f64 / denominator as f64)),
+            Value::Rational(n) => Ok(Value::Rational(
+                n * crate::numeric::rational_new(
+                    crate::numeric::BigInt::from(numerator),
+                    crate::numeric::BigInt::from(denominator),
+                ),
+            )),
+            other => Err(format!("Cannot convert units for {}", other.type_name())),
+        }
+    }
+
     fn units_are_compatible(&self, source: &str, target: &str) -> bool {
-        source == target || (matches!(source, "m" | "km") && matches!(target, "m" | "km"))
+        source == target
+            || (matches!(source, "m" | "km") && matches!(target, "m" | "km"))
+            || (matches!(source, "m/s" | "km/h") && matches!(target, "m/s" | "km/h"))
     }
 
     fn try_call_special_method(
@@ -366,6 +401,23 @@ impl Interpreter {
                                 "UnitStripInvalid: cannot convert from '{}' to '{}'",
                                 source_unit, unit
                             ));
+                        }
+                        if source_unit == "m/s" && unit == "km/h" {
+                            let scaled = self.scale_unit_value(*value, source_scale)?;
+                            let converted = self.multiply_unit_value_by_ratio(scaled, 18, 5)?;
+                            return Ok(Value::UnitNumber {
+                                value: Box::new(converted),
+                                unit: unit.clone(),
+                                scale: 1,
+                            });
+                        }
+                        if source_unit == "km/h" && unit == "m/s" {
+                            let converted = self.multiply_unit_value_by_ratio(*value, 5, 18)?;
+                            return Ok(Value::UnitNumber {
+                                value: Box::new(converted),
+                                unit: unit.clone(),
+                                scale: 1,
+                            });
                         }
                         let scaled = self.scale_unit_value(*value, source_scale)?;
                         let converted = self.divide_unit_value(scaled, target_scale)?;

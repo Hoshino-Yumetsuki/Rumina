@@ -915,10 +915,18 @@ impl Parser {
         let mut expr = self.parse_pipeline()?;
 
         while self.match_token(&Token::As) {
+            if self.match_token(&Token::Less) {
+                let unit = self.parse_unit_name_until_greater()?;
+                expr = Expr::UnitConvert {
+                    expr: Box::new(expr),
+                    unit,
+                };
+                continue;
+            }
+
             if let Token::Ident(unit) = self.current_token() {
                 if unit != "scalar" {
-                    let unit = unit.clone();
-                    self.advance();
+                    let unit = self.parse_unit_name()?;
                     expr = Expr::UnitConvert {
                         expr: Box::new(expr),
                         unit,
@@ -955,6 +963,39 @@ impl Parser {
         }
 
         Ok(expr)
+    }
+
+    fn parse_unit_name(&mut self) -> Result<String, String> {
+        let mut unit = if let Token::Ident(unit) = self.current_token() {
+            let unit = unit.clone();
+            self.advance();
+            unit
+        } else {
+            return Err(format!(
+                "Expected unit name, found {:?}",
+                self.current_token()
+            ));
+        };
+
+        while self.match_token(&Token::Slash) {
+            let Token::Ident(denominator) = self.current_token() else {
+                return Err(format!(
+                    "Expected unit name after '/', found {:?}",
+                    self.current_token()
+                ));
+            };
+            unit.push('/');
+            unit.push_str(&denominator.clone());
+            self.advance();
+        }
+
+        Ok(unit)
+    }
+
+    fn parse_unit_name_until_greater(&mut self) -> Result<String, String> {
+        let unit = self.parse_unit_name()?;
+        self.expect(Token::Greater)?;
+        Ok(unit)
     }
 
     fn parse_pipeline(&mut self) -> Result<Expr, String> {
@@ -1218,20 +1259,15 @@ impl Parser {
                 }
                 Token::Less
                     if matches!(self.tokens.get(self.current + 1), Some(Token::Ident(_)))
-                        && self.tokens.get(self.current + 2) == Some(&Token::Greater) =>
+                        && self.tokens[self.current + 1..]
+                            .iter()
+                            .take_while(|token| {
+                                **token != Token::Semicolon && **token != Token::Eof
+                            })
+                            .any(|token| token == &Token::Greater) =>
                 {
                     self.advance();
-                    let unit = if let Token::Ident(unit) = self.current_token() {
-                        let unit = unit.clone();
-                        self.advance();
-                        unit
-                    } else {
-                        return Err(format!(
-                            "Expected unit name, found {:?}",
-                            self.current_token()
-                        ));
-                    };
-                    self.expect(Token::Greater)?;
+                    let unit = self.parse_unit_name_until_greater()?;
                     expr = Expr::UnitAttach {
                         expr: Box::new(expr),
                         unit,
