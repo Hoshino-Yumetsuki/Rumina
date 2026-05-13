@@ -959,6 +959,33 @@ impl Interpreter {
                 op: *op,
                 expr: Box::new(Self::normalize_equivalence_expr(expr, profile)),
             },
+            Expr::Call { func, args } => {
+                let func = Box::new(Self::normalize_equivalence_expr(func, profile));
+                let args: Vec<Expr> = args
+                    .iter()
+                    .map(|arg| Self::normalize_equivalence_expr(arg, profile))
+                    .collect();
+
+                if profile == "ExpLog-Basic" {
+                    if let Expr::Ident(func_name) = func.as_ref() {
+                        if func_name == "exp" && args.len() == 1 {
+                            if let Expr::Call {
+                                func: inner_func,
+                                args: inner_args,
+                            } = &args[0]
+                            {
+                                if let Expr::Ident(inner_func_name) = inner_func.as_ref() {
+                                    if inner_func_name == "log" && inner_args.len() == 1 {
+                                        return inner_args[0].clone();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Expr::Call { func, args }
+            }
             other => other.clone(),
         }
     }

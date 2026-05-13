@@ -691,6 +691,15 @@ fn test_lsr007_trig_basic_profile_enables_pythagorean_identity() {
 }
 
 #[test]
+fn test_lsr007_explog_basic_profile_enables_exp_log_identity() {
+    let result = run_rumina("set_eqv_profile(\"ExpLog-Basic\"); exp(log(x)) === x;").unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
 fn test_lsr007_set_eqv_profile_rejects_invalid_profile() {
     let error = run_rumina("set_eqv_profile(\"Unknown\");").unwrap_err();
     assert!(
