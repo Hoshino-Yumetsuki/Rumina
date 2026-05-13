@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::ast::{Expr, MatchPattern};
+use crate::ast::{BinOp, Expr, MatchPattern};
 use crate::value::Value;
 
 use super::Interpreter;
@@ -306,6 +306,11 @@ impl Interpreter {
                 if *op == crate::ast::BinOp::Pipe {
                     self.eval_pipe_expr(left, right)
                 } else if *op == crate::ast::BinOp::Equivalent {
+                    if !Self::is_equivalence_operand(left) || !Self::is_equivalence_operand(right) {
+                        return Err(
+                            "EqvTypeMismatch: === expects mathematical Expr operands".to_string()
+                        );
+                    }
                     Ok(Value::Bool(self.expr_equivalent(left, right)))
                 } else {
                     let l = self.eval_expr(left)?;
@@ -494,6 +499,19 @@ impl Interpreter {
                             return Ok(Value::Vector(Rc::new(RefCell::new(values))));
                         }
 
+                        if matches!(indices[1], Expr::Wildcard) {
+                            let row = self.eval_expr(&indices[0])?.to_int()?;
+                            if row <= 0 {
+                                return Err(format!("Matrix row index out of bounds: {}", row));
+                            }
+
+                            let values =
+                                rows.borrow().get((row - 1) as usize).cloned().ok_or_else(
+                                    || format!("Matrix row index out of bounds: {}", row),
+                                )?;
+                            return Ok(Value::Vector(Rc::new(RefCell::new(values))));
+                        }
+
                         let row = self.eval_expr(&indices[0])?.to_int()?;
                         let col = self.eval_expr(&indices[1])?.to_int()?;
                         if row <= 0 {
@@ -669,6 +687,46 @@ impl Interpreter {
 
     fn expr_equivalent(&self, left: &Expr, right: &Expr) -> bool {
         Self::normalize_equivalence_expr(left) == Self::normalize_equivalence_expr(right)
+    }
+
+    fn is_equivalence_operand(expr: &Expr) -> bool {
+        match expr {
+            Expr::Bool(_)
+            | Expr::String(_)
+            | Expr::Null
+            | Expr::Array(_)
+            | Expr::Vector(_)
+            | Expr::Matrix(_)
+            | Expr::Set(_)
+            | Expr::Struct(_)
+            | Expr::Table(_)
+            | Expr::Multi(_)
+            | Expr::UnitStrip { .. }
+            | Expr::UnitConvert { .. }
+            | Expr::UnitAttach { .. }
+            | Expr::Lambda { .. }
+            | Expr::Try(_)
+            | Expr::Match { .. } => false,
+            Expr::Binary { left, op, right } => {
+                matches!(
+                    op,
+                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod | BinOp::Pow
+                ) && Self::is_equivalence_operand(left)
+                    && Self::is_equivalence_operand(right)
+            }
+            Expr::Unary { expr, .. } => Self::is_equivalence_operand(expr),
+            Expr::Call { args, .. } => args.iter().all(Self::is_equivalence_operand),
+            Expr::Member { object, .. } => Self::is_equivalence_operand(object),
+            Expr::Index { object, index } => {
+                Self::is_equivalence_operand(object) && Self::is_equivalence_operand(index)
+            }
+            Expr::Namespace { .. }
+            | Expr::Int(_)
+            | Expr::BigInt(_)
+            | Expr::Float(_)
+            | Expr::Ident(_)
+            | Expr::Wildcard => true,
+        }
     }
 
     fn normalize_equivalence_expr(expr: &Expr) -> Expr {

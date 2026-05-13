@@ -44,6 +44,248 @@ pub fn run_rumina(source: &str) -> Result<Option<Value>, RuminaError> {
     run_rumina_with_dir(source, None)
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BindingKind {
+    Var,
+    Immutable,
+}
+
+fn check_lsr006_lambda_capture_mutation(statements: &[ast::Stmt]) -> Result<(), RuminaError> {
+    fn lookup_captured_var(
+        scopes: &[std::collections::HashMap<String, BindingKind>],
+        name: &str,
+    ) -> bool {
+        if scopes.last().is_some_and(|scope| scope.contains_key(name)) {
+            return false;
+        }
+        scopes
+            .iter()
+            .rev()
+            .skip(1)
+            .find_map(|scope| scope.get(name).copied())
+            == Some(BindingKind::Var)
+    }
+
+    fn stmt_check(
+        stmt: &ast::Stmt,
+        scopes: &mut Vec<std::collections::HashMap<String, BindingKind>>,
+        lambda_depth: usize,
+    ) -> Result<(), RuminaError> {
+        match stmt {
+            ast::Stmt::VarDecl { name, value, .. } => {
+                expr_check(value, scopes, lambda_depth)?;
+                if let Some(scope) = scopes.last_mut() {
+                    scope.insert(name.clone(), BindingKind::Var);
+                }
+            }
+            ast::Stmt::LetDecl { name, value, .. } => {
+                expr_check(value, scopes, lambda_depth)?;
+                if let Some(scope) = scopes.last_mut() {
+                    scope.insert(name.clone(), BindingKind::Immutable);
+                }
+            }
+            ast::Stmt::Assign { name, value } => {
+                expr_check(value, scopes, lambda_depth)?;
+                if lambda_depth > 0 && lookup_captured_var(scopes, name) {
+                    return Err(RuminaError::runtime(format!(
+                        "LambdaCaptureMutation: cannot assign to captured outer var '{}' inside lambda",
+                        name
+                    )));
+                }
+            }
+            ast::Stmt::MemberAssign { object, value, .. } => {
+                expr_check(object, scopes, lambda_depth)?;
+                expr_check(value, scopes, lambda_depth)?;
+            }
+            ast::Stmt::IndexAssign {
+                object,
+                index,
+                value,
+            } => {
+                expr_check(object, scopes, lambda_depth)?;
+                expr_check(index, scopes, lambda_depth)?;
+                expr_check(value, scopes, lambda_depth)?;
+            }
+            ast::Stmt::Expr(expr) | ast::Stmt::Return(Some(expr)) => {
+                expr_check(expr, scopes, lambda_depth)?
+            }
+            ast::Stmt::FuncDef {
+                name, params, body, ..
+            } => {
+                if let Some(scope) = scopes.last_mut() {
+                    scope.insert(name.clone(), BindingKind::Var);
+                }
+                scopes.push(
+                    params
+                        .iter()
+                        .cloned()
+                        .map(|param| (param, BindingKind::Var))
+                        .collect(),
+                );
+                for stmt in body {
+                    stmt_check(stmt, scopes, lambda_depth)?;
+                }
+                scopes.pop();
+            }
+            ast::Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                expr_check(condition, scopes, lambda_depth)?;
+                for stmt in then_branch {
+                    stmt_check(stmt, scopes, lambda_depth)?;
+                }
+                if let Some(branch) = else_branch {
+                    for stmt in branch {
+                        stmt_check(stmt, scopes, lambda_depth)?;
+                    }
+                }
+            }
+            ast::Stmt::While { condition, body } => {
+                expr_check(condition, scopes, lambda_depth)?;
+                for stmt in body {
+                    stmt_check(stmt, scopes, lambda_depth)?;
+                }
+            }
+            ast::Stmt::For {
+                init,
+                condition,
+                update,
+                body,
+            } => {
+                scopes.push(Default::default());
+                if let Some(init) = init {
+                    stmt_check(init, scopes, lambda_depth)?;
+                }
+                if let Some(condition) = condition {
+                    expr_check(condition, scopes, lambda_depth)?;
+                }
+                if let Some(update) = update {
+                    stmt_check(update, scopes, lambda_depth)?;
+                }
+                for stmt in body {
+                    stmt_check(stmt, scopes, lambda_depth)?;
+                }
+                scopes.pop();
+            }
+            ast::Stmt::Loop { body } | ast::Stmt::Block(body) => {
+                for stmt in body {
+                    stmt_check(stmt, scopes, lambda_depth)?;
+                }
+            }
+            ast::Stmt::TryCatch(try_block, _, catch_block) => {
+                stmt_check(try_block, scopes, lambda_depth)?;
+                stmt_check(catch_block, scopes, lambda_depth)?;
+            }
+            ast::Stmt::UnitDecl {
+                value: Some(value), ..
+            } => expr_check(value, scopes, lambda_depth)?,
+            ast::Stmt::Return(None)
+            | ast::Stmt::ExtensionModule { .. }
+            | ast::Stmt::Import { .. }
+            | ast::Stmt::Use { .. }
+            | ast::Stmt::UnitDecl { value: None, .. }
+            | ast::Stmt::Break
+            | ast::Stmt::Continue
+            | ast::Stmt::Include(_)
+            | ast::Stmt::Empty => {}
+        }
+        Ok(())
+    }
+
+    fn expr_check(
+        expr: &ast::Expr,
+        scopes: &mut Vec<std::collections::HashMap<String, BindingKind>>,
+        lambda_depth: usize,
+    ) -> Result<(), RuminaError> {
+        match expr {
+            ast::Expr::Array(items)
+            | ast::Expr::Vector(items)
+            | ast::Expr::Set(items)
+            | ast::Expr::Multi(items) => {
+                for item in items {
+                    expr_check(item, scopes, lambda_depth)?;
+                }
+            }
+            ast::Expr::Matrix(rows) => {
+                for row in rows {
+                    for item in row {
+                        expr_check(item, scopes, lambda_depth)?;
+                    }
+                }
+            }
+            ast::Expr::Struct(fields) => {
+                for (_, value) in fields {
+                    expr_check(value, scopes, lambda_depth)?;
+                }
+            }
+            ast::Expr::Table(fields) => {
+                for (key, value) in fields {
+                    expr_check(key, scopes, lambda_depth)?;
+                    expr_check(value, scopes, lambda_depth)?;
+                }
+            }
+            ast::Expr::Binary { left, right, .. } => {
+                expr_check(left, scopes, lambda_depth)?;
+                expr_check(right, scopes, lambda_depth)?;
+            }
+            ast::Expr::Unary { expr, .. }
+            | ast::Expr::UnitStrip { expr, .. }
+            | ast::Expr::UnitConvert { expr, .. }
+            | ast::Expr::UnitAttach { expr, .. }
+            | ast::Expr::Try(expr) => expr_check(expr, scopes, lambda_depth)?,
+            ast::Expr::Call { func, args } => {
+                expr_check(func, scopes, lambda_depth)?;
+                for arg in args {
+                    expr_check(arg, scopes, lambda_depth)?;
+                }
+            }
+            ast::Expr::Member { object, .. } => expr_check(object, scopes, lambda_depth)?,
+            ast::Expr::Index { object, index } => {
+                expr_check(object, scopes, lambda_depth)?;
+                expr_check(index, scopes, lambda_depth)?;
+            }
+            ast::Expr::Lambda { params, body, .. } => {
+                scopes.push(
+                    params
+                        .iter()
+                        .cloned()
+                        .map(|param| (param, BindingKind::Var))
+                        .collect(),
+                );
+                stmt_check(body, scopes, lambda_depth + 1)?;
+                scopes.pop();
+            }
+            ast::Expr::Match { target, arms } => {
+                expr_check(target, scopes, lambda_depth)?;
+                for arm in arms {
+                    if let Some(guard) = &arm.guard {
+                        expr_check(guard, scopes, lambda_depth)?;
+                    }
+                    expr_check(&arm.expr, scopes, lambda_depth)?;
+                }
+            }
+            ast::Expr::Int(_)
+            | ast::Expr::BigInt(_)
+            | ast::Expr::Float(_)
+            | ast::Expr::String(_)
+            | ast::Expr::Bool(_)
+            | ast::Expr::Null
+            | ast::Expr::Ident(_)
+            | ast::Expr::Wildcard
+            | ast::Expr::Namespace { .. } => {}
+        }
+        Ok(())
+    }
+
+    let mut scopes = vec![std::collections::HashMap::new()];
+    for stmt in statements {
+        stmt_check(stmt, &mut scopes, 0)?;
+    }
+    Ok(())
+}
+
 fn should_use_interpreter_runtime(statements: &[ast::Stmt]) -> bool {
     fn stmt_requires_interpreter(stmt: &ast::Stmt) -> bool {
         match stmt {
@@ -170,6 +412,7 @@ pub fn run_rumina_with_dir(
 
     let mut parser = Parser::new(tokens);
     let ast = parser.parse().map_err(RuminaError::runtime)?;
+    check_lsr006_lambda_capture_mutation(&ast)?;
 
     if should_use_interpreter_runtime(&ast) {
         let mut interpreter = Interpreter::new();

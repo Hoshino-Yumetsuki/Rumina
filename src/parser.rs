@@ -391,6 +391,16 @@ impl Parser {
         };
         self.advance();
 
+        if name == "table" && self.match_token(&Token::Less) {
+            let key_type = self.parse_extension_type()?;
+            self.expect(Token::Comma)
+                .map_err(|err| format!("InterfaceBindError: {err}"))?;
+            let value_type = self.parse_extension_type()?;
+            self.expect(Token::Greater)
+                .map_err(|err| format!("InterfaceBindError: {err}"))?;
+            return Ok(format!("table<{key_type},{value_type}>"));
+        }
+
         Ok(name)
     }
 

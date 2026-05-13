@@ -1,4 +1,4 @@
-use rumina::{Value, run_rumina};
+use rumina::{Lexer, Parser, Value, ast::Stmt, run_rumina};
 
 fn expect_int(result: Result<Option<Value>, rumina::RuminaError>) -> i64 {
     match result.unwrap() {
@@ -66,6 +66,27 @@ fn test_const_requires_initializer() {
 fn test_lsr_declaration_type_annotation_after_name() {
     let result = expect_int(run_rumina("let x num = 42; x;"));
     assert_eq!(result, 42);
+}
+
+#[test]
+fn test_lsr_extension_table_type_annotation() {
+    let source = r#"
+        module scores {
+            func score_of(t table<text,num>, name text) -> num = "c_ext_score_of"
+        }
+    "#;
+    let tokens = Lexer::new(source.to_string()).tokenize();
+    let mut parser = Parser::new(tokens);
+    let statements = parser.parse().unwrap();
+
+    match &statements[0] {
+        Stmt::ExtensionModule { functions, .. } => {
+            assert_eq!(functions[0].params[0].1, "table<text,num>");
+            assert_eq!(functions[0].params[1].1, "text");
+            assert_eq!(functions[0].return_type, "num");
+        }
+        other => panic!("expected extension module, got {other:?}"),
+    }
 }
 
 #[test]
@@ -403,6 +424,12 @@ fn test_lsr000_matrix_column_wildcard_slice_returns_vector() {
 }
 
 #[test]
+fn test_lsr000_matrix_row_wildcard_slice_returns_vector() {
+    let values = expect_vector(run_rumina("let m = mat[1, 2, 3; 4, 5, 6]; m[2, *];"));
+    assert_eq!(values, vec![Value::Int(4), Value::Int(5), Value::Int(6)]);
+}
+
+#[test]
 fn test_lsr004_std_linalg_shape_transpose_trace() {
     let result = run_rumina(
         "import std.linalg as la; let m = mat[1, 2; 3, 4]; let s = la.shape(m); let t = la.transpose(m); s[1] == 2 and s[2] == 2 and t[1][2] == 3 and la.trace(m) == 5;",
@@ -539,6 +566,15 @@ fn test_lsr007_core_equivalence_non_commutative_identities() {
         Some(Value::Bool(b)) => assert!(b),
         other => panic!("Expected Bool(true), got {:?}", other),
     }
+}
+
+#[test]
+fn test_lsr007_equivalence_rejects_bool_operands() {
+    let error = run_rumina("true === true;").unwrap_err();
+    assert!(
+        error.to_string().contains("EqvTypeMismatch"),
+        "expected EqvTypeMismatch diagnostic, got {error}"
+    );
 }
 
 #[test]
@@ -804,6 +840,16 @@ fn test_lsr006_lambda_arity_mismatch_reports_diagnostic() {
     assert!(
         err.to_string().contains("LambdaArityMismatch"),
         "expected LambdaArityMismatch diagnostic, got {err}"
+    );
+}
+
+#[test]
+fn test_lsr006_lambda_capture_mutation_reports_diagnostic() {
+    let err = run_rumina("var counter = 0; let bump = do { counter = counter + 1; }; bump();")
+        .unwrap_err();
+    assert!(
+        err.to_string().contains("LambdaCaptureMutation"),
+        "expected LambdaCaptureMutation diagnostic, got {err}"
     );
 }
 
