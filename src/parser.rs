@@ -1747,10 +1747,9 @@ impl Parser {
             self.expect(Token::RBrace)?;
             Box::new(Stmt::Block(stmts))
         };
-
-            param_types,
         Ok(Expr::Lambda {
             params,
+            param_types,
             body,
             is_simple,
         })
