@@ -1,8 +1,9 @@
 use crate::value::Value;
 
 fn numbers(value: &Value) -> Result<Vec<f64>, String> {
-    let Value::Array(values) = value else {
-        return Err(format!("stats expects vector, got {}", value.type_name()));
+    let values = match value {
+        Value::Vector(values) | Value::Array(values) => values,
+        _ => return Err(format!("stats expects vector, got {}", value.type_name())),
     };
 
     let values = values.borrow();

@@ -426,6 +426,19 @@ fn test_lsr004_std_stats_descriptive_functions() {
 }
 
 #[test]
+fn test_lsr004_std_stats_accept_vector_signature() {
+    let result = expect_float(run_rumina(
+        "use std.stats.{mean, median, var as variance, quantile}; let xs = vec[1, 2, 3, 4]; mean(xs) + median(xs) + variance(xs) + quantile(xs, 0.25);",
+    ));
+    let expected = 2.5 + 2.5 + 1.25 + 1.75;
+    assert!(
+        (result - expected).abs() < 1e-10,
+        "expected {}, got {}",
+        expected,
+        result
+    );
+}
+#[test]
 fn test_lsr004_stdlib_diagnostic_codes() {
     let domain_error = run_rumina("import std.math; math.log(-1);").unwrap_err();
     assert!(
@@ -453,6 +466,17 @@ fn test_lsr004_std_stats_cov_corr() {
 }
 
 #[test]
+fn test_lsr004_std_stats_cov_corr_accept_vectors() {
+    let result = expect_float(run_rumina(
+        "use std.stats.{cov, corr}; let xs = vec[1, 2, 3]; let ys = vec[2, 4, 6]; cov(xs, ys) + corr(xs, ys);",
+    ));
+    assert!(
+        (result - (4.0 / 3.0 + 1.0)).abs() < 1e-10,
+        "unexpected cov+corr: {}",
+        result
+    );
+}
+#[test]
 fn test_lsr004_std_units_dimensionless_helpers() {
     let result = run_rumina(
         "use std.units.{strip, is_dimensionless, convert}; strip(42) == 42 and is_dimensionless(42) and convert(42, \"\") == 42;",
@@ -464,6 +488,17 @@ fn test_lsr004_std_units_dimensionless_helpers() {
     }
 }
 
+#[test]
+fn test_lsr004_std_units_helpers_follow_unit_expression_semantics() {
+    let result = run_rumina(
+        "use std.units.{strip, is_dimensionless, convert}; strip(10<km>) == 10000 and (convert(10<km>, \"m\") as num) == 10000 and not is_dimensionless(10<km>);",
+    )
+    .unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
 #[test]
 fn test_lsr000_matrix_direct_two_dimensional_indexing() {
     let result = expect_int(run_rumina("let m = mat[1, 2, 3; 4, 5, 6]; m[2, 3];"));
@@ -537,6 +572,22 @@ fn test_lsr004_std_linalg_solve_left_and_right() {
     }
 }
 
+#[test]
+fn test_lsr004_std_linalg_diagnostic_codes() {
+    let dimension_mismatch =
+        run_rumina("import std.linalg as la; la.solve_left(mat[1, 0; 0, 1], mat[1, 2, 3]);")
+            .unwrap_err();
+    assert!(
+        dimension_mismatch.to_string().contains("DimensionMismatch"),
+        "expected DimensionMismatch diagnostic, got {dimension_mismatch}"
+    );
+
+    let singular = run_rumina("import std.linalg as la; la.inv(mat[1, 2; 2, 4]);").unwrap_err();
+    assert!(
+        singular.to_string().contains("SingularMatrix"),
+        "expected SingularMatrix diagnostic, got {singular}"
+    );
+}
 #[test]
 fn test_lsr000_matrix_left_division_operator_solves_linear_system() {
     let rows = expect_matrix(run_rumina(

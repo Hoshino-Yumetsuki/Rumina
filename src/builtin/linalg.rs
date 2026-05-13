@@ -48,7 +48,7 @@ pub fn adjoint(args: &[Value]) -> Result<Value, String> {
 pub fn trace(args: &[Value]) -> Result<Value, String> {
     let rows = matrix_arg(args, "trace")?;
     if rows.iter().any(|row| row.len() != rows.len()) {
-        return Err("linalg.trace expects square matrix".to_string());
+        return Err("DimensionMismatch: linalg.trace expects square matrix".to_string());
     }
 
     let mut total = 0.0;
@@ -66,7 +66,7 @@ pub fn trace(args: &[Value]) -> Result<Value, String> {
 pub fn det(args: &[Value]) -> Result<Value, String> {
     let rows = matrix_arg(args, "det")?;
     if rows.iter().any(|row| row.len() != rows.len()) {
-        return Err("linalg.det expects square matrix".to_string());
+        return Err("DimensionMismatch: linalg.det expects square matrix".to_string());
     }
 
     let value = determinant(&rows)?;
@@ -216,7 +216,9 @@ fn transpose_values(rows: &[Vec<Value>]) -> Result<Vec<Vec<Value>>, String> {
 
     for row in rows.iter() {
         if row.len() != col_count {
-            return Err("linalg.transpose expects rectangular matrix".to_string());
+            return Err(
+                "DimensionMismatch: linalg.transpose expects rectangular matrix".to_string(),
+            );
         }
         for (col, value) in row.iter().enumerate() {
             result[col].push(value.clone());
@@ -231,7 +233,10 @@ fn numeric_matrix(rows: &[Vec<Value>], name: &str) -> Result<Vec<Vec<f64>>, Stri
     let mut values = Vec::with_capacity(rows.len());
     for row in rows {
         if row.len() != col_count {
-            return Err(format!("linalg.{} expects rectangular matrix", name));
+            return Err(format!(
+                "DimensionMismatch: linalg.{} expects rectangular matrix",
+                name
+            ));
         }
         values.push(
             row.iter()
@@ -245,7 +250,7 @@ fn numeric_matrix(rows: &[Vec<Value>], name: &str) -> Result<Vec<Vec<f64>>, Stri
 fn invert_matrix(mut matrix: Vec<Vec<f64>>) -> Result<Vec<Vec<f64>>, String> {
     let size = matrix.len();
     if size == 0 || matrix.iter().any(|row| row.len() != size) {
-        return Err("linalg.inv expects square matrix".to_string());
+        return Err("DimensionMismatch: linalg.inv expects square matrix".to_string());
     }
 
     let mut inverse = identity(size);
@@ -258,7 +263,7 @@ fn invert_matrix(mut matrix: Vec<Vec<f64>>) -> Result<Vec<Vec<f64>>, String> {
         }
 
         if matrix[pivot_row][pivot_col].abs() < EPSILON {
-            return Err("linalg.inv expects non-singular matrix".to_string());
+            return Err("SingularMatrix: linalg.inv expects non-singular matrix".to_string());
         }
 
         matrix.swap(pivot_col, pivot_row);
@@ -328,7 +333,7 @@ fn matrix_rank(values: &mut [Vec<f64>]) -> usize {
 
 fn multiply_matrices(left: &[Vec<f64>], right: &[Vec<f64>]) -> Result<Vec<Vec<f64>>, String> {
     if left.is_empty() || right.is_empty() || left[0].len() != right.len() {
-        return Err("linalg matrix dimensions do not align".to_string());
+        return Err("DimensionMismatch: linalg matrix dimensions do not align".to_string());
     }
 
     let rows = left.len();
