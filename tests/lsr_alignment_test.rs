@@ -940,6 +940,15 @@ fn test_lsr008_rejects_incompatible_unit_conversion() {
 }
 
 #[test]
+fn test_lsr008_rejects_non_numeric_unit_strip_with_diagnostic() {
+    let err = run_rumina("true as num;").unwrap_err();
+    assert!(
+        err.to_string().contains("UnitStripTypeMismatch"),
+        "expected UnitStripTypeMismatch diagnostic, got {err}"
+    );
+}
+
+#[test]
 fn test_lsr008_rejects_legacy_num_unit_syntax() {
     assert!(run_rumina("42 as num<m>;").is_err());
 }

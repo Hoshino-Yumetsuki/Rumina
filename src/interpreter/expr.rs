@@ -381,7 +381,10 @@ impl Interpreter {
                     | Value::Rational(_)
                     | Value::Irrational(_)
                     | Value::Complex(_, _) => Ok(val),
-                    other => Err(format!("Cannot strip units from {}", other.type_name())),
+                    other => Err(format!(
+                        "UnitStripTypeMismatch: cannot strip units from {}",
+                        other.type_name()
+                    )),
                 }
             }
 
