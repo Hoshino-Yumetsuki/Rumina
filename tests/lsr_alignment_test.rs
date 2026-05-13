@@ -638,6 +638,24 @@ fn test_lsr007_equivalence_rejects_bool_operands() {
 }
 
 #[test]
+fn test_lsr007_set_eqv_profile_core_preserves_core_semantics() {
+    let result = run_rumina("set_eqv_profile(\"Core\"); let x = 9; x + 0 === x;").unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_lsr007_set_eqv_profile_rejects_invalid_profile() {
+    let error = run_rumina("set_eqv_profile(\"Unknown\");").unwrap_err();
+    assert!(
+        error.to_string().contains("EqvInvalidProfile"),
+        "expected EqvInvalidProfile diagnostic, got {error}"
+    );
+}
+
+#[test]
 fn test_lsr000_table_literal_and_read() {
     let result = expect_int(run_rumina(
         "let scores = table{\"alice\" => 98}; scores[\"alice\"];",

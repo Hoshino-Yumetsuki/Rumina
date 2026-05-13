@@ -60,6 +60,7 @@ pub fn register_builtins(globals: &mut HashMap<String, Value>) {
     register_fn(globals, "fraction", utils::fraction);
     register_fn(globals, "decimal", utils::decimal);
     register_fn(globals, "assert", utils::assert);
+    register_fn(globals, "set_eqv_profile", utils::set_eqv_profile);
 
     // LSR-005: Type conversion functions
     register_fn(globals, "int", utils::to_int);

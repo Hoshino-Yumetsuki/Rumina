@@ -90,6 +90,24 @@ pub fn typeof_fn(args: &[Value]) -> Result<Value, String> {
     Ok(Value::String(args[0].type_name().to_string()))
 }
 
+pub fn set_eqv_profile(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 1 {
+        return Err("set_eqv_profile expects 1 argument".to_string());
+    }
+
+    match &args[0] {
+        Value::String(profile) if profile == "Core" => Ok(Value::Null),
+        Value::String(profile) => Err(format!(
+            "EqvInvalidProfile: unknown equivalence profile '{}'; expected Core",
+            profile
+        )),
+        other => Err(format!(
+            "EqvInvalidProfile: expected string profile, got {}",
+            other.type_name()
+        )),
+    }
+}
+
 pub fn size(args: &[Value]) -> Result<Value, String> {
     if args.len() != 1 {
         return Err("size expects 1 argument".to_string());
