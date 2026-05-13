@@ -1029,6 +1029,7 @@ impl Parser {
             let op = match self.current_token() {
                 Token::EqualEqualEqual => BinOp::Equivalent,
                 Token::EqualEqual => BinOp::Equal,
+                Token::DotEqualEqual => BinOp::BroadcastEqual,
                 Token::BangEqual => BinOp::NotEqual,
                 _ => break,
             };

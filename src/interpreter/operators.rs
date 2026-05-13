@@ -198,6 +198,14 @@ impl Interpreter {
                 Ok(Value::Vector(Rc::new(RefCell::new(result))))
             }
 
+            (Value::Vector(values), _) if op == BinOp::BroadcastEqual => {
+                let mut result = Vec::with_capacity(values.borrow().len());
+                for value in values.borrow().iter() {
+                    result.push(self.eval_binary_op(value, BinOp::Equal, right)?);
+                }
+                Ok(Value::Vector(Rc::new(RefCell::new(result))))
+            }
+
             (_, Value::Set(values)) if matches!(op, BinOp::In | BinOp::NotIn) => {
                 let contains = values.contains(left);
                 Ok(Value::Bool(if op == BinOp::In {

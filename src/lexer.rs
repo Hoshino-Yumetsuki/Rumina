@@ -406,6 +406,10 @@ impl Lexer {
                     if self.current_char == Some('+') {
                         self.advance();
                         Token::DotPlus
+                    } else if self.current_char == Some('=') && self.peek() == Some('=') {
+                        self.advance();
+                        self.advance();
+                        Token::DotEqualEqual
                     } else {
                         Token::Dot
                     }

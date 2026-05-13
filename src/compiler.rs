@@ -840,6 +840,7 @@ impl Compiler {
                     BinOp::Pipe
                         | BinOp::Equivalent
                         | BinOp::BroadcastAdd
+                        | BinOp::BroadcastEqual
                         | BinOp::In
                         | BinOp::NotIn
                         | BinOp::Subset
@@ -862,6 +863,9 @@ impl Compiler {
                     BinOp::Add => OpCode::Add,
                     BinOp::BroadcastAdd => {
                         unreachable!("broadcast add handled before opcode emission")
+                    }
+                    BinOp::BroadcastEqual => {
+                        unreachable!("broadcast equality handled before opcode emission")
                     }
                     BinOp::Sub => OpCode::Sub,
                     BinOp::Mul => OpCode::Mul,

@@ -59,6 +59,7 @@ pub enum Token {
     // 运算符
     Plus,       // +
     DotPlus,    // .+
+    DotEqualEqual, // .==
     Minus,      // -
     Star,       // *
     Slash,      // /
