@@ -724,6 +724,14 @@ fn test_lsr007_explog_basic_profile_normalizes_log_one() {
 }
 
 #[test]
+fn test_lsr007_explog_basic_profile_normalizes_exp_zero() {
+    let result = run_rumina("set_eqv_profile(\"ExpLog-Basic\"); exp(0) === 1;").unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+#[test]
 fn test_lsr007_set_eqv_profile_rejects_invalid_profile() {
     let error = run_rumina("set_eqv_profile(\"Unknown\");").unwrap_err();
     assert!(
