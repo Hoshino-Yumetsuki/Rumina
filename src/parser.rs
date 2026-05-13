@@ -1446,6 +1446,26 @@ impl Parser {
             Token::Ident(name) if name == "_" => {
                 self.advance();
                 Ok(MatchPattern::Wildcard)
+        let has_fallback = arms.iter().any(|arm| {
+            arm.guard.is_none()
+                && matches!(
+                    arm.pattern,
+                    MatchPattern::Wildcard | MatchPattern::Binding(_)
+                )
+        });
+        let exhausts_bool = matches!(target, Expr::Bool(_))
+            && arms.iter().any(|arm| {
+                arm.guard.is_none()
+                    && matches!(arm.pattern, MatchPattern::Literal(Expr::Bool(true)))
+            })
+            && arms.iter().any(|arm| {
+                arm.guard.is_none()
+                    && matches!(arm.pattern, MatchPattern::Literal(Expr::Bool(false)))
+            });
+        if !has_fallback && !exhausts_bool {
+            return Err("MissingWildcard: open match requires a wildcard fallback".to_string());
+        }
+
             }
             Token::Ident(name) => {
                 let name = name.clone();

@@ -528,6 +528,21 @@ fn test_lsr005_match_wildcard_must_be_last() {
 }
 
 #[test]
+fn test_lsr005_open_match_without_wildcard_reports_missing_wildcard() {
+    let error = run_rumina("match 3 { 1 => 10, 2 => 20 };").unwrap_err();
+    assert!(
+        error.to_string().contains("MissingWildcard"),
+        "expected MissingWildcard diagnostic, got {error}"
+    );
+}
+
+#[test]
+fn test_lsr005_exhaustive_bool_match_does_not_require_wildcard() {
+    let result = expect_int(run_rumina("match true { true => 1, false => 0 };"));
+    assert_eq!(result, 1);
+}
+
+#[test]
 fn test_lsr005_match_duplicate_constant_arm_is_unreachable() {
     let error = run_rumina("match 1 { 1 => 10, 1 => 20, _ => 0 };").unwrap_err();
     assert!(
@@ -897,21 +912,6 @@ module example {
 }
 
 #[test]
-fn test_lsr003_extension_func_requires_c_symbol_string() {
-    let mut lexer = rumina::Lexer::new(
-        "module example { func det(m matrix) -> num { return 0; } }".to_string(),
-    );
-    let mut parser = rumina::Parser::new(lexer.tokenize());
-    let error = parser.parse().unwrap_err();
-
-    assert!(
-        error.contains("InterfaceBindError") && error.contains("string C symbol"),
-        "expected InterfaceBindError for missing C symbol string, got {error}"
-    );
-}
-
-#[test]
-#[test]
 fn test_lsr003_extension_param_move_annotation_parses() {
     let mut lexer = rumina::Lexer::new(
         r#"
@@ -941,6 +941,21 @@ module example {
     }
 }
 
+#[test]
+fn test_lsr003_extension_func_requires_c_symbol_string() {
+    let mut lexer = rumina::Lexer::new(
+        "module example { func det(m matrix) -> num { return 0; } }".to_string(),
+    );
+    let mut parser = rumina::Parser::new(lexer.tokenize());
+    let error = parser.parse().unwrap_err();
+
+    assert!(
+        error.contains("InterfaceBindError") && error.contains("string C symbol"),
+        "expected InterfaceBindError for missing C symbol string, got {error}"
+    );
+}
+
+#[test]
 fn test_lsr003_extension_declaration_exposes_callable_stub() {
     let result = run_rumina(
         r#"
