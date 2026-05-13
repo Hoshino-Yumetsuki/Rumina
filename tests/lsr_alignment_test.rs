@@ -729,6 +729,27 @@ fn test_lsr005_match_vector_destructuring_pattern() {
 }
 
 #[test]
+fn test_lsr005_match_structural_add_pattern_binds_expr_terms() {
+    let result = run_rumina("match x + 1 { f + g => f === x and g === 1, _ => false };").unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_lsr005_match_structural_power_and_call_patterns_bind_expr_terms() {
+    let result = run_rumina(
+        "match x^3 { u^n => u === x and n === 3, _ => false } and match sin(x) { sin(u) => u === x, _ => false };",
+    )
+    .unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
 fn test_lsr005_match_wildcard_must_be_last() {
     let error = run_rumina("match 1 { _ => 0, 1 => 1 };").unwrap_err();
     assert!(

@@ -1589,6 +1589,7 @@ impl Parser {
         match pattern {
             MatchPattern::Wildcard | MatchPattern::Binding(_) => None,
             MatchPattern::Literal(expr) => Self::static_match_branch_type(expr),
+            MatchPattern::Expr(_) => None,
             MatchPattern::Vector(_) => Some("vector"),
         }
     }
@@ -1603,11 +1604,17 @@ impl Parser {
                 self.advance();
                 Ok(MatchPattern::Wildcard)
             }
-            Token::Ident(name) => {
+            Token::Ident(name)
+                if matches!(
+                    self.tokens.get(self.current + 1),
+                    Some(Token::If | Token::FatArrow)
+                ) =>
+            {
                 let name = name.clone();
                 self.advance();
                 Ok(MatchPattern::Binding(name))
             }
+            Token::Ident(_) => Ok(MatchPattern::Expr(self.parse_expression()?)),
             Token::Vec => {
                 self.advance();
                 self.expect(Token::LBracket)?;

@@ -9,6 +9,122 @@ use crate::value::Value;
 use super::Interpreter;
 
 impl Interpreter {
+    fn structural_expr_bindings(
+        pattern: &Expr,
+        target: &Expr,
+        bindings: &mut HashMap<String, Value>,
+    ) -> bool {
+        match pattern {
+            Expr::Ident(name) => {
+                if let Some(Value::Expr(previous)) = bindings.get(name) {
+                    previous == target
+                } else {
+                    bindings.insert(name.clone(), Value::Expr(target.clone()));
+                    true
+                }
+            }
+            Expr::Int(a) => matches!(target, Expr::Int(b) if a == b),
+            Expr::BigInt(a) => matches!(target, Expr::BigInt(b) if a == b),
+            Expr::Float(a) => matches!(target, Expr::Float(b) if a == b),
+            Expr::String(a) => matches!(target, Expr::String(b) if a == b),
+            Expr::Bool(a) => matches!(target, Expr::Bool(b) if a == b),
+            Expr::Null => matches!(target, Expr::Null),
+            Expr::Unary { op, expr } => match target {
+                Expr::Unary {
+                    op: target_op,
+                    expr: target_expr,
+                } if op == target_op => Self::structural_expr_bindings(expr, target_expr, bindings),
+                _ => false,
+            },
+            Expr::Binary { left, op, right } => {
+                let Expr::Binary {
+                    left: target_left,
+                    op: target_op,
+                    right: target_right,
+                } = target
+                else {
+                    return false;
+                };
+
+                if op != target_op {
+                    return false;
+                }
+
+                let original = bindings.clone();
+                if Self::structural_expr_bindings(left, target_left, bindings)
+                    && Self::structural_expr_bindings(right, target_right, bindings)
+                {
+                    return true;
+                }
+
+                if matches!(op, BinOp::Add | BinOp::Mul) {
+                    *bindings = original.clone();
+                    if Self::structural_expr_bindings(left, target_right, bindings)
+                        && Self::structural_expr_bindings(right, target_left, bindings)
+                    {
+                        return true;
+                    }
+                }
+
+                *bindings = original;
+                false
+            }
+            Expr::Call { func, args } => {
+                let Expr::Call {
+                    func: target_func,
+                    args: target_args,
+                } = target
+                else {
+                    return false;
+                };
+                if args.len() != target_args.len() {
+                    return false;
+                }
+
+                match (func.as_ref(), target_func.as_ref()) {
+                    (Expr::Ident(expected), Expr::Ident(actual)) if expected == actual => {}
+                    _ => return false,
+                }
+
+                let original = bindings.clone();
+                for (arg, target_arg) in args.iter().zip(target_args) {
+                    if !Self::structural_expr_bindings(arg, target_arg, bindings) {
+                        *bindings = original;
+                        return false;
+                    }
+                }
+                true
+            }
+            _ => pattern == target,
+        }
+    }
+
+    fn substitute_expr_bindings(&self, expr: &Expr) -> Expr {
+        match expr {
+            Expr::Ident(name) => match self.get_variable(name) {
+                Ok(Value::Expr(bound)) => bound,
+                _ => expr.clone(),
+            },
+            Expr::Binary { left, op, right } => Expr::Binary {
+                left: Box::new(self.substitute_expr_bindings(left)),
+                op: *op,
+                right: Box::new(self.substitute_expr_bindings(right)),
+            },
+            Expr::Unary { op, expr } => Expr::Unary {
+                op: *op,
+                expr: Box::new(self.substitute_expr_bindings(expr)),
+            },
+            Expr::Call { func, args } => Expr::Call {
+                func: Box::new(self.substitute_expr_bindings(func)),
+                args: args
+                    .iter()
+                    .map(|arg| self.substitute_expr_bindings(arg))
+                    .collect(),
+            },
+            _ => expr.clone(),
+        }
+    }
+
     fn unit_scale(&self, unit: &str) -> Result<i64, String> {
         match unit {
             "m" => Ok(1),
@@ -350,7 +466,9 @@ impl Interpreter {
                             "EqvTypeMismatch: === expects mathematical Expr operands".to_string()
                         );
                     }
-                    Ok(Value::Bool(self.expr_equivalent(left, right)?))
+                    let left = self.substitute_expr_bindings(left);
+                    let right = self.substitute_expr_bindings(right);
+                    Ok(Value::Bool(self.expr_equivalent(&left, &right)?))
                 } else {
                     let l = self.eval_expr(left)?;
                     let r = self.eval_expr(right)?;
@@ -760,23 +878,42 @@ impl Interpreter {
             }
 
             Expr::Match { target, arms } => {
-                let target = self.eval_expr(target)?;
+                let has_expr_pattern = arms
+                    .iter()
+                    .any(|arm| matches!(arm.pattern, MatchPattern::Expr(_)));
+                let target_value = if has_expr_pattern {
+                    None
+                } else {
+                    Some(self.eval_expr(target)?)
+                };
                 for arm in arms {
                     let bindings = match &arm.pattern {
                         MatchPattern::Wildcard => Some(HashMap::new()),
-                        MatchPattern::Binding(name) => {
-                            Some(HashMap::from([(name.clone(), target.clone())]))
-                        }
+                        MatchPattern::Binding(name) => Some(HashMap::from([(
+                            name.clone(),
+                            target_value
+                                .as_ref()
+                                .cloned()
+                                .unwrap_or_else(|| Value::Expr((**target).clone())),
+                        )])),
                         MatchPattern::Literal(pattern) => {
                             let pattern = self.eval_expr(pattern)?;
-                            if pattern == target {
+                            if target_value.as_ref().is_some_and(|target| &pattern == target) {
                                 Some(HashMap::new())
                             } else {
                                 None
                             }
                         }
+                        MatchPattern::Expr(pattern) => {
+                            let mut bindings = HashMap::new();
+                            if Self::structural_expr_bindings(pattern, target, &mut bindings) {
+                                Some(bindings)
+                            } else {
+                                None
+                            }
+                        }
                         MatchPattern::Vector(names) => {
-                            let Value::Vector(values) = &target else {
+                            let Some(Value::Vector(values)) = target_value.as_ref() else {
                                 continue;
                             };
                             let values = values.borrow();

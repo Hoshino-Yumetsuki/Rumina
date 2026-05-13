@@ -276,6 +276,7 @@ pub enum MatchPattern {
     Binding(String),
     Literal(Expr),
     Vector(Vec<String>),
+    Expr(Expr),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

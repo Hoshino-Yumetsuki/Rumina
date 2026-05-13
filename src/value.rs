@@ -60,6 +60,7 @@ pub enum Value {
         collected_args: Vec<Value>, // 已收集的参数
         total_params: usize,        // 总参数数量
     },
+    Expr(Expr),
     MemoizedFunction {
         original: Box<Value>,                       // 原始函数
         cache: Rc<RefCell<HashMap<String, Value>>>, // 参数->结果的缓存
@@ -104,6 +105,7 @@ impl Value {
             Value::ExtensionFunction { .. } => "extension_function",
             Value::NativeFunction { .. } => "native_function",
             Value::CurriedFunction { .. } => "curried_function",
+            Value::Expr(_) => "expr",
             Value::MemoizedFunction { .. } => "memoized_function",
         }
     }
@@ -377,6 +379,7 @@ impl fmt::Display for Value {
                     total_params
                 )
             }
+            Value::Expr(expr) => write!(f, "{:?}", expr),
             Value::MemoizedFunction { cache, .. } => {
                 write!(f, "<memoized function ({} cached)>", cache.borrow().len())
             }
@@ -640,6 +643,7 @@ impl PartialEq for Value {
             (Value::Set(a), Value::Set(b)) => {
                 a.len() == b.len() && a.iter().all(|value| b.contains(value))
             }
+            (Value::Expr(a), Value::Expr(b)) => a == b,
             _ => false,
         }
     }
