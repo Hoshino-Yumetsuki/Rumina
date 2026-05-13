@@ -673,6 +673,15 @@ fn test_lsr007_set_eqv_profile_core_preserves_core_semantics() {
 }
 
 #[test]
+fn test_lsr007_trig_basic_profile_enables_pythagorean_identity() {
+    let result = run_rumina("set_eqv_profile(\"Trig-Basic\"); sin(x)^2 + cos(x)^2 === 1;").unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
 fn test_lsr007_set_eqv_profile_rejects_invalid_profile() {
     let error = run_rumina("set_eqv_profile(\"Unknown\");").unwrap_err();
     assert!(

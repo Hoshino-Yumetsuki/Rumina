@@ -844,7 +844,9 @@ impl Interpreter {
     }
 
     fn expr_equivalent(&self, left: &Expr, right: &Expr) -> bool {
-        Self::normalize_equivalence_expr(left) == Self::normalize_equivalence_expr(right)
+        let profile = crate::builtin::utils::current_eqv_profile();
+        Self::normalize_equivalence_expr(left, &profile)
+            == Self::normalize_equivalence_expr(right, &profile)
     }
 
     fn is_equivalence_operand(expr: &Expr) -> bool {
@@ -889,11 +891,11 @@ impl Interpreter {
         }
     }
 
-    fn normalize_equivalence_expr(expr: &Expr) -> Expr {
+    fn normalize_equivalence_expr(expr: &Expr, profile: &str) -> Expr {
         match expr {
             Expr::Binary { left, op, right } => {
-                let left = Self::normalize_equivalence_expr(left);
-                let right = Self::normalize_equivalence_expr(right);
+                let left = Self::normalize_equivalence_expr(left, profile);
+                let right = Self::normalize_equivalence_expr(right, profile);
 
                 match (left, *op, right) {
                     (Expr::Int(a), crate::ast::BinOp::Add, Expr::Int(b)) => Expr::Int(a + b),
@@ -931,6 +933,12 @@ impl Interpreter {
                     (left, crate::ast::BinOp::Add, right) => {
                         Self::normalize_commutative_expr(crate::ast::BinOp::Add, left, right)
                     }
+                    (left, crate::ast::BinOp::Add, right)
+                        if profile == "Trig-Basic"
+                            && Self::is_trig_pythagorean_identity(&left, &right) =>
+                    {
+                        Expr::Int(1)
+                    }
                     (left, crate::ast::BinOp::Mul, right) => {
                         Self::normalize_commutative_expr(crate::ast::BinOp::Mul, left, right)
                     }
@@ -943,7 +951,7 @@ impl Interpreter {
             }
             Expr::Unary { op, expr } => Expr::Unary {
                 op: *op,
-                expr: Box::new(Self::normalize_equivalence_expr(expr)),
+                expr: Box::new(Self::normalize_equivalence_expr(expr, profile)),
             },
             other => other.clone(),
         }
@@ -952,6 +960,39 @@ impl Interpreter {
     fn normalize_commutative_expr(op: crate::ast::BinOp, left: Expr, right: Expr) -> Expr {
         let mut terms = Vec::new();
         Self::collect_commutative_terms(op, left, &mut terms);
+    fn is_trig_pythagorean_identity(left: &Expr, right: &Expr) -> bool {
+        let sin_left = Self::trig_square_arg(left, "sin");
+        let cos_right = Self::trig_square_arg(right, "cos");
+        if matches!((sin_left, cos_right), (Some(a), Some(b)) if a == b) {
+            return true;
+        }
+
+        let cos_left = Self::trig_square_arg(left, "cos");
+        let sin_right = Self::trig_square_arg(right, "sin");
+        matches!((cos_left, sin_right), (Some(a), Some(b)) if a == b)
+    }
+
+    fn trig_square_arg<'a>(expr: &'a Expr, name: &str) -> Option<&'a Expr> {
+        let Expr::Binary { left, op, right } = expr else {
+            return None;
+        };
+        if *op != crate::ast::BinOp::Pow || right.as_ref() != &Expr::Int(2) {
+            return None;
+        }
+
+        let Expr::Call { func, args } = left.as_ref() else {
+            return None;
+        };
+        if args.len() != 1 {
+            return None;
+        }
+
+        match func.as_ref() {
+            Expr::Ident(func_name) if func_name == name => Some(&args[0]),
+            _ => None,
+        }
+    }
+
         Self::collect_commutative_terms(op, right, &mut terms);
 
         terms.sort_by_key(|expr| format!("{:?}", expr));

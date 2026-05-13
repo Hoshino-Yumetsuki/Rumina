@@ -6,6 +6,14 @@ use std::collections::HashMap;
 use std::io::{self, Write};
 use std::rc::Rc;
 
+thread_local! {
+    static EQV_PROFILE: RefCell<String> = RefCell::new("Core".to_string());
+}
+
+pub fn current_eqv_profile() -> String {
+    EQV_PROFILE.with(|profile| profile.borrow().clone())
+}
+
 pub fn print(args: &[Value]) -> Result<Value, String> {
     for (i, arg) in args.iter().enumerate() {
         if i > 0 {
@@ -96,9 +104,14 @@ pub fn set_eqv_profile(args: &[Value]) -> Result<Value, String> {
     }
 
     match &args[0] {
-        Value::String(profile) if profile == "Core" => Ok(Value::Null),
+        Value::String(profile)
+            if matches!(profile.as_str(), "Core" | "Trig-Basic" | "ExpLog-Basic") =>
+        {
+            EQV_PROFILE.with(|current| *current.borrow_mut() = profile.clone());
+            Ok(Value::Null)
+        }
         Value::String(profile) => Err(format!(
-            "EqvInvalidProfile: unknown equivalence profile '{}'; expected Core",
+            "EqvInvalidProfile: unknown equivalence profile '{}'; expected Core, Trig-Basic, or ExpLog-Basic",
             profile
         )),
         other => Err(format!(
