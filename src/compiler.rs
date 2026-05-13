@@ -840,6 +840,7 @@ impl Compiler {
                     BinOp::Pipe
                         | BinOp::Equivalent
                         | BinOp::BroadcastAdd
+                        | BinOp::BroadcastMul
                         | BinOp::BroadcastEqual
                         | BinOp::LeftDiv
                         | BinOp::In
@@ -864,6 +865,9 @@ impl Compiler {
                     BinOp::Add => OpCode::Add,
                     BinOp::BroadcastAdd => {
                         unreachable!("broadcast add handled before opcode emission")
+                    }
+                    BinOp::BroadcastMul => {
+                        unreachable!("broadcast multiply handled before opcode emission")
                     }
                     BinOp::BroadcastEqual => {
                         unreachable!("broadcast equality handled before opcode emission")
