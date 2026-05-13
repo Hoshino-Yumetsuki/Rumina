@@ -610,6 +610,15 @@ fn test_lsr005_match_duplicate_constant_arm_is_unreachable() {
 }
 
 #[test]
+fn test_lsr005_match_branch_type_mismatch_reports_diagnostic() {
+    let error = run_rumina("match true { true => 1, false => \"no\" };").unwrap_err();
+    assert!(
+        error.to_string().contains("MatchBranchTypeMismatch"),
+        "expected MatchBranchTypeMismatch diagnostic, got {error}"
+    );
+}
+
+#[test]
 fn test_lsr007_core_equivalence_identities() {
     let result = run_rumina("let x = 9; x + 0 === x and x * 1 === x and x - x === 0;").unwrap();
     match result {

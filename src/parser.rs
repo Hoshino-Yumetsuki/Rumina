@@ -1509,10 +1509,47 @@ impl Parser {
             return Err("MissingWildcard: open match requires a wildcard fallback".to_string());
         }
 
+        let mut branch_type = None;
+        for arm in &arms {
+            let Some(current_type) = Self::static_match_branch_type(&arm.expr) else {
+                continue;
+            };
+            if let Some(expected_type) = branch_type {
+                if expected_type != current_type {
+                    return Err(format!(
+                        "MatchBranchTypeMismatch: expected {} branch, got {}",
+                        expected_type, current_type
+                    ));
+                }
+            } else {
+                branch_type = Some(current_type);
+            }
+        }
+
         Ok(Expr::Match {
             target: Box::new(target),
             arms,
         })
+    }
+
+    fn static_match_branch_type(expr: &Expr) -> Option<&'static str> {
+        match expr {
+            Expr::Int(_)
+            | Expr::BigInt(_)
+            | Expr::Float(_)
+            | Expr::UnitStrip { .. }
+            | Expr::UnitConvert { .. }
+            | Expr::UnitAttach { .. } => Some("num"),
+            Expr::Bool(_) => Some("bool"),
+            Expr::String(_) => Some("text"),
+            Expr::Null => Some("null"),
+            Expr::Array(_) => Some("array"),
+            Expr::Vector(_) => Some("vector"),
+            Expr::Matrix(_) => Some("matrix"),
+            Expr::Set(_) => Some("set"),
+            Expr::Struct(_) | Expr::Table(_) => Some("table"),
+            _ => None,
+        }
     }
 
     fn parse_match_pattern(&mut self) -> Result<MatchPattern, String> {
