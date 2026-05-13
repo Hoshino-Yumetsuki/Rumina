@@ -1079,6 +1079,7 @@ impl Parser {
         loop {
             let op = match self.current_token() {
                 Token::Plus => BinOp::Add,
+                Token::DotPlus => BinOp::BroadcastAdd,
                 Token::Minus => BinOp::Sub,
                 Token::Xor => BinOp::SetSymmetricDifference,
                 _ => break,

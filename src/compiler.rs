@@ -839,6 +839,7 @@ impl Compiler {
                     op,
                     BinOp::Pipe
                         | BinOp::Equivalent
+                        | BinOp::BroadcastAdd
                         | BinOp::In
                         | BinOp::NotIn
                         | BinOp::Subset
@@ -860,6 +861,9 @@ impl Compiler {
                 let opcode = match op {
                     BinOp::Add => OpCode::Add,
                     BinOp::Sub => OpCode::Sub,
+                    BinOp::BroadcastAdd => {
+                        unreachable!("broadcast add handled before opcode emission")
+                    }
                     BinOp::Mul => OpCode::Mul,
                     BinOp::Div => OpCode::Div,
                     BinOp::Mod => OpCode::Mod,

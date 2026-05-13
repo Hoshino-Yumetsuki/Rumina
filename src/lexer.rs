@@ -403,7 +403,12 @@ impl Lexer {
                 }
                 '.' => {
                     self.advance();
-                    Token::Dot
+                    if self.current_char == Some('+') {
+                        self.advance();
+                        Token::DotPlus
+                    } else {
+                        Token::Dot
+                    }
                 }
                 ':' => {
                     self.advance();

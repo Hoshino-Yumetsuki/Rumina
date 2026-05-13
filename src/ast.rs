@@ -285,6 +285,7 @@ pub enum BinOp {
     Sub,  // -
     Mul,  // *
     Div,  // /
+    BroadcastAdd,
     Mod,  // %
     Pow,  // ^
     Pipe, // |>
@@ -323,6 +324,7 @@ impl fmt::Display for BinOp {
             BinOp::Mul => write!(f, "*"),
             BinOp::Div => write!(f, "/"),
             BinOp::Mod => write!(f, "%"),
+            BinOp::BroadcastAdd => write!(f, ".+"),
             BinOp::Pow => write!(f, "^"),
             BinOp::Pipe => write!(f, "|>"),
             BinOp::SetUnion => write!(f, "|"),
@@ -356,6 +358,7 @@ mod tests {
         assert_eq!(BinOp::Div.to_string(), "/");
         assert_eq!(BinOp::Mod.to_string(), "%");
         assert_eq!(BinOp::Pow.to_string(), "^");
+        assert_eq!(BinOp::BroadcastAdd.to_string(), ".+");
         assert_eq!(BinOp::Pipe.to_string(), "|>");
         assert_eq!(BinOp::Equal.to_string(), "==");
         assert_eq!(BinOp::NotEqual.to_string(), "!=");
