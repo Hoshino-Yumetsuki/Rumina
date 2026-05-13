@@ -933,14 +933,14 @@ impl Interpreter {
                     (expr, crate::ast::BinOp::Pow, Expr::Int(1)) => expr,
                     (_, crate::ast::BinOp::Pow, Expr::Int(0)) => Expr::Int(1),
                     (left, crate::ast::BinOp::Sub, right) if left == right => Expr::Int(0),
-                    (left, crate::ast::BinOp::Add, right) => {
-                        Self::normalize_commutative_expr(crate::ast::BinOp::Add, left, right)
-                    }
                     (left, crate::ast::BinOp::Add, right)
                         if profile == "Trig-Basic"
                             && Self::is_trig_pythagorean_identity(&left, &right) =>
                     {
                         Expr::Int(1)
+                    }
+                    (left, crate::ast::BinOp::Add, right) => {
+                        Self::normalize_commutative_expr(crate::ast::BinOp::Add, left, right)
                     }
                     (left, crate::ast::BinOp::Mul, right) => {
                         Self::normalize_commutative_expr(crate::ast::BinOp::Mul, left, right)
@@ -960,9 +960,6 @@ impl Interpreter {
         }
     }
 
-    fn normalize_commutative_expr(op: crate::ast::BinOp, left: Expr, right: Expr) -> Expr {
-        let mut terms = Vec::new();
-        Self::collect_commutative_terms(op, left, &mut terms);
     fn is_trig_pythagorean_identity(left: &Expr, right: &Expr) -> bool {
         let sin_left = Self::trig_square_arg(left, "sin");
         let cos_right = Self::trig_square_arg(right, "cos");
@@ -996,6 +993,9 @@ impl Interpreter {
         }
     }
 
+    fn normalize_commutative_expr(op: crate::ast::BinOp, left: Expr, right: Expr) -> Expr {
+        let mut terms = Vec::new();
+        Self::collect_commutative_terms(op, left, &mut terms);
         Self::collect_commutative_terms(op, right, &mut terms);
 
         terms.sort_by_key(|expr| format!("{:?}", expr));
