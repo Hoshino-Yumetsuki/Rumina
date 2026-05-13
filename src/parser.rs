@@ -1489,6 +1489,20 @@ impl Parser {
         }
 
         self.expect(Token::RBrace)?;
+        if let Some(target_type) = Self::static_match_branch_type(&target) {
+            for arm in &arms {
+                let Some(pattern_type) = Self::static_match_pattern_type(&arm.pattern) else {
+                    continue;
+                };
+                if !Self::match_pattern_types_unify(target_type, pattern_type) {
+                    return Err(format!(
+                        "PatternTypeMismatch: target {} cannot match {} pattern",
+                        target_type, pattern_type
+                    ));
+                }
+            }
+        }
+
         let has_fallback = arms.iter().any(|arm| {
             arm.guard.is_none()
                 && matches!(
@@ -1550,6 +1564,18 @@ impl Parser {
             Expr::Struct(_) | Expr::Table(_) => Some("table"),
             _ => None,
         }
+    }
+
+    fn static_match_pattern_type(pattern: &MatchPattern) -> Option<&'static str> {
+        match pattern {
+            MatchPattern::Wildcard | MatchPattern::Binding(_) => None,
+            MatchPattern::Literal(expr) => Self::static_match_branch_type(expr),
+            MatchPattern::Vector(_) => Some("vector"),
+        }
+    }
+
+    fn match_pattern_types_unify(target_type: &str, pattern_type: &str) -> bool {
+        target_type == pattern_type
     }
 
     fn parse_match_pattern(&mut self) -> Result<MatchPattern, String> {

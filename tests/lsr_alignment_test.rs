@@ -618,6 +618,14 @@ fn test_lsr005_match_branch_type_mismatch_reports_diagnostic() {
     );
 }
 
+#[test]
+fn test_lsr005_match_pattern_type_mismatch_reports_diagnostic() {
+    let error = run_rumina("match 1 { \"one\" => 1, _ => 0 };").unwrap_err();
+    assert!(
+        error.to_string().contains("PatternTypeMismatch"),
+        "expected PatternTypeMismatch diagnostic, got {error}"
+    );
+}
 
 #[test]
 fn test_lsr007_core_equivalence_identities() {
