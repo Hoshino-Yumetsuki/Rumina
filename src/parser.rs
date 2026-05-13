@@ -1715,11 +1715,11 @@ impl Parser {
         if self.match_token(&Token::Pipe) {
             // 有参数列表
             if self.current_token() != &Token::Pipe {
-                param_types.push(self.declared_type_from_current_token());
                 loop {
                     if let Token::Ident(param) = self.current_token() {
                         params.push(param.clone());
                         self.advance();
+                        param_types.push(self.declared_type_from_current_token());
                         self.consume_optional_declared_type();
                     } else {
                         return Err(format!(
