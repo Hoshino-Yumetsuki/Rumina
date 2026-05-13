@@ -131,6 +131,11 @@ fn test_lsr_broadcast_vector_scalar_multiply() {
 }
 
 #[test]
+fn test_lsr_broadcast_vector_scalar_subtract() {
+    let values = expect_vector(run_rumina("vec[5, 7, 9] .- 2;"));
+    assert_eq!(values, vec![Value::Int(3), Value::Int(5), Value::Int(7)]);
+}
+#[test]
 fn test_lsr_broadcast_vector_scalar_equal() {
     let values = expect_vector(run_rumina("vec[1, 2, 3] .== 2;"));
     assert_eq!(
