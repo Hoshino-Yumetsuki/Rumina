@@ -685,26 +685,26 @@ impl Parser {
     fn parse_for(&mut self) -> Result<Stmt, String> {
         self.advance(); // 跳过 for
 
-        if let Token::Ident(name) = self.current_token().clone() {
-            if self.tokens.get(self.current + 1) == Some(&Token::In) {
+        if let Token::Ident(name) = self.current_token().clone()
+            && self.tokens.get(self.current + 1) == Some(&Token::In)
+        {
+            self.advance();
+            self.expect(Token::In)?;
+            let iterable = self.parse_expression()?;
+            let body = if self.current_token() == &Token::LBrace {
                 self.advance();
-                self.expect(Token::In)?;
-                let iterable = self.parse_expression()?;
-                let body = if self.current_token() == &Token::LBrace {
-                    self.advance();
-                    let stmts = self.parse_block_statements()?;
-                    self.expect(Token::RBrace)?;
-                    stmts
-                } else {
-                    vec![self.parse_statement()?]
-                };
+                let stmts = self.parse_block_statements()?;
+                self.expect(Token::RBrace)?;
+                stmts
+            } else {
+                vec![self.parse_statement()?]
+            };
 
-                return Ok(Stmt::ForIn {
-                    name,
-                    iterable,
-                    body,
-                });
-            }
+            return Ok(Stmt::ForIn {
+                name,
+                iterable,
+                body,
+            });
         }
 
         self.expect(Token::LParen)?;

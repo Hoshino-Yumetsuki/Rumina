@@ -1191,32 +1191,31 @@ impl Interpreter {
                     .map(|arg| Self::normalize_equivalence_expr(arg, profile, budget, depth + 1))
                     .collect::<Result<_, _>>()?;
 
-                if profile == "ExpLog-Basic" {
-                    if let Expr::Ident(func_name) = func.as_ref() {
-                        if func_name == "exp" && args.len() == 1 {
-                            if let Expr::Call {
-                                func: inner_func,
-                                args: inner_args,
-                            } = &args[0]
-                            {
-                                if let Expr::Ident(inner_func_name) = inner_func.as_ref() {
-                                    if inner_func_name == "log" && inner_args.len() == 1 {
-                                        budget.rewrite()?;
-                                        return Ok(inner_args[0].clone());
-                                    }
-                                }
-                            }
-                        }
+                if profile == "ExpLog-Basic"
+                    && let Expr::Ident(func_name) = func.as_ref()
+                {
+                    if func_name == "exp"
+                        && args.len() == 1
+                        && let Expr::Call {
+                            func: inner_func,
+                            args: inner_args,
+                        } = &args[0]
+                        && let Expr::Ident(inner_func_name) = inner_func.as_ref()
+                        && inner_func_name == "log"
+                        && inner_args.len() == 1
+                    {
+                        budget.rewrite()?;
+                        return Ok(inner_args[0].clone());
+                    }
 
-                        if func_name == "log" && args == [Expr::Int(1)] {
-                            budget.rewrite()?;
-                            return Ok(Expr::Int(0));
-                        }
+                    if func_name == "log" && args == [Expr::Int(1)] {
+                        budget.rewrite()?;
+                        return Ok(Expr::Int(0));
+                    }
 
-                        if func_name == "exp" && args == [Expr::Int(0)] {
-                            budget.rewrite()?;
-                            return Ok(Expr::Int(1));
-                        }
+                    if func_name == "exp" && args == [Expr::Int(0)] {
+                        budget.rewrite()?;
+                        return Ok(Expr::Int(1));
                     }
                 }
 
