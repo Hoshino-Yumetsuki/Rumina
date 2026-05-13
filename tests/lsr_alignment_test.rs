@@ -1,4 +1,4 @@
-﻿use rumina::{
+锘縰se rumina::{
     Lexer, Parser, Value,
     ast::{ExtensionParamOwnership, Stmt},
     run_rumina,
@@ -947,6 +947,7 @@ fn test_lsr008_rejects_unit_strip_overflow() {
         "expected UnitStripOverflow diagnostic, got {err}"
     );
 }
+
 #[test]
 fn test_lsr008_rejects_non_numeric_unit_strip_with_diagnostic() {
     let err = run_rumina("true as num;").unwrap_err();
