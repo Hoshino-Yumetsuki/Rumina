@@ -990,7 +990,11 @@ fn test_lsr008_rejects_non_numeric_unit_strip_with_diagnostic() {
 
 #[test]
 fn test_lsr008_rejects_legacy_num_unit_syntax() {
-    assert!(run_rumina("42 as num<m>;").is_err());
+    let err = run_rumina("42 as num<m>;").unwrap_err();
+    assert!(
+        err.to_string().contains("UnitStripLegacySyntax"),
+        "expected UnitStripLegacySyntax diagnostic, got {err}"
+    );
 }
 
 #[test]

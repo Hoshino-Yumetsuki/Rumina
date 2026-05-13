@@ -431,7 +431,7 @@ impl Parser {
         declared_type: Option<DeclaredType>,
         is_immutable: bool,
     ) -> Result<Stmt, String> {
-        self.advance(); // 跳过类型关键字或var
+        self.advance(); // 璺宠繃绫诲瀷鍏抽敭瀛楁垨var
 
         let name = if let Token::Ident(n) = self.current_token() {
             n.clone()
@@ -477,7 +477,7 @@ impl Parser {
     }
 
     fn parse_struct_decl(&mut self) -> Result<Stmt, String> {
-        self.advance(); // 跳过 struct
+        self.advance(); // 璺宠繃 struct
 
         let name = if let Token::Ident(n) = self.current_token() {
             n.clone()
@@ -489,11 +489,10 @@ impl Parser {
         };
         self.advance();
 
-        // 解析结构体字面量
+        // 瑙ｆ瀽缁撴瀯浣撳瓧闈㈤噺
         let value = self.parse_struct()?;
 
-        // struct声明不需要分号
-        Ok(Stmt::VarDecl {
+        // struct澹版槑涓嶉渶瑕佸垎鍙?        Ok(Stmt::VarDecl {
             name,
             is_bigint: false,
             declared_type: None,
@@ -530,7 +529,7 @@ impl Parser {
     }
 
     fn parse_func_def_with_decorators(&mut self, decorators: Vec<String>) -> Result<Stmt, String> {
-        self.advance(); // 跳过 func
+        self.advance(); // 璺宠繃 func
 
         let name = if let Token::Ident(n) = self.current_token() {
             n.clone()
@@ -542,7 +541,7 @@ impl Parser {
         };
         self.advance();
 
-        // 参数列表（可选）
+        // 鍙傛暟鍒楄〃锛堝彲閫夛級
         let params = if self.match_token(&Token::LParen) {
             let mut params = Vec::new();
             if self.current_token() != &Token::RParen {
@@ -586,7 +585,7 @@ impl Parser {
     }
 
     fn parse_return(&mut self) -> Result<Stmt, String> {
-        self.advance(); // 跳过 return
+        self.advance(); // 璺宠繃 return
 
         if self.current_token() == &Token::Semicolon {
             self.advance();
@@ -599,29 +598,29 @@ impl Parser {
     }
 
     fn parse_if(&mut self) -> Result<Stmt, String> {
-        self.advance(); // 跳过 if
+        self.advance(); // 璺宠繃 if
 
         let condition = self.parse_expression()?;
 
-        // 支持单行if语句（无大括号）或块if语句（有大括号）
+        // 鏀寔鍗曡if璇彞锛堟棤澶ф嫭鍙凤級鎴栧潡if璇彞锛堟湁澶ф嫭鍙凤級
         let then_branch = if self.current_token() == &Token::LBrace {
-            self.advance(); // 跳过 {
+            self.advance(); // 璺宠繃 {
             let stmts = self.parse_block_statements()?;
             self.expect(Token::RBrace)?;
             stmts
         } else {
-            // 单行if语句
+            // 鍗曡if璇彞
             vec![self.parse_statement()?]
         };
 
         let else_branch = if self.match_token(&Token::Else) {
             if self.current_token() == &Token::LBrace {
-                self.advance(); // 跳过 {
+                self.advance(); // 璺宠繃 {
                 let else_stmts = self.parse_block_statements()?;
                 self.expect(Token::RBrace)?;
                 Some(else_stmts)
             } else {
-                // 单行else语句
+                // 鍗曡else璇彞
                 Some(vec![self.parse_statement()?])
             }
         } else {
@@ -636,18 +635,18 @@ impl Parser {
     }
 
     fn parse_while(&mut self) -> Result<Stmt, String> {
-        self.advance(); // 跳过 while
+        self.advance(); // 璺宠繃 while
 
         let condition = self.parse_expression()?;
 
-        // 支持单行while语句（无大括号）或块while语句（有大括号）
+        // 鏀寔鍗曡while璇彞锛堟棤澶ф嫭鍙凤級鎴栧潡while璇彞锛堟湁澶ф嫭鍙凤級
         let body = if self.current_token() == &Token::LBrace {
-            self.advance(); // 跳过 {
+            self.advance(); // 璺宠繃 {
             let stmts = self.parse_block_statements()?;
             self.expect(Token::RBrace)?;
             stmts
         } else {
-            // 单行while语句
+            // 鍗曡while璇彞
             vec![self.parse_statement()?]
         };
 
@@ -655,16 +654,16 @@ impl Parser {
     }
 
     fn parse_loop(&mut self) -> Result<Stmt, String> {
-        self.advance(); // 跳过 loop
+        self.advance(); // 璺宠繃 loop
 
-        // 支持单行loop语句（无大括号）或块loop语句（有大括号）
+        // 鏀寔鍗曡loop璇彞锛堟棤澶ф嫭鍙凤級鎴栧潡loop璇彞锛堟湁澶ф嫭鍙凤級
         let body = if self.current_token() == &Token::LBrace {
-            self.advance(); // 跳过 {
+            self.advance(); // 璺宠繃 {
             let stmts = self.parse_block_statements()?;
             self.expect(Token::RBrace)?;
             stmts
         } else {
-            // 单行loop语句
+            // 鍗曡loop璇彞
             vec![self.parse_statement()?]
         };
 
@@ -672,25 +671,25 @@ impl Parser {
     }
 
     fn parse_for(&mut self) -> Result<Stmt, String> {
-        self.advance(); // 跳过 for
+        self.advance(); // 璺宠繃 for
 
         self.expect(Token::LParen)?;
 
-        // 解析初始化语句 (可选)
+        // 瑙ｆ瀽鍒濆鍖栬鍙?(鍙€?
         let init = if self.current_token() == &Token::Semicolon {
             None
         } else {
             Some(Box::new(self.parse_statement()?))
         };
 
-        // 如果init不是以分号结尾的，需要consume分号
+        // 濡傛灉init涓嶆槸浠ュ垎鍙风粨灏剧殑锛岄渶瑕乧onsume鍒嗗彿
         if !matches!(self.current_token(), Token::Semicolon) {
-            // init已经消费了分号，不需要再消费
+            // init宸茬粡娑堣垂浜嗗垎鍙凤紝涓嶉渶瑕佸啀娑堣垂
         } else {
-            self.advance(); // 跳过分号
+            self.advance(); // 璺宠繃鍒嗗彿
         }
 
-        // 解析条件表达式 (可选)
+        // 瑙ｆ瀽鏉′欢琛ㄨ揪寮?(鍙€?
         let condition = if self.current_token() == &Token::Semicolon {
             None
         } else {
@@ -698,39 +697,35 @@ impl Parser {
         };
         self.expect(Token::Semicolon)?;
 
-        // 解析更新语句 (可选) - 支持赋值等语句
+        // 瑙ｆ瀽鏇存柊璇彞 (鍙€? - 鏀寔璧嬪€肩瓑璇彞
         let update = if self.current_token() == &Token::RParen {
             None
         } else {
-            // 解析更新部分作为语句（可以是赋值或表达式）
-            // 尝试解析为表达式，然后检查是否是赋值
-            let expr = self.parse_expression()?;
+            // 瑙ｆ瀽鏇存柊閮ㄥ垎浣滀负璇彞锛堝彲浠ユ槸璧嬪€兼垨琛ㄨ揪寮忥級
+            // 灏濊瘯瑙ｆ瀽涓鸿〃杈惧紡锛岀劧鍚庢鏌ユ槸鍚︽槸璧嬪€?            let expr = self.parse_expression()?;
 
-            // 检查是否是赋值
-            let stmt = if self.current_token() == &Token::Equal {
-                self.advance(); // 跳过 =
+            // 妫€鏌ユ槸鍚︽槸璧嬪€?            let stmt = if self.current_token() == &Token::Equal {
+                self.advance(); // 璺宠繃 =
                 let value = self.parse_expression()?;
                 match expr {
                     Expr::Ident(name) => Stmt::Assign { name, value },
                     _ => return Err("Invalid assignment target in for update".to_string()),
                 }
             } else {
-                // 否则作为表达式语句
-                Stmt::Expr(expr)
+                // 鍚﹀垯浣滀负琛ㄨ揪寮忚鍙?                Stmt::Expr(expr)
             };
 
             Some(Box::new(stmt))
         };
         self.expect(Token::RParen)?;
 
-        // 解析循环体
-        let body = if self.current_token() == &Token::LBrace {
-            self.advance(); // 跳过 {
+        // 瑙ｆ瀽寰幆浣?        let body = if self.current_token() == &Token::LBrace {
+            self.advance(); // 璺宠繃 {
             let stmts = self.parse_block_statements()?;
             self.expect(Token::RBrace)?;
             stmts
         } else {
-            // 单行for语句
+            // 鍗曡for璇彞
             vec![self.parse_statement()?]
         };
 
@@ -743,7 +738,7 @@ impl Parser {
     }
 
     fn parse_include(&mut self) -> Result<Stmt, String> {
-        self.advance(); // 跳过 include
+        self.advance(); // 璺宠繃 include
 
         let path = match self.current_token() {
             Token::String(p) => p.clone(),
@@ -757,7 +752,7 @@ impl Parser {
         };
         self.advance();
 
-        // 分号是可选的
+        // 鍒嗗彿鏄彲閫夌殑
         self.match_token(&Token::Semicolon);
         Ok(Stmt::Include(path))
     }
@@ -906,7 +901,7 @@ impl Parser {
         Ok(statements)
     }
 
-    // 表达式解析（优先级从低到高）
+    // 琛ㄨ揪寮忚В鏋愶紙浼樺厛绾т粠浣庡埌楂橈級
     fn parse_expression(&mut self) -> Result<Expr, String> {
         self.parse_as_expression()
     }
@@ -953,7 +948,9 @@ impl Parser {
             };
 
             if self.current_token() == &Token::Less {
-                return Err("legacy as num<_> syntax is not supported".to_string());
+                return Err(
+                    "UnitStripLegacySyntax: legacy as num<_> syntax is not supported".to_string(),
+                );
             }
 
             expr = Expr::UnitStrip {
@@ -1167,8 +1164,7 @@ impl Parser {
         let mut left = self.parse_unary()?;
 
         if self.match_token(&Token::Caret) {
-            let right = self.parse_power()?; // 右结合
-            left = Expr::Binary {
+            let right = self.parse_power()?; // 鍙崇粨鍚?            left = Expr::Binary {
                 left: Box::new(left),
                 op: BinOp::Pow,
                 right: Box::new(right),
@@ -1206,7 +1202,7 @@ impl Parser {
         loop {
             match self.current_token() {
                 Token::LParen => {
-                    // 函数调用
+                    // 鍑芥暟璋冪敤
                     self.advance();
                     let args = self.parse_arguments()?;
                     self.expect(Token::RParen)?;
@@ -1216,7 +1212,7 @@ impl Parser {
                     };
                 }
                 Token::LBracket => {
-                    // 索引访问
+                    // 绱㈠紩璁块棶
                     self.advance();
                     let mut indices = vec![self.parse_index_component()?];
                     while self.match_token(&Token::Comma) {
@@ -1353,7 +1349,7 @@ impl Parser {
             }
             Token::Ident(name) => {
                 self.advance();
-                // 检查是否是命名空间访问
+                // 妫€鏌ユ槸鍚︽槸鍛藉悕绌洪棿璁块棶
                 if self.match_token(&Token::DoubleColon) {
                     if let Token::Ident(member) = self.current_token() {
                         let member = member.clone();
@@ -1391,7 +1387,7 @@ impl Parser {
             }
             Token::TypeString => {
                 self.advance();
-                // 检查是否是命名空间访问
+                // 妫€鏌ユ槸鍚︽槸鍛藉悕绌洪棿璁块棶
                 if self.match_token(&Token::DoubleColon) {
                     if let Token::Ident(member) = self.current_token() {
                         let member = member.clone();
@@ -1753,13 +1749,12 @@ impl Parser {
             let value = self.parse_expression()?;
             fields.push((name, value));
 
-            // 字段后可以有分号或逗号，也可以没有
+            // 瀛楁鍚庡彲浠ユ湁鍒嗗彿鎴栭€楀彿锛屼篃鍙互娌℃湁
             if !self.match_token(&Token::Semicolon) {
                 self.match_token(&Token::Comma);
             }
 
-            // 如果下一个是右大括号，退出循环
-            if self.current_token() == &Token::RBrace {
+            // 濡傛灉涓嬩竴涓槸鍙冲ぇ鎷彿锛岄€€鍑哄惊鐜?            if self.current_token() == &Token::RBrace {
                 break;
             }
         }
@@ -1774,11 +1769,10 @@ impl Parser {
         }
         let mut param_types = Vec::new();
 
-        // 检查是否有参数列表（以 | 开始）
+        // 妫€鏌ユ槸鍚︽湁鍙傛暟鍒楄〃锛堜互 | 寮€濮嬶級
         let mut params = Vec::new();
         if self.match_token(&Token::Pipe) {
-            // 有参数列表
-            if self.current_token() != &Token::Pipe {
+            // 鏈夊弬鏁板垪琛?            if self.current_token() != &Token::Pipe {
                 loop {
                     if let Token::Ident(param) = self.current_token() {
                         params.push(param.clone());
@@ -1805,7 +1799,7 @@ impl Parser {
             let expr = self.parse_expression()?;
             Box::new(Stmt::Return(Some(expr)))
         } else {
-            // 完整形式: do |a, b| { ... } 或 do { ... }
+            // 瀹屾暣褰㈠紡: do |a, b| { ... } 鎴?do { ... }
             self.expect(Token::LBrace)?;
             let stmts = self.parse_block_statements()?;
             self.expect(Token::RBrace)?;
