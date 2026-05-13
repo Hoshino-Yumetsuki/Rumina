@@ -124,7 +124,6 @@ fn test_lsr_broadcast_vector_scalar_add() {
     assert_eq!(values, vec![Value::Int(2), Value::Int(3), Value::Int(4)]);
 }
 
-
 fn value_strings(values: Vec<Value>) -> Vec<String> {
     values.into_iter().map(|value| value.to_string()).collect()
 }
@@ -132,6 +131,7 @@ fn value_strings(values: Vec<Value>) -> Vec<String> {
 fn matrix_value_strings(rows: Vec<Vec<Value>>) -> Vec<Vec<String>> {
     rows.into_iter().map(value_strings).collect()
 }
+
 #[test]
 fn test_lsr_broadcast_vector_scalar_multiply() {
     let values = expect_vector(run_rumina("vec[1, 2, 3] .* 2;"));
@@ -152,7 +152,6 @@ fn test_lsr_broadcast_vector_scalar_equal() {
         vec![Value::Bool(false), Value::Bool(true), Value::Bool(false)]
     );
 }
-
 
 #[test]
 fn test_lsr_broadcast_vector_scalar_remaining_dotted_operators() {
@@ -230,6 +229,7 @@ fn test_lsr_broadcast_matrix_scalar_and_same_shape_matrices() {
         ]
     );
 }
+
 #[test]
 fn test_legacy_logical_operators_are_rejected() {
     assert!(
@@ -523,6 +523,7 @@ fn test_lsr004_std_stats_accept_vector_signature() {
         result
     );
 }
+
 #[test]
 fn test_lsr004_stdlib_diagnostic_codes() {
     let domain_error = run_rumina("import std.math; math.log(-1);").unwrap_err();
@@ -561,6 +562,7 @@ fn test_lsr004_std_stats_cov_corr_accept_vectors() {
         result
     );
 }
+
 #[test]
 fn test_lsr004_std_units_dimensionless_helpers() {
     let result = run_rumina(
@@ -584,6 +586,7 @@ fn test_lsr004_std_units_helpers_follow_unit_expression_semantics() {
         other => panic!("Expected Bool(true), got {:?}", other),
     }
 }
+
 #[test]
 fn test_lsr000_matrix_direct_two_dimensional_indexing() {
     let result = expect_int(run_rumina("let m = mat[1, 2, 3; 4, 5, 6]; m[2, 3];"));
@@ -673,6 +676,7 @@ fn test_lsr004_std_linalg_diagnostic_codes() {
         "expected SingularMatrix diagnostic, got {singular}"
     );
 }
+
 #[test]
 fn test_lsr000_matrix_left_division_operator_solves_linear_system() {
     let rows = expect_matrix(run_rumina(
@@ -1005,6 +1009,58 @@ fn test_lsr000_table_write_requires_mutable_binding() {
 }
 
 #[test]
+fn test_lsr000_vector_assignment_detaches_mutable_alias() {
+    let result = run_rumina(
+        "var original = vec[1, 2]; var alias = original; alias[1] = 9; original[1] == 1 and alias[1] == 9;",
+    )
+    .unwrap();
+
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_lsr000_matrix_assignment_detaches_mutable_alias() {
+    let result = run_rumina(
+        "var original = mat[1, 2; 3, 4]; var alias = original; alias[1, 2] = 9; original[1, 2] == 2 and alias[1, 2] == 9;",
+    )
+    .unwrap();
+
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_lsr000_table_assignment_detaches_mutable_alias() {
+    let result = run_rumina(
+        "var original = table{\"alice\" => 98}; var alias = original; alias[\"alice\"] = 100; original[\"alice\"] == 98 and alias[\"alice\"] == 100;",
+    )
+    .unwrap();
+
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_lsr000_container_function_parameter_detaches_mutable_alias() {
+    let result = run_rumina(
+        "func mutate(value) { value[1] = 9; } var original = vec[1, 2]; mutate(original); original[1] == 1;",
+    )
+    .unwrap();
+
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
 fn test_lsr000_table_has_helper_returns_bool() {
     let result = run_rumina(
         "let scores = table{\"alice\" => 98}; scores.has(\"alice\") and not scores.has(\"bob\");",
@@ -1296,6 +1352,39 @@ fn test_lsr000_function_accepts_typed_signature() {
 }
 
 #[test]
+fn test_lsr000_if_is_expression_in_binding() {
+    let result = expect_int(run_rumina(
+        "let x = -7; let y = if x < 0 { -x; } else { x; }; y;",
+    ));
+    assert_eq!(result, 7);
+}
+
+#[test]
+fn test_lsr000_counted_loop_evaluates_count_once() {
+    let result = expect_int(run_rumina(
+        "var n = 3; var total = 0; loop n { total = total + 1; n = n + 10; } total;",
+    ));
+    assert_eq!(result, 3);
+}
+
+#[test]
+fn test_lsr000_counted_loop_rejects_negative_count() {
+    let error = run_rumina("loop -1 { 1; };").unwrap_err();
+    assert!(
+        error.to_string().contains("LoopCountInvalid"),
+        "expected LoopCountInvalid diagnostic, got {error}"
+    );
+}
+
+#[test]
+fn test_lsr000_for_in_iterates_vector_with_break_and_continue() {
+    let result = expect_int(run_rumina(
+        "var total = 0; for n in vec[1, 2, 3, 4, 5] { if n == 2 { continue; } if n == 5 { break; } total = total + n; } total;",
+    ));
+    assert_eq!(result, 8);
+}
+
+#[test]
 fn test_lsr003_extension_module_signature_parses() {
     let mut lexer = rumina::Lexer::new(
         r#"
@@ -1422,6 +1511,7 @@ module example {
         "expected TableKeyTypeError for string key type, got {error}"
     );
 }
+
 #[test]
 fn test_lsr003_extension_func_requires_c_symbol_string() {
     let mut lexer = rumina::Lexer::new(

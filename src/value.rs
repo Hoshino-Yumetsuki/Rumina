@@ -79,6 +79,108 @@ pub enum IrrationalValue {
 }
 
 impl Value {
+    pub fn deep_clone_containers(&self) -> Value {
+        match self {
+            Value::Complex(real, imaginary) => Value::Complex(
+                Box::new(real.deep_clone_containers()),
+                Box::new(imaginary.deep_clone_containers()),
+            ),
+            Value::UnitNumber { value, unit, scale } => Value::UnitNumber {
+                value: Box::new(value.deep_clone_containers()),
+                unit: unit.clone(),
+                scale: *scale,
+            },
+            Value::Set(values) => {
+                Value::Set(values.iter().map(Value::deep_clone_containers).collect())
+            }
+            Value::MultiValue(values) => {
+                Value::MultiValue(values.iter().map(Value::deep_clone_containers).collect())
+            }
+            Value::Result { ok, value } => Value::Result {
+                ok: *ok,
+                value: Box::new(value.deep_clone_containers()),
+            },
+            Value::Option(value) => Value::Option(
+                value
+                    .as_ref()
+                    .map(|value| Box::new(value.deep_clone_containers())),
+            ),
+            Value::Array(values) => Value::Array(Rc::new(RefCell::new(
+                values
+                    .borrow()
+                    .iter()
+                    .map(Value::deep_clone_containers)
+                    .collect(),
+            ))),
+            Value::Vector(values) => Value::Vector(Rc::new(RefCell::new(
+                values
+                    .borrow()
+                    .iter()
+                    .map(Value::deep_clone_containers)
+                    .collect(),
+            ))),
+            Value::Matrix(rows) => Value::Matrix(Rc::new(RefCell::new(
+                rows.borrow()
+                    .iter()
+                    .map(|row| row.iter().map(Value::deep_clone_containers).collect())
+                    .collect(),
+            ))),
+            Value::Struct(fields) => Value::Struct(Rc::new(RefCell::new(
+                fields
+                    .borrow()
+                    .iter()
+                    .map(|(key, value)| (key.clone(), value.deep_clone_containers()))
+                    .collect(),
+            ))),
+            Value::Lambda {
+                params,
+                body,
+                closure,
+            } => Value::Lambda {
+                params: params.clone(),
+                body: body.clone(),
+                closure: Rc::new(RefCell::new(
+                    closure
+                        .borrow()
+                        .iter()
+                        .map(|(key, value)| (key.clone(), value.deep_clone_containers()))
+                        .collect(),
+                )),
+            },
+            Value::Module(fields) => Value::Module(Rc::new(RefCell::new(
+                fields
+                    .borrow()
+                    .iter()
+                    .map(|(key, value)| (key.clone(), value.deep_clone_containers()))
+                    .collect(),
+            ))),
+            Value::CurriedFunction {
+                original,
+                collected_args,
+                total_params,
+            } => Value::CurriedFunction {
+                original: Box::new(original.deep_clone_containers()),
+                collected_args: collected_args
+                    .iter()
+                    .map(Value::deep_clone_containers)
+                    .collect(),
+                total_params: *total_params,
+            },
+            Value::Expr(expr) => Value::Expr(expr.clone()),
+            Value::MemoizedFunction { original, cache } => Value::MemoizedFunction {
+                original: Box::new(original.deep_clone_containers()),
+                cache: Rc::new(RefCell::new(
+                    cache
+                        .borrow()
+                        .iter()
+                        .map(|(key, value)| (key.clone(), value.deep_clone_containers()))
+                        .collect(),
+                )),
+            },
+            other => other.clone(),
+        }
+    }
+
     pub fn type_name(&self) -> &str {
         match self {
             Value::Int(_) => "int",

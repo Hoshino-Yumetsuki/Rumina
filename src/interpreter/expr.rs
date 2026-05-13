@@ -958,6 +958,22 @@ impl Interpreter {
                 Err("Match expression did not match any arm".to_string())
             }
 
+            Expr::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                let condition = self.eval_expr(condition)?;
+                let branch = if condition.is_truthy() {
+                    then_branch
+                } else {
+                    else_branch
+                };
+                self.execute_stmts_for_last_value(branch)
+                    .map_err(|err| err.to_string())?
+                    .ok_or_else(|| "If expression branch did not produce a value".to_string())
+            }
+
             Expr::Namespace { module, name } => {
                 // 尝试从模块中获取
                 let module_val = self.get_variable(module)?;
@@ -1020,7 +1036,8 @@ impl Interpreter {
             | Expr::Lambda { .. }
             | Expr::Try(_)
             | Expr::Range { .. }
-            | Expr::Match { .. } => false,
+            | Expr::Match { .. }
+            | Expr::If { .. } => false,
             Expr::Binary { left, op, right } => {
                 matches!(
                     op,
@@ -1384,7 +1401,7 @@ impl Interpreter {
             Expr::Range { start, end } => {
                 1 + Self::equivalence_node_count(start) + Self::equivalence_node_count(end)
             }
-            Expr::Lambda { .. } | Expr::Match { .. } => 1,
+            Expr::Lambda { .. } | Expr::Match { .. } | Expr::If { .. } => 1,
             Expr::Namespace { .. }
             | Expr::Int(_)
             | Expr::BigInt(_)

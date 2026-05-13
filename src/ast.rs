@@ -112,8 +112,15 @@ pub enum Stmt {
         body: Vec<Stmt>,
     },
 
+    ForIn {
+        name: String,
+        iterable: Expr,
+        body: Vec<Stmt>,
+    },
+
     // Loop循环
     Loop {
+        count: Expr,
         body: Vec<Stmt>,
     },
 
@@ -251,6 +258,12 @@ pub enum Expr {
     Match {
         target: Box<Expr>,
         arms: Vec<MatchArm>,
+    },
+
+    If {
+        condition: Box<Expr>,
+        then_branch: Vec<Stmt>,
+        else_branch: Vec<Stmt>,
     },
 
     // 命名空间访问

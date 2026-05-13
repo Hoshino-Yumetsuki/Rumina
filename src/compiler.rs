@@ -1136,6 +1136,12 @@ impl Compiler {
                 ));
             }
 
+            Expr::If { .. } => {
+                return Err(RuminaError::runtime(
+                    "if expressions are not yet supported by the bytecode compiler".to_string(),
+                ));
+            }
+
             Expr::Try(_) => {
                 return Err(RuminaError::runtime(
                     "? operator is not yet supported by the bytecode compiler".to_string(),

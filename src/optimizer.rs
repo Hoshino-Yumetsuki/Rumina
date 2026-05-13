@@ -189,6 +189,31 @@ impl ASTOptimizer {
                 }))
             }
 
+            Stmt::ForIn {
+                name,
+                iterable,
+                body,
+            } => {
+                let opt_iterable = self.optimize_expr(iterable)?;
+                let opt_body = self.optimize_stmts(body)?;
+
+                Ok(Some(Stmt::ForIn {
+                    name,
+                    iterable: opt_iterable,
+                    body: opt_body,
+                }))
+            }
+
+            Stmt::Loop { count, body } => {
+                let opt_count = self.optimize_expr(count)?;
+                let opt_body = self.optimize_stmts(body)?;
+
+                Ok(Some(Stmt::Loop {
+                    count: opt_count,
+                    body: opt_body,
+                }))
+            }
+
             Stmt::Return(expr) => {
                 let opt_expr = if let Some(e) = expr {
                     Some(self.optimize_expr(e)?)

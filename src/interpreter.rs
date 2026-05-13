@@ -42,6 +42,7 @@ pub struct Interpreter {
     return_value: Option<Value>,
     break_flag: bool,
     continue_flag: bool,
+    loop_depth: usize,
     // Error tracking fields
     current_file: String,
     call_stack: Vec<String>, // Stack of function names
@@ -72,6 +73,7 @@ impl Interpreter {
             return_value: None,
             break_flag: false,
             continue_flag: false,
+            loop_depth: 0,
             current_file: "<unknown>".to_string(),
             call_stack: Vec::new(),
             recursion_depth: 0,
@@ -152,6 +154,10 @@ impl Interpreter {
                 }
             }
             Stmt::Block(stmts) => self.execute_stmts_for_last_value(stmts),
+            Stmt::Break | Stmt::Continue if self.loop_depth == 0 => self
+                .execute_stmt(stmt)
+                .map_err(|err| self.wrap_error(err))
+                .map(|_| None),
             _ => {
                 self.execute_stmt(stmt)
                     .map_err(|err| self.wrap_error(err))?;
@@ -160,7 +166,7 @@ impl Interpreter {
         }
     }
 
-    fn execute_stmts_for_last_value(
+    pub(super) fn execute_stmts_for_last_value(
         &mut self,
         stmts: &[Stmt],
     ) -> Result<Option<Value>, RuminaError> {
@@ -196,6 +202,7 @@ impl Interpreter {
     }
 
     fn set_variable(&mut self, name: String, value: Value, immutable: bool) {
+        let value = value.deep_clone_containers();
         if let Some(local) = self.locals.last() {
             local.borrow_mut().insert(name.clone(), value);
             if immutable && let Some(immutable_scope) = self.immutable_locals.last_mut() {
@@ -236,12 +243,16 @@ impl Interpreter {
         // Assign to nearest existing scope
         for scope in self.locals.iter().rev() {
             if scope.borrow().contains_key(&name) {
-                scope.borrow_mut().insert(name, value);
+                scope
+                    .borrow_mut()
+                    .insert(name, value.deep_clone_containers());
                 return Ok(());
             }
         }
 
-        self.globals.borrow_mut().insert(name, value);
+        self.globals
+            .borrow_mut()
+            .insert(name, value.deep_clone_containers());
         Ok(())
     }
 

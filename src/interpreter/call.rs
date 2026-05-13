@@ -89,7 +89,7 @@ impl Interpreter {
                 // 创建新的局部作用域
                 let mut local_scope = HashMap::new();
                 for (param, arg) in params.iter().zip(args.iter()) {
-                    local_scope.insert(param.clone(), arg.clone());
+                    local_scope.insert(param.clone(), arg.deep_clone_containers());
                 }
                 self.locals.push(Rc::new(RefCell::new(local_scope)));
                 self.immutable_locals.push(std::collections::HashSet::new());
@@ -153,7 +153,7 @@ impl Interpreter {
                 // 使用闭包作为基础作用域
                 let mut local_scope = closure.borrow().clone();
                 for (param, arg) in params.iter().zip(args.iter()) {
-                    local_scope.insert(param.clone(), arg.clone());
+                    local_scope.insert(param.clone(), arg.deep_clone_containers());
                 }
                 self.locals.push(Rc::new(RefCell::new(local_scope)));
                 self.immutable_locals.push(std::collections::HashSet::new());
@@ -230,7 +230,7 @@ impl Interpreter {
                 let mut local_scope = HashMap::new();
                 local_scope.insert("self".to_string(), self_obj);
                 for (param, arg) in params.iter().zip(args.iter()) {
-                    local_scope.insert(param.clone(), arg.clone());
+                    local_scope.insert(param.clone(), arg.deep_clone_containers());
                 }
                 self.locals.push(Rc::new(RefCell::new(local_scope)));
                 self.immutable_locals.push(std::collections::HashSet::new());
@@ -273,7 +273,7 @@ impl Interpreter {
                 let mut local_scope = closure.borrow().clone();
                 local_scope.insert("self".to_string(), self_obj);
                 for (param, arg) in params.iter().zip(args.iter()) {
-                    local_scope.insert(param.clone(), arg.clone());
+                    local_scope.insert(param.clone(), arg.deep_clone_containers());
                 }
                 self.locals.push(Rc::new(RefCell::new(local_scope)));
                 self.immutable_locals.push(std::collections::HashSet::new());

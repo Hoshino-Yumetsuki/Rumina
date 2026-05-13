@@ -403,7 +403,7 @@ impl Interpreter {
                 value,
             } => {
                 let val = self.eval_expr(value)?;
-                let key = self.eval_expr(index)?.to_string();
+                let index_value = self.eval_expr(index)?;
 
                 if let Expr::Ident(var_name) = object {
                     if self.is_immutable_binding(var_name) {
@@ -416,7 +416,51 @@ impl Interpreter {
                     let obj = self.eval_expr(object)?;
                     match obj {
                         Value::Struct(s) => {
-                            s.borrow_mut().insert(key, val);
+                            s.borrow_mut().insert(index_value.to_string(), val);
+                            Ok(())
+                        }
+                        Value::Vector(values) => {
+                            let index = index_value.to_int()?;
+                            if index <= 0 {
+                                return Err(format!("Vector index out of bounds: {}", index));
+                            }
+
+                            let mut values = values.borrow_mut();
+                            let slot = values
+                                .get_mut((index - 1) as usize)
+                                .ok_or_else(|| format!("Vector index out of bounds: {}", index))?;
+                            *slot = val;
+                            Ok(())
+                        }
+                        Value::Matrix(rows) => {
+                            let Expr::Multi(indices) = index else {
+                                return Err(
+                                    "Matrix assignment expects row and column indices".to_string()
+                                );
+                            };
+                            if indices.len() != 2 {
+                                return Err(
+                                    "Matrix assignment expects row and column indices".to_string()
+                                );
+                            }
+
+                            let row = self.eval_expr(&indices[0])?.to_int()?;
+                            let col = self.eval_expr(&indices[1])?.to_int()?;
+                            if row <= 0 {
+                                return Err(format!("Matrix row index out of bounds: {}", row));
+                            }
+                            if col <= 0 {
+                                return Err(format!("Matrix column index out of bounds: {}", col));
+                            }
+
+                            let mut rows = rows.borrow_mut();
+                            let row_values = rows.get_mut((row - 1) as usize).ok_or_else(|| {
+                                format!("Matrix row index out of bounds: {}", row)
+                            })?;
+                            let slot = row_values.get_mut((col - 1) as usize).ok_or_else(|| {
+                                format!("Matrix column index out of bounds: {}", col)
+                            })?;
+                            *slot = val;
                             Ok(())
                         }
                         _ => Err(format!("Cannot assign index to {}", obj.type_name())),
@@ -425,7 +469,7 @@ impl Interpreter {
                     let obj = self.eval_expr(object)?;
                     match obj {
                         Value::Struct(s) => {
-                            s.borrow_mut().insert(key, val);
+                            s.borrow_mut().insert(index_value.to_string(), val);
                             Ok(())
                         }
                         _ => Err(format!("Cannot assign index to {}", obj.type_name())),
@@ -495,6 +539,7 @@ impl Interpreter {
             }
 
             Stmt::While { condition, body } => {
+                self.loop_depth += 1;
                 loop {
                     let cond = self.eval_expr(condition)?;
                     if !cond.is_truthy() {
@@ -517,11 +562,18 @@ impl Interpreter {
                         break;
                     }
                 }
+                self.loop_depth -= 1;
                 Ok(())
             }
 
-            Stmt::Loop { body } => {
-                loop {
+            Stmt::Loop { count, body } => {
+                let count = self.eval_expr(count)?.to_int()?;
+                if count < 0 {
+                    return Err("LoopCountInvalid: loop count must be non-negative".to_string());
+                }
+
+                self.loop_depth += 1;
+                for _ in 0..count {
                     for stmt in body {
                         self.execute_stmt(stmt)?;
                         if self.return_value.is_some() || self.break_flag {
@@ -538,6 +590,7 @@ impl Interpreter {
                         break;
                     }
                 }
+                self.loop_depth -= 1;
                 Ok(())
             }
 
@@ -547,6 +600,7 @@ impl Interpreter {
                 update,
                 body,
             } => {
+                self.loop_depth += 1;
                 // 执行初始化语句（如果有）
                 if let Some(init_stmt) = init {
                     self.execute_stmt(init_stmt)?;
@@ -585,15 +639,55 @@ impl Interpreter {
                         self.execute_stmt(upd)?;
                     }
                 }
+                self.loop_depth -= 1;
+                Ok(())
+            }
+
+            Stmt::ForIn {
+                name,
+                iterable,
+                body,
+            } => {
+                let values = match self.eval_expr(iterable)? {
+                    Value::Vector(values) | Value::Array(values) => values.borrow().clone(),
+                    other => return Err(format!("Cannot iterate over {}", other.type_name())),
+                };
+
+                self.loop_depth += 1;
+                for value in values {
+                    self.set_variable(name.clone(), value, true);
+                    for stmt in body {
+                        self.execute_stmt(stmt)?;
+                        if self.return_value.is_some() || self.break_flag {
+                            break;
+                        }
+                        if self.continue_flag {
+                            self.continue_flag = false;
+                            break;
+                        }
+                    }
+
+                    if self.return_value.is_some() || self.break_flag {
+                        self.break_flag = false;
+                        break;
+                    }
+                }
+                self.loop_depth -= 1;
                 Ok(())
             }
 
             Stmt::Break => {
+                if self.loop_depth == 0 {
+                    return Err("Break outside of loop".to_string());
+                }
                 self.break_flag = true;
                 Ok(())
             }
 
             Stmt::Continue => {
+                if self.loop_depth == 0 {
+                    return Err("Continue outside of loop".to_string());
+                }
                 self.continue_flag = true;
                 Ok(())
             }

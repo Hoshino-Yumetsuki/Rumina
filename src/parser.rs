@@ -666,6 +666,8 @@ impl Parser {
     fn parse_loop(&mut self) -> Result<Stmt, String> {
         self.advance(); // 跳过 loop
 
+        let count = self.parse_expression()?;
+
         // 支持单行loop语句（无大括号）或块loop语句（有大括号）
         let body = if self.current_token() == &Token::LBrace {
             self.advance(); // 跳过 {
@@ -677,11 +679,33 @@ impl Parser {
             vec![self.parse_statement()?]
         };
 
-        Ok(Stmt::Loop { body })
+        Ok(Stmt::Loop { count, body })
     }
 
     fn parse_for(&mut self) -> Result<Stmt, String> {
         self.advance(); // 跳过 for
+
+        if let Token::Ident(name) = self.current_token().clone() {
+            if self.tokens.get(self.current + 1) == Some(&Token::In) {
+                self.advance();
+                self.expect(Token::In)?;
+                let iterable = self.parse_expression()?;
+                let body = if self.current_token() == &Token::LBrace {
+                    self.advance();
+                    let stmts = self.parse_block_statements()?;
+                    self.expect(Token::RBrace)?;
+                    stmts
+                } else {
+                    vec![self.parse_statement()?]
+                };
+
+                return Ok(Stmt::ForIn {
+                    name,
+                    iterable,
+                    body,
+                });
+            }
+        }
 
         self.expect(Token::LParen)?;
 
@@ -1184,11 +1208,16 @@ impl Parser {
     fn parse_power(&mut self) -> Result<Expr, String> {
         let mut left = self.parse_unary()?;
 
-        if self.match_token(&Token::Caret) {
+        if self.match_token(&Token::Caret) || self.match_token(&Token::DotCaret) {
+            let op = if self.tokens.get(self.current - 1) == Some(&Token::DotCaret) {
+                BinOp::BroadcastPow
+            } else {
+                BinOp::Pow
+            };
             let right = self.parse_power()?; // 右结合
             left = Expr::Binary {
                 left: Box::new(left),
-                op: BinOp::Pow,
+                op,
                 right: Box::new(right),
             };
         }
@@ -1456,10 +1485,31 @@ impl Parser {
                 Ok(expr)
             }
             Token::Do => self.parse_lambda(false),
+            Token::If => self.parse_if_expression(),
             Token::Pipe => self.parse_lambda(true),
             Token::Match => self.parse_match(),
             _ => Err(format!("Unexpected token: {:?}", self.current_token())),
         }
+    }
+
+    fn parse_if_expression(&mut self) -> Result<Expr, String> {
+        self.expect(Token::If)?;
+        let condition = self.parse_expression()?;
+
+        self.expect(Token::LBrace)?;
+        let then_branch = self.parse_block_statements()?;
+        self.expect(Token::RBrace)?;
+
+        self.expect(Token::Else)?;
+        self.expect(Token::LBrace)?;
+        let else_branch = self.parse_block_statements()?;
+        self.expect(Token::RBrace)?;
+
+        Ok(Expr::If {
+            condition: Box::new(condition),
+            then_branch,
+            else_branch,
+        })
     }
 
     fn parse_match(&mut self) -> Result<Expr, String> {

@@ -215,7 +215,28 @@ fn check_lsr006_lambda_capture_mutation(statements: &[ast::Stmt]) -> Result<(), 
                 }
                 scopes.pop();
             }
-            ast::Stmt::Loop { body } | ast::Stmt::Block(body) => {
+            ast::Stmt::ForIn {
+                name,
+                iterable,
+                body,
+            } => {
+                expr_check(iterable, scopes, lambda_depth)?;
+                scopes.push(std::collections::HashMap::from([(
+                    name.clone(),
+                    BindingKind::Immutable,
+                )]));
+                for stmt in body {
+                    stmt_check(stmt, scopes, lambda_depth)?;
+                }
+                scopes.pop();
+            }
+            ast::Stmt::Loop { count, body } => {
+                expr_check(count, scopes, lambda_depth)?;
+                for stmt in body {
+                    stmt_check(stmt, scopes, lambda_depth)?;
+                }
+            }
+            ast::Stmt::Block(body) => {
                 for stmt in body {
                     stmt_check(stmt, scopes, lambda_depth)?;
                 }
@@ -317,6 +338,19 @@ fn check_lsr006_lambda_capture_mutation(statements: &[ast::Stmt]) -> Result<(), 
                     expr_check(&arm.expr, scopes, lambda_depth)?;
                 }
             }
+            ast::Expr::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                expr_check(condition, scopes, lambda_depth)?;
+                for stmt in then_branch {
+                    stmt_check(stmt, scopes, lambda_depth)?;
+                }
+                for stmt in else_branch {
+                    stmt_check(stmt, scopes, lambda_depth)?;
+                }
+            }
             ast::Expr::Int(_)
             | ast::Expr::BigInt(_)
             | ast::Expr::Float(_)
@@ -390,7 +424,8 @@ fn should_use_interpreter_runtime(statements: &[ast::Stmt]) -> bool {
                         .unwrap_or(false)
                     || body.iter().any(stmt_requires_interpreter)
             }
-            ast::Stmt::Loop { body } => body.iter().any(stmt_requires_interpreter),
+            ast::Stmt::ForIn { .. } => true,
+            ast::Stmt::Loop { .. } => true,
             _ => false,
         }
     }
@@ -436,6 +471,7 @@ fn should_use_interpreter_runtime(statements: &[ast::Stmt]) -> bool {
             ast::Expr::Table(_) => true,
             ast::Expr::Lambda { body, .. } => stmt_requires_interpreter(body),
             ast::Expr::Match { .. } => true,
+            ast::Expr::If { .. } => true,
             ast::Expr::Multi(_) => true,
             _ => false,
         }
