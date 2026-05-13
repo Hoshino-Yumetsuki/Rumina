@@ -318,6 +318,7 @@ impl Parser {
         self.expect(Token::LParen)
             .map_err(|err| format!("InterfaceBindError: {err}"))?;
         let mut params = Vec::new();
+        let mut param_ownership = Vec::new();
         if self.current_token() != &Token::RParen {
             loop {
                 let param_name = if let Token::Ident(param) = self.current_token() {
@@ -332,6 +333,7 @@ impl Parser {
                 };
                 let param_type = self.parse_extension_type()?;
                 params.push((param_name, param_type));
+                param_ownership.push(self.parse_extension_param_ownership()?);
 
                 if !self.match_token(&Token::Comma) {
                     break;
@@ -363,9 +365,29 @@ impl Parser {
         Ok(ExtensionFunction {
             name,
             params,
+            param_ownership,
             return_type,
             symbol,
         })
+    }
+
+    fn parse_extension_param_ownership(&mut self) -> Result<ExtensionParamOwnership, String> {
+        if !self.match_token(&Token::At) {
+            return Ok(ExtensionParamOwnership::Readonly);
+        }
+
+        let ownership = match self.current_token() {
+            Token::Ident(name) if name == "readonly" => ExtensionParamOwnership::Readonly,
+            Token::Ident(name) if name == "move" => ExtensionParamOwnership::Move,
+            other => {
+                return Err(format!(
+                    "InterfaceBindError: expected extension ownership annotation @readonly or @move, found {:?}",
+                    other
+                ));
+            }
+        };
+        self.advance();
+        Ok(ownership)
     }
 
     fn parse_extension_type(&mut self) -> Result<String, String> {

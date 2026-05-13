@@ -17,11 +17,19 @@ pub enum DeclaredType {
     BigInt,
 }
 
+/// LSR-003 extension parameter ownership annotation.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExtensionParamOwnership {
+    Readonly,
+    Move,
+}
+
 /// LSR-003 extension interface function binding.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExtensionFunction {
     pub name: String,
     pub params: Vec<(String, String)>,
+    pub param_ownership: Vec<ExtensionParamOwnership>,
     pub return_type: String,
     pub symbol: String,
 }

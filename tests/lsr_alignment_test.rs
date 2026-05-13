@@ -1,4 +1,8 @@
-use rumina::{Lexer, Parser, Value, ast::Stmt, run_rumina};
+use rumina::{
+    Lexer, Parser, Value,
+    ast::{ExtensionParamOwnership, Stmt},
+    run_rumina,
+};
 
 fn expect_int(result: Result<Option<Value>, rumina::RuminaError>) -> i64 {
     match result.unwrap() {
@@ -907,6 +911,36 @@ fn test_lsr003_extension_func_requires_c_symbol_string() {
 }
 
 #[test]
+#[test]
+fn test_lsr003_extension_param_move_annotation_parses() {
+    let mut lexer = rumina::Lexer::new(
+        r#"
+module example {
+  func consume(t table<string,num> @move) -> bool = "c_ext_consume";
+}
+"#
+        .to_string(),
+    );
+    let mut parser = rumina::Parser::new(lexer.tokenize());
+    let ast = parser
+        .parse()
+        .expect("extension ownership annotation should parse");
+
+    match &ast[..] {
+        [rumina::ast::Stmt::ExtensionModule { functions, .. }] => {
+            assert_eq!(
+                functions[0].params[0],
+                ("t".to_string(), "table<string,num>".to_string())
+            );
+            assert_eq!(
+                functions[0].param_ownership[0],
+                ExtensionParamOwnership::Move
+            );
+        }
+        other => panic!("expected one extension module, got {other:?}"),
+    }
+}
+
 fn test_lsr003_extension_declaration_exposes_callable_stub() {
     let result = run_rumina(
         r#"
