@@ -1730,8 +1730,9 @@ impl Parser {
 
     fn parse_brace_literal(&mut self) -> Result<Expr, String> {
         if matches!(self.current_token(), Token::LBrace)
-            && matches!(self.tokens.get(self.current + 1), Some(Token::Ident(_)))
-            && self.tokens.get(self.current + 2) == Some(&Token::Equal)
+            && (self.tokens.get(self.current + 1) == Some(&Token::RBrace)
+                || (matches!(self.tokens.get(self.current + 1), Some(Token::Ident(_)))
+                    && self.tokens.get(self.current + 2) == Some(&Token::Equal)))
         {
             return self.parse_struct();
         }
