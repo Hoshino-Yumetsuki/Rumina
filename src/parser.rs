@@ -1455,17 +1455,6 @@ impl Parser {
             return Err("MissingWildcard: open match requires a wildcard fallback".to_string());
         }
 
-            }
-            Token::Ident(name) => {
-                let name = name.clone();
-                self.advance();
-                Ok(MatchPattern::Binding(name))
-            }
-            Token::Vec => {
-                self.advance();
-                self.expect(Token::LBracket)?;
-                let mut names = Vec::new();
-                if self.current_token() != &Token::RBracket {
         Ok(Expr::Match {
             target: Box::new(target),
             arms,
@@ -1488,6 +1477,17 @@ impl Parser {
                         self.advance();
                         if !self.match_token(&Token::Comma) {
                             break;
+            }
+            Token::Ident(name) => {
+                let name = name.clone();
+                self.advance();
+                Ok(MatchPattern::Binding(name))
+            }
+            Token::Vec => {
+                self.advance();
+                self.expect(Token::LBracket)?;
+                let mut names = Vec::new();
+                if self.current_token() != &Token::RBracket {
                         }
                     }
                 }
