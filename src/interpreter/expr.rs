@@ -981,6 +981,10 @@ impl Interpreter {
                                 }
                             }
                         }
+
+                        if func_name == "log" && args == [Expr::Int(1)] {
+                            return Expr::Int(0);
+                        }
                     }
                 }
 
