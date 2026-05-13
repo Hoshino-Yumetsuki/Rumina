@@ -841,6 +841,7 @@ impl Compiler {
                         | BinOp::Equivalent
                         | BinOp::BroadcastAdd
                         | BinOp::BroadcastEqual
+                        | BinOp::LeftDiv
                         | BinOp::In
                         | BinOp::NotIn
                         | BinOp::Subset
@@ -868,6 +869,7 @@ impl Compiler {
                         unreachable!("broadcast equality handled before opcode emission")
                     }
                     BinOp::Sub => OpCode::Sub,
+                    BinOp::LeftDiv => unreachable!("left division handled before opcode emission"),
                     BinOp::Mul => OpCode::Mul,
                     BinOp::Div => OpCode::Div,
                     BinOp::Mod => OpCode::Mod,

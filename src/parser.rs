@@ -1102,6 +1102,7 @@ impl Parser {
 
         loop {
             let op = match self.current_token() {
+                Token::Backslash => BinOp::LeftDiv,
                 Token::Star => BinOp::Mul,
                 Token::Slash => BinOp::Div,
                 Token::Percent => BinOp::Mod,

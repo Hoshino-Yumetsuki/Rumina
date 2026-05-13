@@ -190,6 +190,10 @@ impl Interpreter {
         }
 
         match (left, right) {
+            (Value::Matrix(_), Value::Matrix(_)) if op == BinOp::LeftDiv => {
+                crate::builtin::linalg::solve_left(&[left.clone(), right.clone()])
+            }
+
             (Value::Vector(values), _) if op == BinOp::BroadcastAdd => {
                 let mut result = Vec::with_capacity(values.borrow().len());
                 for value in values.borrow().iter() {

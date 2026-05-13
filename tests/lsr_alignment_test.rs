@@ -526,6 +526,14 @@ fn test_lsr004_std_linalg_solve_left_and_right() {
 }
 
 #[test]
+fn test_lsr000_matrix_left_division_operator_solves_linear_system() {
+    let rows = expect_matrix(run_rumina(
+        "let a = mat[2, 0; 0, 4]; let b = mat[8; 12]; a \\ b;",
+    ));
+
+    assert_eq!(rows, vec![vec![Value::Int(4)], vec![Value::Int(3)]]);
+}
+#[test]
 fn test_lsr004_std_linalg_eig_diagonal_matrix() {
     let result = run_rumina(
         "import std.linalg as la; let e = la.eig(mat[2, 0; 0, 3]); e.values[1][1] == 2 and e.values[2][1] == 3 and e.vectors[1][1] == 1 and e.vectors[2][2] == 1;",
