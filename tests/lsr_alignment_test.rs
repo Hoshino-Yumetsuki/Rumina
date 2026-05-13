@@ -1153,7 +1153,7 @@ fn test_lsr003_extension_param_move_annotation_parses() {
     let mut lexer = rumina::Lexer::new(
         r#"
 module example {
-  func consume(t table<string,num> @move) -> bool = "c_ext_consume";
+  func consume(t table<text,num> @move) -> bool = "c_ext_consume";
 }
 "#
         .to_string(),
@@ -1167,7 +1167,7 @@ module example {
         [rumina::ast::Stmt::ExtensionModule { functions, .. }] => {
             assert_eq!(
                 functions[0].params[0],
-                ("t".to_string(), "table<string,num>".to_string())
+                ("t".to_string(), "table<text,num>".to_string())
             );
             assert_eq!(
                 functions[0].param_ownership[0],
@@ -1178,6 +1178,72 @@ module example {
     }
 }
 
+#[test]
+fn test_lsr003_extension_table_allows_default_hashable_key_types() {
+    let mut lexer = rumina::Lexer::new(
+        r#"
+module example {
+  func by_num(t table<num,text>) -> bool = "c_ext_by_num";
+  func by_complex(t table<complex,text>) -> bool = "c_ext_by_complex";
+  func by_text(t table<text,num>) -> bool = "c_ext_by_text";
+  func by_bool(t table<bool,num>) -> bool = "c_ext_by_bool";
+}
+"#
+        .to_string(),
+    );
+    let mut parser = rumina::Parser::new(lexer.tokenize());
+    let ast = parser
+        .parse()
+        .expect("default hashable table key types should parse");
+
+    match &ast[..] {
+        [rumina::ast::Stmt::ExtensionModule { functions, .. }] => {
+            assert_eq!(functions.len(), 4);
+            assert_eq!(functions[2].params[0].1, "table<text,num>");
+        }
+        other => panic!("expected one extension module, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_lsr003_extension_table_rejects_unhashable_key_type() {
+    let mut lexer = rumina::Lexer::new(
+        r#"
+module example {
+  func bad(t table<vector,num>) -> bool = "c_ext_bad";
+}
+"#
+        .to_string(),
+    );
+    let mut parser = rumina::Parser::new(lexer.tokenize());
+
+    let error = parser.parse().unwrap_err();
+
+    assert!(
+        error.contains("TableKeyTypeError") && error.contains("vector"),
+        "expected TableKeyTypeError for vector key type, got {error}"
+    );
+}
+
+#[test]
+fn test_lsr003_extension_table_rejects_string_key_type_without_hash_semantics() {
+    let mut lexer = rumina::Lexer::new(
+        r#"
+module example {
+  func bad(t table<string,num>) -> bool = "c_ext_bad";
+}
+"#
+        .to_string(),
+    );
+    let mut parser = rumina::Parser::new(lexer.tokenize());
+
+    let error = parser.parse().unwrap_err();
+
+    assert!(
+        error.contains("TableKeyTypeError") && error.contains("string"),
+        "expected TableKeyTypeError for string key type, got {error}"
+    );
+}
 #[test]
 fn test_lsr003_extension_func_requires_c_symbol_string() {
     let mut lexer = rumina::Lexer::new(

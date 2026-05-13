@@ -329,15 +329,42 @@ impl Packager {
             )));
         }
 
-        fs::read_to_string(&interface_path).map_err(|err| {
+        let interface_source = fs::read_to_string(&interface_path).map_err(|err| {
             RuminaError::runtime(format!(
                 "InterfaceBindError: extension interface '{}' must be a readable .lm file: {err}",
                 interface_path.display()
             ))
         })?;
+        Self::validate_extension_interface(&interface_path, &interface_source)?;
 
         println!("Extension entry symbol: {}", manifest.entry);
         Ok(interface_path)
+    }
+
+    fn validate_extension_interface(
+        interface_path: &Path,
+        source: &str,
+    ) -> Result<(), RuminaError> {
+        let mut lexer = rumina::Lexer::new(source.to_string());
+        let mut parser = rumina::Parser::new(lexer.tokenize());
+        let statements = parser.parse().map_err(|err| {
+            RuminaError::runtime(format!(
+                "InterfaceBindError: extension interface '{}' failed to parse: {err}",
+                interface_path.display()
+            ))
+        })?;
+
+        if statements
+            .iter()
+            .any(|statement| matches!(statement, rumina::ast::Stmt::ExtensionModule { .. }))
+        {
+            return Ok(());
+        }
+
+        Err(RuminaError::runtime(format!(
+            "InterfaceBindError: extension interface '{}' must declare an extension module",
+            interface_path.display()
+        )))
     }
 }
 
@@ -384,5 +411,72 @@ mod tests {
         fs::remove_dir_all(&extension_dir).unwrap();
         assert!(error.contains("InterfaceBindError"));
         assert!(error.contains("readable .lm file"));
+    }
+
+    #[test]
+    fn lsr003_extension_interface_must_parse_as_extension_module() {
+        let extension_dir = unique_temp_dir("invalid-interface");
+        fs::create_dir_all(&extension_dir).unwrap();
+        fs::write(extension_dir.join("lib.lm"), "let x = 1;").unwrap();
+
+        let packager = Packager::new(PackageConfig {
+            input_file: extension_dir.display().to_string(),
+            output_file: "unused".to_string(),
+            ..PackageConfig::default()
+        });
+
+        let error = packager.resolve_input_source().unwrap_err().to_string();
+
+        fs::remove_dir_all(&extension_dir).unwrap();
+        assert!(error.contains("InterfaceBindError"));
+        assert!(error.contains("extension module"));
+    }
+
+    #[test]
+    fn lsr003_extension_interface_syntax_errors_are_interface_bind_errors() {
+        let extension_dir = unique_temp_dir("bad-interface-syntax");
+        fs::create_dir_all(&extension_dir).unwrap();
+        fs::write(
+            extension_dir.join("lib.lm"),
+            "module example { func det(m matrix) -> num { return 0; } }",
+        )
+        .unwrap();
+
+        let packager = Packager::new(PackageConfig {
+            input_file: extension_dir.display().to_string(),
+            output_file: "unused".to_string(),
+            ..PackageConfig::default()
+        });
+
+        let error = packager.resolve_input_source().unwrap_err().to_string();
+
+        fs::remove_dir_all(&extension_dir).unwrap();
+        assert!(error.contains("InterfaceBindError"));
+    }
+
+    #[test]
+    fn lsr003_extension_interface_table_key_errors_stop_packaging() {
+        let extension_dir = unique_temp_dir("bad-table-key");
+        fs::create_dir_all(&extension_dir).unwrap();
+        fs::write(
+            extension_dir.join("lib.lm"),
+            r#"
+module example {
+  func bad(t table<vector,num>) -> bool = "c_ext_bad";
+}
+"#,
+        )
+        .unwrap();
+
+        let packager = Packager::new(PackageConfig {
+            input_file: extension_dir.display().to_string(),
+            output_file: "unused".to_string(),
+            ..PackageConfig::default()
+        });
+
+        let error = packager.resolve_input_source().unwrap_err().to_string();
+
+        fs::remove_dir_all(&extension_dir).unwrap();
+        assert!(error.contains("TableKeyTypeError"));
     }
 }

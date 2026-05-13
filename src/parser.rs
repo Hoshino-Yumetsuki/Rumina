@@ -415,6 +415,11 @@ impl Parser {
 
         if name == "table" && self.match_token(&Token::Less) {
             let key_type = self.parse_extension_type()?;
+            if !Self::is_default_hashable_extension_table_key_type(&key_type) {
+                return Err(format!(
+                    "TableKeyTypeError: table key type '{key_type}' is not hashable by default in extension interfaces"
+                ));
+            }
             self.expect(Token::Comma)
                 .map_err(|err| format!("InterfaceBindError: {err}"))?;
             let value_type = self.parse_extension_type()?;
@@ -424,6 +429,10 @@ impl Parser {
         }
 
         Ok(name)
+    }
+
+    fn is_default_hashable_extension_table_key_type(key_type: &str) -> bool {
+        matches!(key_type, "num" | "complex" | "text" | "bool")
     }
 
     fn parse_var_decl_with_type(
