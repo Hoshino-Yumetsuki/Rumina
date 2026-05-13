@@ -898,7 +898,10 @@ impl Interpreter {
                         )])),
                         MatchPattern::Literal(pattern) => {
                             let pattern = self.eval_expr(pattern)?;
-                            if target_value.as_ref().is_some_and(|target| &pattern == target) {
+                            if target_value
+                                .as_ref()
+                                .is_some_and(|target| &pattern == target)
+                            {
                                 Some(HashMap::new())
                             } else {
                                 None
