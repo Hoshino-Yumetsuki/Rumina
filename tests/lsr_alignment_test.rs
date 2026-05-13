@@ -405,6 +405,21 @@ fn test_lsr004_std_stats_descriptive_functions() {
 }
 
 #[test]
+fn test_lsr004_stdlib_diagnostic_codes() {
+    let domain_error = run_rumina("import std.math; math.log(-1);").unwrap_err();
+    assert!(
+        domain_error.to_string().contains("DomainError"),
+        "expected DomainError diagnostic, got {domain_error}"
+    );
+
+    let empty_input = run_rumina("import std.stats; stats.mean([]);").unwrap_err();
+    assert!(
+        empty_input.to_string().contains("EmptyInput"),
+        "expected EmptyInput diagnostic, got {empty_input}"
+    );
+}
+
+#[test]
 fn test_lsr004_std_stats_cov_corr() {
     let result = expect_float(run_rumina(
         "use std.stats.{cov, corr}; cov([1, 2, 3], [2, 4, 6]) + corr([1, 2, 3], [2, 4, 6]);",

@@ -314,7 +314,7 @@ pub fn log(args: &[Value]) -> Result<Value, String> {
     }
     let val = args[0].to_float()?;
     if val <= 0.0 {
-        return Err("log domain error: input must be positive".to_string());
+        return Err("DomainError: log input must be positive".to_string());
     }
     Ok(Value::Float(val.log10()))
 }
@@ -325,7 +325,7 @@ pub fn std_log(args: &[Value]) -> Result<Value, String> {
     }
     let val = args[0].to_float()?;
     if val <= 0.0 {
-        return Err("log domain error: input must be positive".to_string());
+        return Err("DomainError: log input must be positive".to_string());
     }
     Ok(Value::Float(val.ln()))
 }

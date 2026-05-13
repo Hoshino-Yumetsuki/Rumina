@@ -7,7 +7,7 @@ fn numbers(value: &Value) -> Result<Vec<f64>, String> {
 
     let values = values.borrow();
     if values.is_empty() {
-        return Err("stats expects non-empty vector".to_string());
+        return Err("EmptyInput: stats expects non-empty vector".to_string());
     }
 
     values.iter().map(Value::to_float).collect()
