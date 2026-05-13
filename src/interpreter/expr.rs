@@ -16,7 +16,11 @@ impl Interpreter {
             _ => match self.get_variable(&format!("__unit_{}", unit))? {
                 Value::Int(scale) => Ok(scale),
                 Value::Bool(true) => Ok(1),
-                other => Err(format!("Invalid unit declaration for {}: {}", unit, other.type_name())),
+                other => Err(format!(
+                    "Invalid unit declaration for {}: {}",
+                    unit,
+                    other.type_name()
+                )),
             },
         }
     }
@@ -78,20 +82,21 @@ impl Interpreter {
                 }
                 "keys" => {
                     if !args.is_empty() {
-                        Some(Err(format!("keys() expects 0 arguments, got {}", args.len())))
+                        Some(Err(format!(
+                            "keys() expects 0 arguments, got {}",
+                            args.len()
+                        )))
                     } else {
-                        let keys = map
-                            .borrow()
-                            .keys()
-                            .cloned()
-                            .map(Value::String)
-                            .collect();
+                        let keys = map.borrow().keys().cloned().map(Value::String).collect();
                         Some(Ok(Value::Vector(Rc::new(RefCell::new(keys)))))
                     }
                 }
                 "values" => {
                     if !args.is_empty() {
-                        Some(Err(format!("values() expects 0 arguments, got {}", args.len())))
+                        Some(Err(format!(
+                            "values() expects 0 arguments, got {}",
+                            args.len()
+                        )))
                     } else {
                         let values = map.borrow().values().cloned().collect();
                         Some(Ok(Value::Vector(Rc::new(RefCell::new(values)))))
@@ -99,7 +104,10 @@ impl Interpreter {
                 }
                 "items" => {
                     if !args.is_empty() {
-                        Some(Err(format!("items() expects 0 arguments, got {}", args.len())))
+                        Some(Err(format!(
+                            "items() expects 0 arguments, got {}",
+                            args.len()
+                        )))
                     } else {
                         let items = map
                             .borrow()
@@ -361,7 +369,8 @@ impl Interpreter {
                     }
                     other => Err(format!(
                         "UnitStripInvalid: cannot convert {} to unit '{}'",
-                        other.type_name(), unit
+                        other.type_name(),
+                        unit
                     )),
                 }
             }
@@ -463,6 +472,24 @@ impl Interpreter {
 
             Expr::Index { object, index } => {
                 let obj = self.eval_expr(object)?;
+                if let (Value::Matrix(rows), Expr::Multi(indices)) = (&obj, index.as_ref()) {
+                    if indices.len() == 2 {
+                        let row = self.eval_expr(&indices[0])?.to_int()?;
+                        let col = self.eval_expr(&indices[1])?.to_int()?;
+                        if row <= 0 {
+                            return Err(format!("Matrix row index out of bounds: {}", row));
+                        }
+                        if col <= 0 {
+                            return Err(format!("Matrix column index out of bounds: {}", col));
+                        }
+                        return rows
+                            .borrow()
+                            .get((row - 1) as usize)
+                            .and_then(|values| values.get((col - 1) as usize))
+                            .cloned()
+                            .ok_or_else(|| format!("Matrix index out of bounds: {},{}", row, col));
+                    }
+                }
                 let idx = self.eval_expr(index)?;
                 match (obj, idx) {
                     (Value::Array(arr), Value::Int(i)) => {
@@ -535,10 +562,16 @@ impl Interpreter {
                 for arm in arms {
                     let bindings = match &arm.pattern {
                         MatchPattern::Wildcard => Some(HashMap::new()),
-                        MatchPattern::Binding(name) => Some(HashMap::from([(name.clone(), target.clone())])),
+                        MatchPattern::Binding(name) => {
+                            Some(HashMap::from([(name.clone(), target.clone())]))
+                        }
                         MatchPattern::Literal(pattern) => {
                             let pattern = self.eval_expr(pattern)?;
-                            if pattern == target { Some(HashMap::new()) } else { None }
+                            if pattern == target {
+                                Some(HashMap::new())
+                            } else {
+                                None
+                            }
                         }
                         MatchPattern::Vector(names) => {
                             let Value::Vector(values) = &target else {
@@ -548,13 +581,7 @@ impl Interpreter {
                             if values.len() != names.len() {
                                 continue;
                             }
-                            Some(
-                                names
-                                    .iter()
-                                    .cloned()
-                                    .zip(values.iter().cloned())
-                                    .collect(),
-                            )
+                            Some(names.iter().cloned().zip(values.iter().cloned()).collect())
                         }
                     };
 
@@ -641,6 +668,12 @@ impl Interpreter {
                     (_, crate::ast::BinOp::Mul, Expr::Int(0))
                     | (Expr::Int(0), crate::ast::BinOp::Mul, _) => Expr::Int(0),
                     (left, crate::ast::BinOp::Sub, right) if left == right => Expr::Int(0),
+                    (left, crate::ast::BinOp::Add, right) => {
+                        Self::normalize_commutative_expr(crate::ast::BinOp::Add, left, right)
+                    }
+                    (left, crate::ast::BinOp::Mul, right) => {
+                        Self::normalize_commutative_expr(crate::ast::BinOp::Mul, left, right)
+                    }
                     (left, op, right) => Expr::Binary {
                         left: Box::new(left),
                         op,
@@ -653,6 +686,38 @@ impl Interpreter {
                 expr: Box::new(Self::normalize_equivalence_expr(expr)),
             },
             other => other.clone(),
+        }
+    }
+
+    fn normalize_commutative_expr(op: crate::ast::BinOp, left: Expr, right: Expr) -> Expr {
+        let mut terms = Vec::new();
+        Self::collect_commutative_terms(op, left, &mut terms);
+        Self::collect_commutative_terms(op, right, &mut terms);
+
+        terms.sort_by_key(|expr| format!("{:?}", expr));
+        let mut terms = terms.into_iter();
+        let Some(first) = terms.next() else {
+            return Expr::Int(0);
+        };
+
+        terms.fold(first, |left, right| Expr::Binary {
+            left: Box::new(left),
+            op,
+            right: Box::new(right),
+        })
+    }
+
+    fn collect_commutative_terms(op: crate::ast::BinOp, expr: Expr, terms: &mut Vec<Expr>) {
+        match expr {
+            Expr::Binary {
+                left,
+                op: expr_op,
+                right,
+            } if expr_op == op => {
+                Self::collect_commutative_terms(op, *left, terms);
+                Self::collect_commutative_terms(op, *right, terms);
+            }
+            other => terms.push(other),
         }
     }
 }

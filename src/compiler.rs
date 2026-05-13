@@ -171,7 +171,7 @@ impl Compiler {
                 // Keep expression result on stack for potential return value
             }
 
-            Stmt::Import { .. } | Stmt::Use { .. } => {}
+            Stmt::Import { .. } | Stmt::Use { .. } | Stmt::ExtensionModule { .. } => {}
 
             Stmt::UnitDecl { .. } => {}
 
@@ -832,9 +832,10 @@ impl Compiler {
                         | BinOp::SetIntersection
                         | BinOp::SetSymmetricDifference
                 ) {
-                    return Err(RuminaError::runtime(
-                        format!("{} operator is not yet supported by the bytecode compiler", op),
-                    ));
+                    return Err(RuminaError::runtime(format!(
+                        "{} operator is not yet supported by the bytecode compiler",
+                        op
+                    )));
                 }
 
                 // Compile operands

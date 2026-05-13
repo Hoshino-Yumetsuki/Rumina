@@ -149,19 +149,19 @@ impl Parser {
                         self.match_token(&Token::Semicolon);
                         match expr {
                             Expr::Ident(name) => Ok(Stmt::Assign { name, value }),
-                Expr::Member { object, member } => Ok(Stmt::MemberAssign {
-                    object: *object,
-                    member,
-                    value,
-                }),
-                Expr::Index { object, index } => Ok(Stmt::IndexAssign {
-                    object: *object,
-                    index: *index,
-                    value,
-                }),
-                Expr::Namespace { .. } => Err("Cannot assign to namespace".to_string()),
-                _ => Err("Invalid assignment target".to_string()),
-            }
+                            Expr::Member { object, member } => Ok(Stmt::MemberAssign {
+                                object: *object,
+                                member,
+                                value,
+                            }),
+                            Expr::Index { object, index } => Ok(Stmt::IndexAssign {
+                                object: *object,
+                                index: *index,
+                                value,
+                            }),
+                            Expr::Namespace { .. } => Err("Cannot assign to namespace".to_string()),
+                            _ => Err("Invalid assignment target".to_string()),
+                        }
                     } else {
                         self.match_token(&Token::Semicolon);
                         Ok(Stmt::Expr(expr))
@@ -194,6 +194,7 @@ impl Parser {
             Token::Include => self.parse_include(),
             Token::Import => self.parse_import(),
             Token::Use => self.parse_use(),
+            Token::Module => self.parse_extension_module(),
             Token::Unit => self.parse_unit_decl(),
             Token::Try => self.parse_try_catch(),
             Token::LBrace => self.parse_block(),
@@ -261,7 +262,10 @@ impl Parser {
             self.advance();
             name
         } else {
-            return Err(format!("Expected unit name, found {:?}", self.current_token()));
+            return Err(format!(
+                "Expected unit name, found {:?}",
+                self.current_token()
+            ));
         };
 
         let value = if self.match_token(&Token::Equal) {
@@ -272,6 +276,122 @@ impl Parser {
 
         self.match_token(&Token::Semicolon);
         Ok(Stmt::UnitDecl { name, value })
+    }
+
+    fn parse_extension_module(&mut self) -> Result<Stmt, String> {
+        self.expect(Token::Module)?;
+        let name = if let Token::Ident(name) = self.current_token() {
+            let name = name.clone();
+            self.advance();
+            name
+        } else {
+            return Err(format!(
+                "InterfaceBindError: expected extension module name, found {:?}",
+                self.current_token()
+            ));
+        };
+
+        self.expect(Token::LBrace)?;
+        let mut functions = Vec::new();
+        while self.current_token() != &Token::RBrace && self.current_token() != &Token::Eof {
+            functions.push(self.parse_extension_function()?);
+        }
+        self.expect(Token::RBrace)?;
+
+        Ok(Stmt::ExtensionModule { name, functions })
+    }
+
+    fn parse_extension_function(&mut self) -> Result<ExtensionFunction, String> {
+        self.expect(Token::Func)
+            .map_err(|err| format!("InterfaceBindError: {err}"))?;
+        let name = if let Token::Ident(name) = self.current_token() {
+            let name = name.clone();
+            self.advance();
+            name
+        } else {
+            return Err(format!(
+                "InterfaceBindError: expected extension function name, found {:?}",
+                self.current_token()
+            ));
+        };
+
+        self.expect(Token::LParen)
+            .map_err(|err| format!("InterfaceBindError: {err}"))?;
+        let mut params = Vec::new();
+        if self.current_token() != &Token::RParen {
+            loop {
+                let param_name = if let Token::Ident(param) = self.current_token() {
+                    let param = param.clone();
+                    self.advance();
+                    param
+                } else {
+                    return Err(format!(
+                        "InterfaceBindError: expected extension parameter name, found {:?}",
+                        self.current_token()
+                    ));
+                };
+                let param_type = self.parse_extension_type()?;
+                params.push((param_name, param_type));
+
+                if !self.match_token(&Token::Comma) {
+                    break;
+                }
+            }
+        }
+        self.expect(Token::RParen)
+            .map_err(|err| format!("InterfaceBindError: {err}"))?;
+        self.expect(Token::Arrow)
+            .map_err(|err| format!("InterfaceBindError: {err}"))?;
+        let return_type = self.parse_extension_type()?;
+
+        if !self.match_token(&Token::Equal) {
+            return Err("InterfaceBindError: extension functions must bind to a string C symbol with = \"symbol\"".to_string());
+        }
+
+        let symbol = if let Token::String(symbol) = self.current_token() {
+            let symbol = symbol.clone();
+            self.advance();
+            symbol
+        } else {
+            return Err(format!(
+                "InterfaceBindError: expected string C symbol, found {:?}",
+                self.current_token()
+            ));
+        };
+        self.match_token(&Token::Semicolon);
+
+        Ok(ExtensionFunction {
+            name,
+            params,
+            return_type,
+            symbol,
+        })
+    }
+
+    fn parse_extension_type(&mut self) -> Result<String, String> {
+        let name = match self.current_token() {
+            Token::TypeNum => "num".to_string(),
+            Token::TypeInt => "int".to_string(),
+            Token::TypeFloat => "float".to_string(),
+            Token::TypeBool => "bool".to_string(),
+            Token::TypeString => "string".to_string(),
+            Token::TypeRational => "rational".to_string(),
+            Token::TypeIrrational => "irrational".to_string(),
+            Token::TypeComplex => "complex".to_string(),
+            Token::TypeArray => "array".to_string(),
+            Token::BigInt => "bigint".to_string(),
+            Token::Table => "table".to_string(),
+            Token::Ident(name) => name.clone(),
+            other => {
+                return Err(format!(
+                    "InterfaceBindError: expected explicit extension interface type, found {:?}",
+                    other
+                ));
+            }
+        };
+        self.advance();
+
+        Ok(name)
     }
 
     fn parse_var_decl_with_type(
@@ -784,7 +904,12 @@ impl Parser {
                     self.advance();
                     UnitStripMode::Scalar
                 }
-                _ => return Err(format!("Expected num or scalar after as, found {:?}", self.current_token())),
+                _ => {
+                    return Err(format!(
+                        "Expected num or scalar after as, found {:?}",
+                        self.current_token()
+                    ));
+                }
             };
 
             if self.current_token() == &Token::Less {
@@ -1016,7 +1141,15 @@ impl Parser {
                 Token::LBracket => {
                     // 索引访问
                     self.advance();
-                    let index = self.parse_expression()?;
+                    let mut indices = vec![self.parse_expression()?];
+                    while self.match_token(&Token::Comma) {
+                        indices.push(self.parse_expression()?);
+                    }
+                    let index = if indices.len() == 1 {
+                        indices.remove(0)
+                    } else {
+                        Expr::Multi(indices)
+                    };
                     self.expect(Token::RBracket)?;
                     expr = Expr::Index {
                         object: Box::new(expr),
@@ -1246,7 +1379,11 @@ impl Parser {
                     ));
                 }
             }
-            arms.push(MatchArm { pattern, guard, expr });
+            arms.push(MatchArm {
+                pattern,
+                guard,
+                expr,
+            });
 
             if !self.match_token(&Token::Comma) {
                 break;
@@ -1282,7 +1419,10 @@ impl Parser {
                 if self.current_token() != &Token::RBracket {
                     loop {
                         let Token::Ident(name) = self.current_token() else {
-                            return Err(format!("Expected vector pattern binding, found {:?}", self.current_token()));
+                            return Err(format!(
+                                "Expected vector pattern binding, found {:?}",
+                                self.current_token()
+                            ));
                         };
                         names.push(name.clone());
                         self.advance();
@@ -1294,10 +1434,18 @@ impl Parser {
                 self.expect(Token::RBracket)?;
                 Ok(MatchPattern::Vector(names))
             }
-            Token::Int(_) | Token::BigIntLiteral(_) | Token::Float(_) | Token::Decimal(_) | Token::String(_) | Token::True | Token::False | Token::Null => {
-                Ok(MatchPattern::Literal(self.parse_primary()?))
-            }
-            _ => Err(format!("Expected match pattern, found {:?}", self.current_token())),
+            Token::Int(_)
+            | Token::BigIntLiteral(_)
+            | Token::Float(_)
+            | Token::Decimal(_)
+            | Token::String(_)
+            | Token::True
+            | Token::False
+            | Token::Null => Ok(MatchPattern::Literal(self.parse_primary()?)),
+            _ => Err(format!(
+                "Expected match pattern, found {:?}",
+                self.current_token()
+            )),
         }
     }
 

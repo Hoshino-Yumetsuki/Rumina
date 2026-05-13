@@ -17,9 +17,23 @@ pub enum DeclaredType {
     BigInt,
 }
 
+/// LSR-003 extension interface function binding.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExtensionFunction {
+    pub name: String,
+    pub params: Vec<(String, String)>,
+    pub return_type: String,
+    pub symbol: String,
+}
+
 /// 语句
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
+    ExtensionModule {
+        name: String,
+        functions: Vec<ExtensionFunction>,
+    },
+
     // 变量声明
     VarDecl {
         name: String,
@@ -261,13 +275,13 @@ pub enum BinOp {
     SetIntersection,
     SetSymmetricDifference,
 
-    Equal,     // ==
+    Equal,      // ==
     Equivalent, // ===
-    NotEqual,  // !=
-    Greater,   // >
-    GreaterEq, // >=
-    Less,      // <
-    LessEq,    // <=
+    NotEqual,   // !=
+    Greater,    // >
+    GreaterEq,  // >=
+    Less,       // <
+    LessEq,     // <=
     In,
     NotIn,
     Subset,

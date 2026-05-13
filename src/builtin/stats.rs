@@ -48,7 +48,11 @@ pub fn var(args: &[Value]) -> Result<Value, String> {
     let values = numbers(&args[0])?;
     let mean = mean_values(&values);
     Ok(Value::Float(
-        values.iter().map(|value| (value - mean).powi(2)).sum::<f64>() / values.len() as f64,
+        values
+            .iter()
+            .map(|value| (value - mean).powi(2))
+            .sum::<f64>()
+            / values.len() as f64,
     ))
 }
 
@@ -75,7 +79,9 @@ pub fn quantile(args: &[Value]) -> Result<Value, String> {
     let lower = position.floor() as usize;
     let upper = position.ceil() as usize;
     let weight = position - lower as f64;
-    Ok(Value::Float(values[lower] * (1.0 - weight) + values[upper] * weight))
+    Ok(Value::Float(
+        values[lower] * (1.0 - weight) + values[upper] * weight,
+    ))
 }
 
 pub fn cov(args: &[Value]) -> Result<Value, String> {

@@ -48,22 +48,70 @@ impl Interpreter {
 
     fn lsr004_math_module() -> HashMap<String, Value> {
         HashMap::from([
-            ("abs".to_string(), Self::native_fn("std.math.abs", builtin::math::abs_fn)),
-            ("sqrt".to_string(), Self::native_fn("std.math.sqrt", builtin::math::sqrt)),
-            ("pow".to_string(), Self::native_fn("std.math.pow", builtin::math::pow)),
-            ("exp".to_string(), Self::native_fn("std.math.exp", builtin::math::exp)),
-            ("log".to_string(), Self::native_fn("std.math.log", builtin::math::std_log)),
-            ("log10".to_string(), Self::native_fn("std.math.log10", builtin::math::log10)),
-            ("sin".to_string(), Self::native_fn("std.math.sin", builtin::math::sin)),
-            ("cos".to_string(), Self::native_fn("std.math.cos", builtin::math::cos)),
-            ("tan".to_string(), Self::native_fn("std.math.tan", builtin::math::tan)),
-            ("asin".to_string(), Self::native_fn("std.math.asin", builtin::math::asin)),
-            ("acos".to_string(), Self::native_fn("std.math.acos", builtin::math::acos)),
-            ("atan".to_string(), Self::native_fn("std.math.atan", builtin::math::atan)),
-            ("floor".to_string(), Self::native_fn("std.math.floor", builtin::math::floor)),
-            ("ceil".to_string(), Self::native_fn("std.math.ceil", builtin::math::ceil)),
-            ("round".to_string(), Self::native_fn("std.math.round", builtin::math::round)),
-            ("clamp".to_string(), Self::native_fn("std.math.clamp", builtin::math::clamp)),
+            (
+                "abs".to_string(),
+                Self::native_fn("std.math.abs", builtin::math::abs_fn),
+            ),
+            (
+                "sqrt".to_string(),
+                Self::native_fn("std.math.sqrt", builtin::math::sqrt),
+            ),
+            (
+                "pow".to_string(),
+                Self::native_fn("std.math.pow", builtin::math::pow),
+            ),
+            (
+                "exp".to_string(),
+                Self::native_fn("std.math.exp", builtin::math::exp),
+            ),
+            (
+                "log".to_string(),
+                Self::native_fn("std.math.log", builtin::math::std_log),
+            ),
+            (
+                "log10".to_string(),
+                Self::native_fn("std.math.log10", builtin::math::log10),
+            ),
+            (
+                "sin".to_string(),
+                Self::native_fn("std.math.sin", builtin::math::sin),
+            ),
+            (
+                "cos".to_string(),
+                Self::native_fn("std.math.cos", builtin::math::cos),
+            ),
+            (
+                "tan".to_string(),
+                Self::native_fn("std.math.tan", builtin::math::tan),
+            ),
+            (
+                "asin".to_string(),
+                Self::native_fn("std.math.asin", builtin::math::asin),
+            ),
+            (
+                "acos".to_string(),
+                Self::native_fn("std.math.acos", builtin::math::acos),
+            ),
+            (
+                "atan".to_string(),
+                Self::native_fn("std.math.atan", builtin::math::atan),
+            ),
+            (
+                "floor".to_string(),
+                Self::native_fn("std.math.floor", builtin::math::floor),
+            ),
+            (
+                "ceil".to_string(),
+                Self::native_fn("std.math.ceil", builtin::math::ceil),
+            ),
+            (
+                "round".to_string(),
+                Self::native_fn("std.math.round", builtin::math::round),
+            ),
+            (
+                "clamp".to_string(),
+                Self::native_fn("std.math.clamp", builtin::math::clamp),
+            ),
             ("pi".to_string(), Value::Irrational(IrrationalValue::Pi)),
             ("e".to_string(), Value::Irrational(IrrationalValue::E)),
             ("phi".to_string(), Value::Float(1.618033988749895)),
@@ -72,33 +120,78 @@ impl Interpreter {
 
     fn lsr004_random_module() -> HashMap<String, Value> {
         HashMap::from([
-            ("seed".to_string(), Self::native_fn("std.random.seed", builtin::random::seed)),
-            ("rand".to_string(), Self::native_fn("std.random.rand", builtin::random::rand)),
-            ("randint".to_string(), Self::native_fn("std.random.randint", builtin::random::randint)),
-            ("normal".to_string(), Self::native_fn("std.random.normal", builtin::random::normal)),
-            ("choice".to_string(), Self::native_fn("std.random.choice", builtin::random::choice)),
+            (
+                "seed".to_string(),
+                Self::native_fn("std.random.seed", builtin::random::seed),
+            ),
+            (
+                "rand".to_string(),
+                Self::native_fn("std.random.rand", builtin::random::rand),
+            ),
+            (
+                "randint".to_string(),
+                Self::native_fn("std.random.randint", builtin::random::randint),
+            ),
+            (
+                "normal".to_string(),
+                Self::native_fn("std.random.normal", builtin::random::normal),
+            ),
+            (
+                "choice".to_string(),
+                Self::native_fn("std.random.choice", builtin::random::choice),
+            ),
         ])
     }
 
     fn lsr004_stats_module() -> HashMap<String, Value> {
         HashMap::from([
-            ("mean".to_string(), Self::native_fn("std.stats.mean", builtin::stats::mean)),
-            ("median".to_string(), Self::native_fn("std.stats.median", builtin::stats::median)),
-            ("var".to_string(), Self::native_fn("std.stats.var", builtin::stats::var)),
-            ("std".to_string(), Self::native_fn("std.stats.std", builtin::stats::std)),
-            ("quantile".to_string(), Self::native_fn("std.stats.quantile", builtin::stats::quantile)),
-            ("cov".to_string(), Self::native_fn("std.stats.cov", builtin::stats::cov)),
-            ("corr".to_string(), Self::native_fn("std.stats.corr", builtin::stats::corr)),
+            (
+                "mean".to_string(),
+                Self::native_fn("std.stats.mean", builtin::stats::mean),
+            ),
+            (
+                "median".to_string(),
+                Self::native_fn("std.stats.median", builtin::stats::median),
+            ),
+            (
+                "var".to_string(),
+                Self::native_fn("std.stats.var", builtin::stats::var),
+            ),
+            (
+                "std".to_string(),
+                Self::native_fn("std.stats.std", builtin::stats::std),
+            ),
+            (
+                "quantile".to_string(),
+                Self::native_fn("std.stats.quantile", builtin::stats::quantile),
+            ),
+            (
+                "cov".to_string(),
+                Self::native_fn("std.stats.cov", builtin::stats::cov),
+            ),
+            (
+                "corr".to_string(),
+                Self::native_fn("std.stats.corr", builtin::stats::corr),
+            ),
         ])
     }
 
     fn lsr004_units_module() -> HashMap<String, Value> {
         HashMap::from([
-            ("convert".to_string(), Self::native_fn("std.units.convert", builtin::units::convert)),
-            ("strip".to_string(), Self::native_fn("std.units.strip", builtin::units::strip)),
+            (
+                "convert".to_string(),
+                Self::native_fn("std.units.convert", builtin::units::convert),
+            ),
+            (
+                "strip".to_string(),
+                Self::native_fn("std.units.strip", builtin::units::strip),
+            ),
             (
                 "is_dimensionless".to_string(),
-                Self::native_fn("std.units.is_dimensionless", builtin::units::is_dimensionless),
+                Self::native_fn(
+                    "std.units.is_dimensionless",
+                    builtin::units::is_dimensionless,
+                ),
             ),
         ])
     }
@@ -112,16 +205,34 @@ impl Interpreter {
 
     fn lsr004_linalg_module() -> HashMap<String, Value> {
         HashMap::from([
-            ("shape".to_string(), Self::native_fn("std.linalg.shape", builtin::linalg::shape)),
+            (
+                "shape".to_string(),
+                Self::native_fn("std.linalg.shape", builtin::linalg::shape),
+            ),
             (
                 "transpose".to_string(),
                 Self::native_fn("std.linalg.transpose", builtin::linalg::transpose),
             ),
-            ("trace".to_string(), Self::native_fn("std.linalg.trace", builtin::linalg::trace)),
-            ("det".to_string(), Self::native_fn("std.linalg.det", builtin::linalg::det)),
-            ("adjoint".to_string(), Self::native_fn("std.linalg.adjoint", builtin::linalg::adjoint)),
-            ("inv".to_string(), Self::native_fn("std.linalg.inv", builtin::linalg::inv)),
-            ("rank".to_string(), Self::native_fn("std.linalg.rank", builtin::linalg::rank)),
+            (
+                "trace".to_string(),
+                Self::native_fn("std.linalg.trace", builtin::linalg::trace),
+            ),
+            (
+                "det".to_string(),
+                Self::native_fn("std.linalg.det", builtin::linalg::det),
+            ),
+            (
+                "adjoint".to_string(),
+                Self::native_fn("std.linalg.adjoint", builtin::linalg::adjoint),
+            ),
+            (
+                "inv".to_string(),
+                Self::native_fn("std.linalg.inv", builtin::linalg::inv),
+            ),
+            (
+                "rank".to_string(),
+                Self::native_fn("std.linalg.rank", builtin::linalg::rank),
+            ),
             (
                 "solve_left".to_string(),
                 Self::native_fn("std.linalg.solve_left", builtin::linalg::solve_left),
@@ -130,8 +241,14 @@ impl Interpreter {
                 "solve_right".to_string(),
                 Self::native_fn("std.linalg.solve_right", builtin::linalg::solve_right),
             ),
-            ("eig".to_string(), Self::native_fn("std.linalg.eig", builtin::linalg::eig)),
-            ("svd".to_string(), Self::native_fn("std.linalg.svd", builtin::linalg::svd)),
+            (
+                "eig".to_string(),
+                Self::native_fn("std.linalg.eig", builtin::linalg::eig),
+            ),
+            (
+                "svd".to_string(),
+                Self::native_fn("std.linalg.svd", builtin::linalg::svd),
+            ),
         ])
     }
 
@@ -140,7 +257,9 @@ impl Interpreter {
             "std.constants" => Ok(Value::Module(Rc::new(RefCell::new(
                 Self::lsr002_constants_module(),
             )))),
-            "std.math" => Ok(Value::Module(Rc::new(RefCell::new(Self::lsr004_math_module())))),
+            "std.math" => Ok(Value::Module(Rc::new(RefCell::new(
+                Self::lsr004_math_module(),
+            )))),
             "std.random" => Ok(Value::Module(Rc::new(RefCell::new(
                 Self::lsr004_random_module(),
             )))),
@@ -162,6 +281,8 @@ impl Interpreter {
 
     pub(super) fn execute_stmt(&mut self, stmt: &Stmt) -> Result<(), String> {
         match stmt {
+            Stmt::ExtensionModule { .. } => Ok(()),
+
             Stmt::VarDecl {
                 name,
                 is_bigint,
@@ -653,9 +774,16 @@ impl Interpreter {
             Stmt::UnitDecl { name, value } => {
                 let scale = if let Some(value) = value {
                     match self.eval_expr(value)? {
-                        Value::UnitNumber { value, scale, .. } => self.scale_unit_value(*value, scale)?,
+                        Value::UnitNumber { value, scale, .. } => {
+                            self.scale_unit_value(*value, scale)?
+                        }
                         Value::Int(n) => Value::Int(n),
-                        other => return Err(format!("Invalid unit declaration scale: {}", other.type_name())),
+                        other => {
+                            return Err(format!(
+                                "Invalid unit declaration scale: {}",
+                                other.type_name()
+                            ));
+                        }
                     }
                 } else {
                     Value::Bool(true)

@@ -56,7 +56,10 @@ fn test_const_is_immutable() {
 
 #[test]
 fn test_const_requires_initializer() {
-    assert!(run_rumina("const x;").is_err(), "const declarations must initialize");
+    assert!(
+        run_rumina("const x;").is_err(),
+        "const declarations must initialize"
+    );
 }
 
 #[test]
@@ -85,15 +88,27 @@ fn test_lsr_logical_keywords() {
 
 #[test]
 fn test_legacy_logical_operators_are_rejected() {
-    assert!(run_rumina("true && true;").is_err(), "&& should be rejected");
-    assert!(run_rumina("true || false;").is_err(), "|| should be rejected");
+    assert!(
+        run_rumina("true && true;").is_err(),
+        "&& should be rejected"
+    );
+    assert!(
+        run_rumina("true || false;").is_err(),
+        "|| should be rejected"
+    );
     assert!(run_rumina("!false;").is_err(), "! should be rejected");
 }
 
 #[test]
 fn test_legacy_type_first_declaration_is_rejected() {
-    assert!(run_rumina("num x = 42;").is_err(), "type-first declarations should be rejected");
-    assert!(run_rumina("int x = 42;").is_err(), "type-first declarations should be rejected");
+    assert!(
+        run_rumina("num x = 42;").is_err(),
+        "type-first declarations should be rejected"
+    );
+    assert!(
+        run_rumina("int x = 42;").is_err(),
+        "type-first declarations should be rejected"
+    );
 }
 
 #[test]
@@ -231,14 +246,24 @@ fn test_lsr002_constants_available() {
 
 #[test]
 fn test_lsr004_use_std_constants() {
-    let g = expect_float(run_rumina("use std.constants.{EARTH_GRAVITY}; EARTH_GRAVITY;"));
-    assert!((g - 9.80665).abs() < 1e-12, "unexpected EARTH_GRAVITY: {}", g);
+    let g = expect_float(run_rumina(
+        "use std.constants.{EARTH_GRAVITY}; EARTH_GRAVITY;",
+    ));
+    assert!(
+        (g - 9.80665).abs() < 1e-12,
+        "unexpected EARTH_GRAVITY: {}",
+        g
+    );
 }
 
 #[test]
 fn test_lsr004_import_std_constants() {
     let g = expect_float(run_rumina("import std.constants; constants.EARTH_GRAVITY;"));
-    assert!((g - 9.80665).abs() < 1e-12, "unexpected EARTH_GRAVITY: {}", g);
+    assert!(
+        (g - 9.80665).abs() < 1e-12,
+        "unexpected EARTH_GRAVITY: {}",
+        g
+    );
 }
 
 #[test]
@@ -256,7 +281,11 @@ fn test_lsr004_import_alias() {
 #[test]
 fn test_lsr004_use_alias() {
     let result = expect_float(run_rumina("use std.constants.{G as GRAVITY}; GRAVITY;"));
-    assert!((result - 6.67430e-11).abs() < 1e-20, "unexpected GRAVITY: {}", result);
+    assert!(
+        (result - 6.67430e-11).abs() < 1e-20,
+        "unexpected GRAVITY: {}",
+        result
+    );
 }
 
 #[test]
@@ -264,13 +293,21 @@ fn test_lsr004_use_std_math_functions() {
     let result = expect_float(run_rumina(
         "use std.math.{pow, log, log10, floor, ceil, round, clamp}; pow(2, 3) + log(1) + log10(100) + floor(1.9) + ceil(1.1) + round(1.6) + clamp(10, 0, 3);",
     ));
-    assert!((result - 18.0).abs() < 1e-10, "expected 18.0, got {}", result);
+    assert!(
+        (result - 18.0).abs() < 1e-10,
+        "expected 18.0, got {}",
+        result
+    );
 }
 
 #[test]
 fn test_lsr004_std_math_constants() {
     let result = expect_float(run_rumina("import std.math; math.phi;"));
-    assert!((result - 1.618033988749895).abs() < 1e-12, "unexpected phi: {}", result);
+    assert!(
+        (result - 1.618033988749895).abs() < 1e-12,
+        "unexpected phi: {}",
+        result
+    );
 }
 
 #[test]
@@ -296,11 +333,23 @@ fn test_lsr004_std_random_seed_is_reproducible() {
 
 #[test]
 fn test_lsr004_std_random_normal_and_choice() {
-    let normal = expect_float(run_rumina("use std.random.{seed, normal}; seed(7); normal(0, 1);"));
-    assert!(normal.is_finite(), "normal sample should be finite: {}", normal);
+    let normal = expect_float(run_rumina(
+        "use std.random.{seed, normal}; seed(7); normal(0, 1);",
+    ));
+    assert!(
+        normal.is_finite(),
+        "normal sample should be finite: {}",
+        normal
+    );
 
-    let choice = expect_int(run_rumina("use std.random.{seed, choice}; seed(7); choice([10, 20, 30]);"));
-    assert!([10, 20, 30].contains(&choice), "choice returned unexpected value: {}", choice);
+    let choice = expect_int(run_rumina(
+        "use std.random.{seed, choice}; seed(7); choice([10, 20, 30]);",
+    ));
+    assert!(
+        [10, 20, 30].contains(&choice),
+        "choice returned unexpected value: {}",
+        choice
+    );
 }
 
 #[test]
@@ -309,7 +358,12 @@ fn test_lsr004_std_stats_descriptive_functions() {
         "use std.stats.{mean, median, var as variance, std, quantile}; mean([1, 2, 3, 4]) + median([1, 2, 3, 4]) + variance([1, 2, 3, 4]) + std([1, 2, 3, 4]) + quantile([1, 2, 3, 4], 0.5);",
     ));
     let expected = 2.5 + 2.5 + 1.25 + 1.25_f64.sqrt() + 2.5;
-    assert!((result - expected).abs() < 1e-10, "expected {}, got {}", expected, result);
+    assert!(
+        (result - expected).abs() < 1e-10,
+        "expected {}, got {}",
+        expected,
+        result
+    );
 }
 
 #[test]
@@ -317,7 +371,11 @@ fn test_lsr004_std_stats_cov_corr() {
     let result = expect_float(run_rumina(
         "use std.stats.{cov, corr}; cov([1, 2, 3], [2, 4, 6]) + corr([1, 2, 3], [2, 4, 6]);",
     ));
-    assert!((result - (4.0 / 3.0 + 1.0)).abs() < 1e-10, "unexpected cov+corr: {}", result);
+    assert!(
+        (result - (4.0 / 3.0 + 1.0)).abs() < 1e-10,
+        "unexpected cov+corr: {}",
+        result
+    );
 }
 
 #[test]
@@ -330,6 +388,12 @@ fn test_lsr004_std_units_dimensionless_helpers() {
         Some(Value::Bool(b)) => assert!(b),
         other => panic!("Expected Bool(true), got {:?}", other),
     }
+}
+
+#[test]
+fn test_lsr000_matrix_direct_two_dimensional_indexing() {
+    let result = expect_int(run_rumina("let m = mat[1, 2, 3; 4, 5, 6]; m[2, 3];"));
+    assert_eq!(result, 6);
 }
 
 #[test]
@@ -415,7 +479,9 @@ fn test_lsr005_match_binding_and_guard_patterns() {
 
 #[test]
 fn test_lsr005_match_vector_destructuring_pattern() {
-    let result = expect_int(run_rumina("match vec[20, 22] { vec[a, b] => a + b, _ => 0 };"));
+    let result = expect_int(run_rumina(
+        "match vec[20, 22] { vec[a, b] => a + b, _ => 0 };",
+    ));
     assert_eq!(result, 42);
 }
 
@@ -452,14 +518,26 @@ fn test_lsr007_equivalence_is_not_structural_equality() {
 }
 
 #[test]
+fn test_lsr007_core_equivalence_commutative_add_and_mul() {
+    let result = run_rumina("x + 1 === 1 + x and x * 2 === 2 * x;").unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
 fn test_lsr000_table_literal_and_read() {
-    let result = expect_int(run_rumina("let scores = table{\"alice\" => 98}; scores[\"alice\"];"));
+    let result = expect_int(run_rumina(
+        "let scores = table{\"alice\" => 98}; scores[\"alice\"];",
+    ));
     assert_eq!(result, 98);
 }
 
 #[test]
 fn test_lsr000_table_missing_key_returns_null() {
-    let result = run_rumina("let scores = table{\"alice\" => 98}; scores[\"bob\"] == null;").unwrap();
+    let result =
+        run_rumina("let scores = table{\"alice\" => 98}; scores[\"bob\"] == null;").unwrap();
     match result {
         Some(Value::Bool(b)) => assert!(b),
         other => panic!("Expected Bool(true), got {:?}", other),
@@ -493,7 +571,10 @@ fn test_lsr000_table_write_adds_new_key() {
 #[test]
 fn test_lsr000_table_write_requires_mutable_binding() {
     let result = run_rumina("let scores = table{\"alice\" => 98}; scores[\"alice\"] = 100;");
-    assert!(result.is_err(), "table writes through let bindings should error");
+    assert!(
+        result.is_err(),
+        "table writes through let bindings should error"
+    );
 }
 
 #[test]
@@ -667,7 +748,9 @@ fn test_lsr008_convert_metric_unit_literal_to_target_unit() {
 
 #[test]
 fn test_lsr008_strip_after_metric_unit_conversion_uses_target_scale() {
-    let result = run_rumina("((10<km> as m) as num) == 10000 and ((10<m> as km) as num) == (1 / 100);").unwrap();
+    let result =
+        run_rumina("((10<km> as m) as num) == 10000 and ((10<m> as km) as num) == (1 / 100);")
+            .unwrap();
     match result {
         Some(Value::Bool(b)) => assert!(b),
         other => panic!("Expected Bool(true), got {:?}", other),
@@ -701,7 +784,63 @@ fn test_lsr006_lambda_accepts_typed_params() {
 }
 
 #[test]
+fn test_lsr006_lambda_arity_mismatch_reports_diagnostic() {
+    let err = run_rumina("let add = |x num, y num| -> x + y; add(1);").unwrap_err();
+    assert!(
+        err.to_string().contains("LambdaArityMismatch"),
+        "expected LambdaArityMismatch diagnostic, got {err}"
+    );
+}
+
+#[test]
 fn test_lsr000_function_accepts_typed_signature() {
-    let result = expect_int(run_rumina("func add(x num, y num) -> num { return x + y; } add(20, 22);"));
+    let result = expect_int(run_rumina(
+        "func add(x num, y num) -> num { return x + y; } add(20, 22);",
+    ));
     assert_eq!(result, 42);
+}
+
+#[test]
+fn test_lsr003_extension_module_signature_parses() {
+    let mut lexer = rumina::Lexer::new(
+        r#"
+module example {
+  func det(m matrix) -> num = "c_ext_det"
+}
+"#
+        .to_string(),
+    );
+    let mut parser = rumina::Parser::new(lexer.tokenize());
+    let ast = parser
+        .parse()
+        .expect("extension module interface should parse");
+
+    match &ast[..] {
+        [rumina::ast::Stmt::ExtensionModule { name, functions }] => {
+            assert_eq!(name, "example");
+            assert_eq!(functions.len(), 1);
+            assert_eq!(functions[0].name, "det");
+            assert_eq!(
+                functions[0].params,
+                vec![("m".to_string(), "matrix".to_string())]
+            );
+            assert_eq!(functions[0].return_type, "num");
+            assert_eq!(functions[0].symbol, "c_ext_det");
+        }
+        other => panic!("expected one extension module, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_lsr003_extension_func_requires_c_symbol_string() {
+    let mut lexer = rumina::Lexer::new(
+        "module example { func det(m matrix) -> num { return 0; } }".to_string(),
+    );
+    let mut parser = rumina::Parser::new(lexer.tokenize());
+    let error = parser.parse().unwrap_err();
+
+    assert!(
+        error.contains("InterfaceBindError") && error.contains("string C symbol"),
+        "expected InterfaceBindError for missing C symbol string, got {error}"
+    );
 }

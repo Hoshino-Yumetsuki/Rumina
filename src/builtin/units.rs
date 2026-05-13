@@ -34,7 +34,10 @@ pub fn convert(args: &[Value]) -> Result<Value, String> {
     }
     ensure_number(&args[0])?;
     let Value::String(_) = &args[1] else {
-        return Err(format!("units.convert expects unit text, got {}", args[1].type_name()));
+        return Err(format!(
+            "units.convert expects unit text, got {}",
+            args[1].type_name()
+        ));
     };
     Ok(args[0].clone())
 }

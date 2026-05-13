@@ -192,7 +192,11 @@ impl Interpreter {
         match (left, right) {
             (_, Value::Set(values)) if matches!(op, BinOp::In | BinOp::NotIn) => {
                 let contains = values.contains(left);
-                Ok(Value::Bool(if op == BinOp::In { contains } else { !contains }))
+                Ok(Value::Bool(if op == BinOp::In {
+                    contains
+                } else {
+                    !contains
+                }))
             }
 
             (Value::Set(_), Value::Set(_)) if matches!(op, BinOp::Equal | BinOp::NotEqual) => {

@@ -1441,7 +1441,7 @@ impl VM {
                         // Check parameter count
                         if args.len() != params.len() {
                             return Err(RuminaError::runtime(format!(
-                                "Lambda expects {} arguments, got {}",
+                                "LambdaArityMismatch: expected {} arguments, got {}",
                                 params.len(),
                                 args.len()
                             )));
@@ -1617,7 +1617,7 @@ impl VM {
                         // Check parameter count
                         if args.len() != params.len() {
                             return Err(RuminaError::runtime(format!(
-                                "Lambda expects {} arguments, got {}",
+                                "LambdaArityMismatch: expected {} arguments, got {}",
                                 params.len(),
                                 args.len()
                             )));

@@ -6,13 +6,20 @@ use crate::value::Value;
 
 const EPSILON: f64 = 1e-12;
 
-fn matrix_arg<'a>(args: &'a [Value], name: &str) -> Result<std::cell::Ref<'a, Vec<Vec<Value>>>, String> {
+fn matrix_arg<'a>(
+    args: &'a [Value],
+    name: &str,
+) -> Result<std::cell::Ref<'a, Vec<Vec<Value>>>, String> {
     if args.len() != 1 {
         return Err(format!("linalg.{} expects 1 argument", name));
     }
 
     let Value::Matrix(rows) = &args[0] else {
-        return Err(format!("linalg.{} expects matrix, got {}", name, args[0].type_name()));
+        return Err(format!(
+            "linalg.{} expects matrix, got {}",
+            name,
+            args[0].type_name()
+        ));
     };
 
     Ok(rows.borrow())
@@ -29,7 +36,9 @@ pub fn shape(args: &[Value]) -> Result<Value, String> {
 
 pub fn transpose(args: &[Value]) -> Result<Value, String> {
     let rows = matrix_arg(args, "transpose")?;
-    Ok(Value::Matrix(Rc::new(RefCell::new(transpose_values(&rows)?))))
+    Ok(Value::Matrix(Rc::new(RefCell::new(transpose_values(
+        &rows,
+    )?))))
 }
 
 pub fn adjoint(args: &[Value]) -> Result<Value, String> {
@@ -86,10 +95,16 @@ pub fn solve_left(args: &[Value]) -> Result<Value, String> {
         return Err("linalg.solve_left expects 2 arguments".to_string());
     }
     let Value::Matrix(a_rows) = &args[0] else {
-        return Err(format!("linalg.solve_left expects matrix, got {}", args[0].type_name()));
+        return Err(format!(
+            "linalg.solve_left expects matrix, got {}",
+            args[0].type_name()
+        ));
     };
     let Value::Matrix(b_rows) = &args[1] else {
-        return Err(format!("linalg.solve_left expects matrix, got {}", args[1].type_name()));
+        return Err(format!(
+            "linalg.solve_left expects matrix, got {}",
+            args[1].type_name()
+        ));
     };
 
     let inverse = invert_matrix(numeric_matrix(&a_rows.borrow(), "solve_left")?)?;
@@ -102,10 +117,16 @@ pub fn solve_right(args: &[Value]) -> Result<Value, String> {
         return Err("linalg.solve_right expects 2 arguments".to_string());
     }
     let Value::Matrix(b_rows) = &args[0] else {
-        return Err(format!("linalg.solve_right expects matrix, got {}", args[0].type_name()));
+        return Err(format!(
+            "linalg.solve_right expects matrix, got {}",
+            args[0].type_name()
+        ));
     };
     let Value::Matrix(a_rows) = &args[1] else {
-        return Err(format!("linalg.solve_right expects matrix, got {}", args[1].type_name()));
+        return Err(format!(
+            "linalg.solve_right expects matrix, got {}",
+            args[1].type_name()
+        ));
     };
 
     let b = numeric_matrix(&b_rows.borrow(), "solve_right")?;
@@ -127,7 +148,10 @@ pub fn eig(args: &[Value]) -> Result<Value, String> {
         .collect();
     let mut result = HashMap::new();
     result.insert("values".to_string(), float_matrix_value(eigenvalues));
-    result.insert("vectors".to_string(), float_matrix_value(identity(values.len())));
+    result.insert(
+        "vectors".to_string(),
+        float_matrix_value(identity(values.len())),
+    );
     Ok(Value::Struct(Rc::new(RefCell::new(result))))
 }
 
@@ -150,7 +174,10 @@ pub fn svd(args: &[Value]) -> Result<Value, String> {
     let mut result = HashMap::new();
     result.insert("U".to_string(), float_matrix_value(identity(values.len())));
     result.insert("S".to_string(), float_matrix_value(singular_values));
-    result.insert("V".to_string(), float_matrix_value(identity(values.first().map_or(0, Vec::len))));
+    result.insert(
+        "V".to_string(),
+        float_matrix_value(identity(values.first().map_or(0, Vec::len))),
+    );
     Ok(Value::Struct(Rc::new(RefCell::new(result))))
 }
 
@@ -206,7 +233,11 @@ fn numeric_matrix(rows: &[Vec<Value>], name: &str) -> Result<Vec<Vec<f64>>, Stri
         if row.len() != col_count {
             return Err(format!("linalg.{} expects rectangular matrix", name));
         }
-        values.push(row.iter().map(Value::to_float).collect::<Result<Vec<_>, _>>()?);
+        values.push(
+            row.iter()
+                .map(Value::to_float)
+                .collect::<Result<Vec<_>, _>>()?,
+        );
     }
     Ok(values)
 }
@@ -306,7 +337,9 @@ fn multiply_matrices(left: &[Vec<f64>], right: &[Vec<f64>]) -> Result<Vec<Vec<f6
     let mut result = vec![vec![0.0; cols]; rows];
     for row in 0..rows {
         for col in 0..cols {
-            result[row][col] = (0..inner).map(|index| left[row][index] * right[index][col]).sum();
+            result[row][col] = (0..inner)
+                .map(|index| left[row][index] * right[index][col])
+                .sum();
         }
     }
     Ok(result)

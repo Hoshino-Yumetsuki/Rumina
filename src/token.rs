@@ -40,6 +40,7 @@ pub enum Token {
     Try,
     Catch,
     Match,
+    Module,
     Table,
     Vec,
     Mat,
@@ -66,14 +67,14 @@ pub enum Token {
     Question, // ?
 
     // 比较运算符
-    Equal,        // =
+    Equal,           // =
     EqualEqualEqual, // ===
-    EqualEqual,   // ==
-    BangEqual,    // !=
-    Greater,      // >
-    GreaterEqual, // >=
-    Less,         // <
-    LessEqual,    // <=
+    EqualEqual,      // ==
+    BangEqual,       // !=
+    Greater,         // >
+    GreaterEqual,    // >=
+    Less,            // <
+    LessEqual,       // <=
 
     // 逻辑运算符
     And,

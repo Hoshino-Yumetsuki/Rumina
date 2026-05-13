@@ -176,7 +176,9 @@ pub fn clamp(args: &[Value]) -> Result<Value, String> {
     }
 
     Ok(Value::Float(
-        args[0].to_float()?.clamp(args[1].to_float()?, args[2].to_float()?),
+        args[0]
+            .to_float()?
+            .clamp(args[1].to_float()?, args[2].to_float()?),
     ))
 }
 

@@ -76,7 +76,10 @@ pub fn choice(args: &[Value]) -> Result<Value, String> {
     }
 
     let Value::Array(values) = &args[0] else {
-        return Err(format!("random.choice expects array, got {}", args[0].type_name()));
+        return Err(format!(
+            "random.choice expects array, got {}",
+            args[0].type_name()
+        ));
     };
 
     let values = values.borrow();
