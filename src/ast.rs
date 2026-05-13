@@ -289,14 +289,14 @@ pub enum UnitStripMode {
 pub enum BinOp {
     Add, // +
     BroadcastAdd,
-    Sub,  // -
+    Sub, // -
     BroadcastEqual,
-    Mul,  // *
+    Mul,     // *
     LeftDiv, // \
-    Div,  // /
-    Mod,  // %
-    Pow,  // ^
-    Pipe, // |>
+    Div,     // /
+    Mod,     // %
+    Pow,     // ^
+    Pipe,    // |>
     SetUnion,
     SetIntersection,
     SetSymmetricDifference,

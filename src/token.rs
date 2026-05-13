@@ -57,17 +57,17 @@ pub enum Token {
     TypeArray,
 
     // 运算符
-    Plus,       // +
-    DotPlus,    // .+
+    Plus,          // +
+    DotPlus,       // .+
     DotEqualEqual, // .==
-    Minus,      // -
-    Star,       // *
-    Slash,      // /
-    Percent,    // %
-    Caret,      // ^ (幂运算)
-    Bang,       // !
-    Question,   // ?
-    Apostrophe, // '
+    Minus,         // -
+    Star,          // *
+    Slash,         // /
+    Percent,       // %
+    Caret,         // ^ (幂运算)
+    Bang,          // !
+    Question,      // ?
+    Apostrophe,    // '
 
     // 比较运算符
     Equal,           // =

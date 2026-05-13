@@ -904,7 +904,6 @@ fn test_lsr008_strip_after_metric_unit_conversion_uses_target_scale() {
 }
 
 #[test]
-#[test]
 fn test_lsr008_strip_after_compound_unit_conversion_uses_target_scale() {
     let result = run_rumina("((20<m/s> as <km/h>) as num) == 72;").unwrap();
     match result {
@@ -913,6 +912,7 @@ fn test_lsr008_strip_after_compound_unit_conversion_uses_target_scale() {
     }
 }
 
+#[test]
 fn test_lsr008_rejects_incompatible_unit_conversion() {
     let err = run_rumina("unit score; 10<m> as score;").unwrap_err();
     assert!(
