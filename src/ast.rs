@@ -217,6 +217,11 @@ pub enum Expr {
         unit: String,
     },
 
+    MatrixTranspose {
+        expr: Box<Expr>,
+        conjugate: bool,
+    },
+
     // 函数调用
     Call {
         func: Box<Expr>,
@@ -281,11 +286,11 @@ pub enum UnitStripMode {
 /// 二元运算符
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinOp {
-    Add,  // +
+    Add, // +
+    BroadcastAdd,
     Sub,  // -
     Mul,  // *
     Div,  // /
-    BroadcastAdd,
     Mod,  // %
     Pow,  // ^
     Pipe, // |>
@@ -320,11 +325,11 @@ impl fmt::Display for BinOp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             BinOp::Add => write!(f, "+"),
+            BinOp::BroadcastAdd => write!(f, ".+"),
             BinOp::Sub => write!(f, "-"),
             BinOp::Mul => write!(f, "*"),
             BinOp::Div => write!(f, "/"),
             BinOp::Mod => write!(f, "%"),
-            BinOp::BroadcastAdd => write!(f, ".+"),
             BinOp::Pow => write!(f, "^"),
             BinOp::Pipe => write!(f, "|>"),
             BinOp::SetUnion => write!(f, "|"),
@@ -353,12 +358,12 @@ mod tests {
     #[test]
     fn test_binop_display() {
         assert_eq!(BinOp::Add.to_string(), "+");
+        assert_eq!(BinOp::BroadcastAdd.to_string(), ".+");
         assert_eq!(BinOp::Sub.to_string(), "-");
         assert_eq!(BinOp::Mul.to_string(), "*");
         assert_eq!(BinOp::Div.to_string(), "/");
         assert_eq!(BinOp::Mod.to_string(), "%");
         assert_eq!(BinOp::Pow.to_string(), "^");
-        assert_eq!(BinOp::BroadcastAdd.to_string(), ".+");
         assert_eq!(BinOp::Pipe.to_string(), "|>");
         assert_eq!(BinOp::Equal.to_string(), "==");
         assert_eq!(BinOp::NotEqual.to_string(), "!=");

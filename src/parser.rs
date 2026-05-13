@@ -1190,9 +1190,13 @@ impl Parser {
                     };
                 }
                 Token::Dot => {
-                    // 成员访问
                     self.advance();
-                    if let Token::Ident(member) = self.current_token() {
+                    if self.match_token(&Token::Apostrophe) {
+                        expr = Expr::MatrixTranspose {
+                            expr: Box::new(expr),
+                            conjugate: false,
+                        };
+                    } else if let Token::Ident(member) = self.current_token() {
                         let member = member.clone();
                         self.advance();
                         expr = Expr::Member {

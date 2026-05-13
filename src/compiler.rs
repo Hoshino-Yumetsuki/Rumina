@@ -860,10 +860,10 @@ impl Compiler {
                 // Emit operation - always use generic opcodes
                 let opcode = match op {
                     BinOp::Add => OpCode::Add,
-                    BinOp::Sub => OpCode::Sub,
                     BinOp::BroadcastAdd => {
                         unreachable!("broadcast add handled before opcode emission")
                     }
+                    BinOp::Sub => OpCode::Sub,
                     BinOp::Mul => OpCode::Mul,
                     BinOp::Div => OpCode::Div,
                     BinOp::Mod => OpCode::Mod,
@@ -921,6 +921,12 @@ impl Compiler {
                 return Err(RuminaError::runtime(
                     "unit-attached numeric literals are not yet supported by the bytecode compiler"
                         .to_string(),
+                ));
+            }
+
+            Expr::MatrixTranspose { .. } => {
+                return Err(RuminaError::runtime(
+                    "matrix transpose is not yet supported by the bytecode compiler".to_string(),
                 ));
             }
 

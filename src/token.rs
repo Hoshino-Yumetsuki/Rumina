@@ -57,15 +57,16 @@ pub enum Token {
     TypeArray,
 
     // 运算符
-    Plus,     // +
-    DotPlus,  // .+
-    Minus,    // -
-    Star,     // *
-    Slash,    // /
-    Percent,  // %
-    Caret,    // ^ (幂运算)
-    Bang,     // !
-    Question, // ?
+    Plus,       // +
+    DotPlus,    // .+
+    Minus,      // -
+    Star,       // *
+    Slash,      // /
+    Percent,    // %
+    Caret,      // ^ (幂运算)
+    Bang,       // !
+    Question,   // ?
+    Apostrophe, // '
 
     // 比较运算符
     Equal,           // =
@@ -123,6 +124,7 @@ impl std::fmt::Display for Token {
             Token::Try => write!(f, "try"),
             Token::Catch => write!(f, "catch"),
             Token::Question => write!(f, "?"),
+            Token::Apostrophe => write!(f, "'"),
             _ => write!(f, "{:?}", self),
         }
     }
@@ -144,6 +146,7 @@ mod tests {
         assert_eq!(Token::Try.to_string(), "try");
         assert_eq!(Token::Catch.to_string(), "catch");
         assert_eq!(Token::Question.to_string(), "?");
+        assert_eq!(Token::Apostrophe.to_string(), "'");
     }
 
     #[test]

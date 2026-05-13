@@ -25,6 +25,13 @@ fn expect_vector(result: Result<Option<Value>, rumina::RuminaError>) -> Vec<Valu
     }
 }
 
+fn expect_matrix(result: Result<Option<Value>, rumina::RuminaError>) -> Vec<Vec<Value>> {
+    match result.unwrap() {
+        Some(Value::Matrix(rows)) => rows.borrow().clone(),
+        other => panic!("Expected Matrix, got {:?}", other),
+    }
+}
+
 fn expect_set(result: Result<Option<Value>, rumina::RuminaError>) -> Value {
     match result.unwrap() {
         Some(value @ Value::Set(_)) => value,
@@ -437,6 +444,19 @@ fn test_lsr000_matrix_column_wildcard_slice_returns_vector() {
 fn test_lsr000_matrix_row_wildcard_slice_returns_vector() {
     let values = expect_vector(run_rumina("let m = mat[1, 2, 3; 4, 5, 6]; m[2, *];"));
     assert_eq!(values, vec![Value::Int(4), Value::Int(5), Value::Int(6)]);
+}
+
+#[test]
+fn test_lsr000_matrix_postfix_non_conjugate_transpose() {
+    let rows = expect_matrix(run_rumina("mat[1, 2; 3, 4].';"));
+
+    assert_eq!(
+        rows,
+        vec![
+            vec![Value::Int(1), Value::Int(3)],
+            vec![Value::Int(2), Value::Int(4)]
+        ]
+    );
 }
 
 #[test]

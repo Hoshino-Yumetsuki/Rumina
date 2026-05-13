@@ -451,6 +451,10 @@ impl Lexer {
                     self.advance();
                     Token::RBracket
                 }
+                '\'' if self.position > 0 && self.input.get(self.position - 1) == Some(&'.') => {
+                    self.advance();
+                    Token::Apostrophe
+                }
                 '\'' => self.read_single_string(),
                 '"' => self.read_string(),
                 _ if ch.is_ascii_digit() => self.read_number(),

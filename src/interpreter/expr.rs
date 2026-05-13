@@ -400,6 +400,29 @@ impl Interpreter {
                 }
             }
 
+            Expr::MatrixTranspose { expr, conjugate } => {
+                if *conjugate {
+                    return Err("conjugate transpose is not yet supported".to_string());
+                }
+                let value = self.eval_expr(expr)?;
+                let Value::Matrix(rows) = value else {
+                    return Err(format!("Cannot transpose {}", value.type_name()));
+                };
+                let rows = rows.borrow();
+                let row_count = rows.len();
+                let col_count = rows.first().map_or(0, Vec::len);
+                let mut transposed = vec![Vec::with_capacity(row_count); col_count];
+                for row in rows.iter() {
+                    if row.len() != col_count {
+                        return Err("Matrix transpose expects rectangular matrix".to_string());
+                    }
+                    for (col, item) in row.iter().enumerate() {
+                        transposed[col].push(item.clone());
+                    }
+                }
+                Ok(Value::Matrix(Rc::new(RefCell::new(transposed))))
+            }
+
             Expr::Call { func, args } => {
                 // 检查是否是成员调用 (obj.method())
                 if let Expr::Member { object, member } = &**func {
@@ -787,6 +810,7 @@ impl Interpreter {
             | Expr::UnitStrip { .. }
             | Expr::UnitConvert { .. }
             | Expr::UnitAttach { .. }
+            | Expr::MatrixTranspose { .. }
             | Expr::Lambda { .. }
             | Expr::Try(_)
             | Expr::Range { .. }

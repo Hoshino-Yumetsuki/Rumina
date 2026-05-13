@@ -234,6 +234,7 @@ fn check_lsr006_lambda_capture_mutation(statements: &[ast::Stmt]) -> Result<(), 
             | ast::Expr::UnitStrip { expr, .. }
             | ast::Expr::UnitConvert { expr, .. }
             | ast::Expr::UnitAttach { expr, .. }
+            | ast::Expr::MatrixTranspose { expr, .. }
             | ast::Expr::Try(expr) => expr_check(expr, scopes, lambda_depth)?,
             ast::Expr::Range { start, end } => {
                 expr_check(start, scopes, lambda_depth)?;
@@ -378,6 +379,7 @@ fn should_use_interpreter_runtime(statements: &[ast::Stmt]) -> bool {
             ast::Expr::UnitStrip { .. } => true,
             ast::Expr::UnitConvert { .. } => true,
             ast::Expr::UnitAttach { .. } => true,
+            ast::Expr::MatrixTranspose { .. } => true,
             ast::Expr::Array(items) => items.iter().any(expr_requires_interpreter),
             ast::Expr::Vector(_) => true,
             ast::Expr::Matrix(_) => true,
