@@ -1125,6 +1125,7 @@ impl Parser {
                 Token::Plus => BinOp::Add,
                 Token::DotPlus => BinOp::BroadcastAdd,
                 Token::Minus => BinOp::Sub,
+                Token::DotMinus => BinOp::BroadcastSub,
                 Token::Xor => BinOp::SetSymmetricDifference,
                 _ => break,
             };

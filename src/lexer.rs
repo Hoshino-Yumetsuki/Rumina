@@ -406,6 +406,9 @@ impl Lexer {
                     if self.current_char == Some('+') {
                         self.advance();
                         Token::DotPlus
+                    } else if self.current_char == Some('-') {
+                        self.advance();
+                        Token::DotMinus
                     } else if self.current_char == Some('*') {
                         self.advance();
                         Token::DotStar

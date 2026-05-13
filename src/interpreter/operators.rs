@@ -210,6 +210,14 @@ impl Interpreter {
                 Ok(Value::Vector(Rc::new(RefCell::new(result))))
             }
 
+            (Value::Vector(values), _) if op == BinOp::BroadcastSub => {
+                let mut result = Vec::with_capacity(values.borrow().len());
+                for value in values.borrow().iter() {
+                    result.push(self.eval_binary_op(value, BinOp::Sub, right)?);
+                }
+                Ok(Value::Vector(Rc::new(RefCell::new(result))))
+            }
+
             (Value::Vector(values), _) if op == BinOp::BroadcastEqual => {
                 let mut result = Vec::with_capacity(values.borrow().len());
                 for value in values.borrow().iter() {
