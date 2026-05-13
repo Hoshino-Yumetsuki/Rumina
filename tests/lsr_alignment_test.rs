@@ -920,15 +920,6 @@ fn test_lsr008_rejects_legacy_num_unit_syntax() {
 #[test]
 fn test_lsr000_unit_declarations_are_accepted() {
     let result = expect_int(run_rumina("unit score; unit level = 100; 1;"));
-#[test]
-fn test_lsr006_lambda_untyped_assignment_reports_ambiguous_type() {
-    let err = run_rumina("let inc = |x| -> x + 1;").unwrap_err();
-    assert!(
-        err.to_string().contains("LambdaTypeAmbiguous"),
-        "expected LambdaTypeAmbiguous diagnostic, got {err}"
-    );
-}
-
     assert_eq!(result, 1);
 }
 
@@ -944,6 +935,15 @@ fn test_lsr006_lambda_arity_mismatch_reports_diagnostic() {
     assert!(
         err.to_string().contains("LambdaArityMismatch"),
         "expected LambdaArityMismatch diagnostic, got {err}"
+    );
+}
+
+#[test]
+fn test_lsr006_lambda_untyped_assignment_reports_ambiguous_type() {
+    let err = run_rumina("let inc = |x| -> x + 1;").unwrap_err();
+    assert!(
+        err.to_string().contains("LambdaTypeAmbiguous"),
+        "expected LambdaTypeAmbiguous diagnostic, got {err}"
     );
 }
 
