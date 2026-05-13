@@ -135,6 +135,7 @@ fn test_lsr_broadcast_vector_scalar_subtract() {
     let values = expect_vector(run_rumina("vec[5, 7, 9] .- 2;"));
     assert_eq!(values, vec![Value::Int(3), Value::Int(5), Value::Int(7)]);
 }
+
 #[test]
 fn test_lsr_broadcast_vector_scalar_equal() {
     let values = expect_vector(run_rumina("vec[1, 2, 3] .== 2;"));
@@ -731,6 +732,7 @@ fn test_lsr007_explog_basic_profile_normalizes_exp_zero() {
         other => panic!("Expected Bool(true), got {:?}", other),
     }
 }
+
 #[test]
 fn test_lsr007_set_eqv_profile_rejects_invalid_profile() {
     let error = run_rumina("set_eqv_profile(\"Unknown\");").unwrap_err();
