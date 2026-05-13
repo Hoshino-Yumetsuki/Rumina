@@ -1240,6 +1240,17 @@ impl Parser {
     fn parse_index_component(&mut self) -> Result<Expr, String> {
         if self.match_token(&Token::Star) {
             Ok(Expr::Wildcard)
+        } else if self.tokens.get(self.current + 1) == Some(&Token::Dot)
+            && self.tokens.get(self.current + 2) == Some(&Token::Dot)
+        {
+            let start = self.parse_primary()?;
+            self.expect(Token::Dot)?;
+            self.expect(Token::Dot)?;
+            let end = self.parse_expression()?;
+            Ok(Expr::Range {
+                start: Box::new(start),
+                end: Box::new(end),
+            })
         } else {
             self.parse_expression()
         }
@@ -1466,17 +1477,6 @@ impl Parser {
             Token::Ident(name) if name == "_" => {
                 self.advance();
                 Ok(MatchPattern::Wildcard)
-                    loop {
-                        let Token::Ident(name) = self.current_token() else {
-                            return Err(format!(
-                                "Expected vector pattern binding, found {:?}",
-                                self.current_token()
-                            ));
-                        };
-                        names.push(name.clone());
-                        self.advance();
-                        if !self.match_token(&Token::Comma) {
-                            break;
             }
             Token::Ident(name) => {
                 let name = name.clone();
@@ -1488,6 +1488,17 @@ impl Parser {
                 self.expect(Token::LBracket)?;
                 let mut names = Vec::new();
                 if self.current_token() != &Token::RBracket {
+                    loop {
+                        let Token::Ident(name) = self.current_token() else {
+                            return Err(format!(
+                                "Expected vector pattern binding, found {:?}",
+                                self.current_token()
+                            ));
+                        };
+                        names.push(name.clone());
+                        self.advance();
+                        if !self.match_token(&Token::Comma) {
+                            break;
                         }
                     }
                 }

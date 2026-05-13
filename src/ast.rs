@@ -166,6 +166,12 @@ pub enum Expr {
     // Matrix/vector slice wildcard used inside index expressions.
     Wildcard,
 
+    // Inclusive range used inside index expressions.
+    Range {
+        start: Box<Expr>,
+        end: Box<Expr>,
+    },
+
     // 数组字面量
     Array(Vec<Expr>),
 

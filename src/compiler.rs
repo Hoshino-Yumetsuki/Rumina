@@ -828,6 +828,12 @@ impl Compiler {
                 ));
             }
 
+            Expr::Range { .. } => {
+                return Err(RuminaError::runtime(
+                    "range slices are not yet supported by the bytecode compiler".to_string(),
+                ));
+            }
+
             Expr::Binary { left, op, right } => {
                 if matches!(
                     op,

@@ -421,6 +421,15 @@ impl ASTOptimizer {
                 })
             }
 
+            Expr::Range { start, end } => {
+                let opt_start = Box::new(self.optimize_expr(*start)?);
+                let opt_end = Box::new(self.optimize_expr(*end)?);
+                Ok(Expr::Range {
+                    start: opt_start,
+                    end: opt_end,
+                })
+            }
+
             Expr::Member { object, member } => {
                 let opt_object = Box::new(self.optimize_expr(*object)?);
                 Ok(Expr::Member {

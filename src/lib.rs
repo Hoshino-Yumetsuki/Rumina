@@ -235,6 +235,10 @@ fn check_lsr006_lambda_capture_mutation(statements: &[ast::Stmt]) -> Result<(), 
             | ast::Expr::UnitConvert { expr, .. }
             | ast::Expr::UnitAttach { expr, .. }
             | ast::Expr::Try(expr) => expr_check(expr, scopes, lambda_depth)?,
+            ast::Expr::Range { start, end } => {
+                expr_check(start, scopes, lambda_depth)?;
+                expr_check(end, scopes, lambda_depth)?;
+            }
             ast::Expr::Call { func, args } => {
                 expr_check(func, scopes, lambda_depth)?;
                 for arg in args {
@@ -348,6 +352,7 @@ fn should_use_interpreter_runtime(statements: &[ast::Stmt]) -> bool {
         match expr {
             ast::Expr::Try(_) => true,
             ast::Expr::Wildcard => true,
+            ast::Expr::Range { .. } => true,
             ast::Expr::Member { object, .. } => {
                 matches!(object.as_ref(), ast::Expr::Array(_)) || expr_requires_interpreter(object)
             }
