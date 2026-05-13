@@ -73,6 +73,15 @@ fn check_lsr006_lambda_capture_mutation(statements: &[ast::Stmt]) -> Result<(), 
             == Some(BindingKind::Var)
     }
 
+    fn assigned_root_name(expr: &ast::Expr) -> Option<&str> {
+        match expr {
+            ast::Expr::Ident(name) => Some(name),
+            ast::Expr::Member { object, .. } => assigned_root_name(object),
+            ast::Expr::Index { object, .. } => assigned_root_name(object),
+            _ => None,
+        }
+    }
+
     fn stmt_check(
         stmt: &ast::Stmt,
         scopes: &mut Vec<std::collections::HashMap<String, BindingKind>>,
@@ -115,6 +124,15 @@ fn check_lsr006_lambda_capture_mutation(statements: &[ast::Stmt]) -> Result<(), 
             ast::Stmt::MemberAssign { object, value, .. } => {
                 expr_check(object, scopes, lambda_depth)?;
                 expr_check(value, scopes, lambda_depth)?;
+                if let Some(name) = assigned_root_name(object)
+                    && lambda_depth > 0
+                    && lookup_captured_var(scopes, name)
+                {
+                    return Err(RuminaError::runtime(format!(
+                        "LambdaCaptureMutation: cannot mutate captured outer var '{}' inside lambda",
+                        name
+                    )));
+                }
             }
             ast::Stmt::IndexAssign {
                 object,
@@ -124,6 +142,15 @@ fn check_lsr006_lambda_capture_mutation(statements: &[ast::Stmt]) -> Result<(), 
                 expr_check(object, scopes, lambda_depth)?;
                 expr_check(index, scopes, lambda_depth)?;
                 expr_check(value, scopes, lambda_depth)?;
+                if let Some(name) = assigned_root_name(object)
+                    && lambda_depth > 0
+                    && lookup_captured_var(scopes, name)
+                {
+                    return Err(RuminaError::runtime(format!(
+                        "LambdaCaptureMutation: cannot mutate captured outer var '{}' inside lambda",
+                        name
+                    )));
+                }
             }
             ast::Stmt::Expr(expr) | ast::Stmt::Return(Some(expr)) => {
                 expr_check(expr, scopes, lambda_depth)?

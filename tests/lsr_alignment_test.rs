@@ -1270,6 +1270,24 @@ fn test_lsr006_lambda_capture_mutation_reports_diagnostic() {
 }
 
 #[test]
+fn test_lsr006_lambda_capture_member_and_index_mutation_report_diagnostic() {
+    let member_err =
+        run_rumina("var state = { value = 0 }; let bump = do { state.value = 1; }; bump();")
+            .unwrap_err();
+    assert!(
+        member_err.to_string().contains("LambdaCaptureMutation"),
+        "expected LambdaCaptureMutation diagnostic, got {member_err}"
+    );
+
+    let index_err =
+        run_rumina("var items = [0]; let bump = do { items[0] = 1; }; bump();").unwrap_err();
+    assert!(
+        index_err.to_string().contains("LambdaCaptureMutation"),
+        "expected LambdaCaptureMutation diagnostic, got {index_err}"
+    );
+}
+
+#[test]
 fn test_lsr000_function_accepts_typed_signature() {
     let result = expect_int(run_rumina(
         "func add(x num, y num) -> num { return x + y; } add(20, 22);",
