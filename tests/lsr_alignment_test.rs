@@ -587,7 +587,11 @@ fn test_lsr005_match_vector_destructuring_pattern() {
 
 #[test]
 fn test_lsr005_match_wildcard_must_be_last() {
-    assert!(run_rumina("match 1 { _ => 0, 1 => 1 };").is_err());
+    let error = run_rumina("match 1 { _ => 0, 1 => 1 };").unwrap_err();
+    assert!(
+        error.to_string().contains("UnreachablePattern"),
+        "expected UnreachablePattern diagnostic, got {error}"
+    );
 }
 
 #[test]

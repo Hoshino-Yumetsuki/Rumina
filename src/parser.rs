@@ -1487,7 +1487,7 @@ impl Parser {
             }
 
             if is_wildcard && self.current_token() != &Token::RBrace {
-                return Err("Wildcard match arm must be last".to_string());
+                return Err("UnreachablePattern: wildcard match arm must be last".to_string());
             }
         }
 
