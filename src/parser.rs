@@ -1435,17 +1435,6 @@ impl Parser {
         }
 
         self.expect(Token::RBrace)?;
-        Ok(Expr::Match {
-            target: Box::new(target),
-            arms,
-        })
-    }
-
-    fn parse_match_pattern(&mut self) -> Result<MatchPattern, String> {
-        match self.current_token() {
-            Token::Ident(name) if name == "_" => {
-                self.advance();
-                Ok(MatchPattern::Wildcard)
         let has_fallback = arms.iter().any(|arm| {
             arm.guard.is_none()
                 && matches!(
@@ -1477,6 +1466,17 @@ impl Parser {
                 self.expect(Token::LBracket)?;
                 let mut names = Vec::new();
                 if self.current_token() != &Token::RBracket {
+        Ok(Expr::Match {
+            target: Box::new(target),
+            arms,
+        })
+    }
+
+    fn parse_match_pattern(&mut self) -> Result<MatchPattern, String> {
+        match self.current_token() {
+            Token::Ident(name) if name == "_" => {
+                self.advance();
+                Ok(MatchPattern::Wildcard)
                     loop {
                         let Token::Ident(name) = self.current_token() else {
                             return Err(format!(
