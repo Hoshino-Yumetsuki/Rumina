@@ -842,7 +842,14 @@ impl Compiler {
                         | BinOp::BroadcastAdd
                         | BinOp::BroadcastSub
                         | BinOp::BroadcastMul
+                        | BinOp::BroadcastDiv
+                        | BinOp::BroadcastPow
                         | BinOp::BroadcastEqual
+                        | BinOp::BroadcastNotEqual
+                        | BinOp::BroadcastGreater
+                        | BinOp::BroadcastGreaterEq
+                        | BinOp::BroadcastLess
+                        | BinOp::BroadcastLessEq
                         | BinOp::LeftDiv
                         | BinOp::In
                         | BinOp::NotIn
@@ -873,8 +880,29 @@ impl Compiler {
                     BinOp::BroadcastMul => {
                         unreachable!("broadcast multiply handled before opcode emission")
                     }
+                    BinOp::BroadcastDiv => {
+                        unreachable!("broadcast division handled before opcode emission")
+                    }
+                    BinOp::BroadcastPow => {
+                        unreachable!("broadcast power handled before opcode emission")
+                    }
                     BinOp::BroadcastEqual => {
                         unreachable!("broadcast equality handled before opcode emission")
+                    }
+                    BinOp::BroadcastNotEqual => {
+                        unreachable!("broadcast inequality handled before opcode emission")
+                    }
+                    BinOp::BroadcastGreater => {
+                        unreachable!("broadcast greater-than handled before opcode emission")
+                    }
+                    BinOp::BroadcastGreaterEq => {
+                        unreachable!("broadcast greater-equal handled before opcode emission")
+                    }
+                    BinOp::BroadcastLess => {
+                        unreachable!("broadcast less-than handled before opcode emission")
+                    }
+                    BinOp::BroadcastLessEq => {
+                        unreachable!("broadcast less-equal handled before opcode emission")
                     }
                     BinOp::Sub => OpCode::Sub,
                     BinOp::LeftDiv => unreachable!("left division handled before opcode emission"),

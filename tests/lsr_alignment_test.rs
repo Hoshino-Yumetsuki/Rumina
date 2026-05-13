@@ -124,6 +124,14 @@ fn test_lsr_broadcast_vector_scalar_add() {
     assert_eq!(values, vec![Value::Int(2), Value::Int(3), Value::Int(4)]);
 }
 
+
+fn value_strings(values: Vec<Value>) -> Vec<String> {
+    values.into_iter().map(|value| value.to_string()).collect()
+}
+
+fn matrix_value_strings(rows: Vec<Vec<Value>>) -> Vec<Vec<String>> {
+    rows.into_iter().map(value_strings).collect()
+}
 #[test]
 fn test_lsr_broadcast_vector_scalar_multiply() {
     let values = expect_vector(run_rumina("vec[1, 2, 3] .* 2;"));
@@ -145,6 +153,83 @@ fn test_lsr_broadcast_vector_scalar_equal() {
     );
 }
 
+
+#[test]
+fn test_lsr_broadcast_vector_scalar_remaining_dotted_operators() {
+    assert_eq!(
+        value_strings(expect_vector(run_rumina("vec[8, 10, 12] ./ 2;"))),
+        vec!["4/1", "5/1", "6/1"]
+    );
+    assert_eq!(
+        expect_vector(run_rumina("vec[2, 3, 4] .^ 2;")),
+        vec![Value::Int(4), Value::Int(9), Value::Int(16)]
+    );
+    assert_eq!(
+        expect_vector(run_rumina("vec[1, 2, 3] .!= 2;")),
+        vec![Value::Bool(true), Value::Bool(false), Value::Bool(true)]
+    );
+    assert_eq!(
+        expect_vector(run_rumina("vec[1, 2, 3] .< 3;")),
+        vec![Value::Bool(true), Value::Bool(true), Value::Bool(false)]
+    );
+    assert_eq!(
+        expect_vector(run_rumina("vec[1, 2, 3] .<= 2;")),
+        vec![Value::Bool(true), Value::Bool(true), Value::Bool(false)]
+    );
+    assert_eq!(
+        expect_vector(run_rumina("vec[1, 2, 3] .> 2;")),
+        vec![Value::Bool(false), Value::Bool(false), Value::Bool(true)]
+    );
+    assert_eq!(
+        expect_vector(run_rumina("vec[1, 2, 3] .>= 2;")),
+        vec![Value::Bool(false), Value::Bool(true), Value::Bool(true)]
+    );
+}
+
+#[test]
+fn test_lsr_broadcast_same_shape_vectors() {
+    assert_eq!(
+        expect_vector(run_rumina("vec[1, 2, 3] .+ vec[10, 20, 30];")),
+        vec![Value::Int(11), Value::Int(22), Value::Int(33)]
+    );
+    assert_eq!(
+        value_strings(expect_vector(run_rumina("vec[8, 9, 10] ./ vec[2, 3, 5];"))),
+        vec!["4/1", "3/1", "2/1"]
+    );
+    assert_eq!(
+        expect_vector(run_rumina("vec[1, 4, 9] .>= vec[1, 5, 8];")),
+        vec![Value::Bool(true), Value::Bool(false), Value::Bool(true)]
+    );
+}
+
+#[test]
+fn test_lsr_broadcast_matrix_scalar_and_same_shape_matrices() {
+    assert_eq!(
+        expect_matrix(run_rumina("mat[1, 2; 3, 4] .+ 10;")),
+        vec![
+            vec![Value::Int(11), Value::Int(12)],
+            vec![Value::Int(13), Value::Int(14)],
+        ]
+    );
+    assert_eq!(
+        matrix_value_strings(expect_matrix(run_rumina("mat[8, 9; 10, 12] ./ 2;"))),
+        vec![vec!["4/1", "9/2"], vec!["5/1", "6/1"]]
+    );
+    assert_eq!(
+        expect_matrix(run_rumina("mat[2, 3; 4, 5] .^ 2;")),
+        vec![
+            vec![Value::Int(4), Value::Int(9)],
+            vec![Value::Int(16), Value::Int(25)],
+        ]
+    );
+    assert_eq!(
+        expect_matrix(run_rumina("mat[1, 2; 3, 4] .< mat[2, 2; 2, 5];")),
+        vec![
+            vec![Value::Bool(true), Value::Bool(false)],
+            vec![Value::Bool(false), Value::Bool(true)],
+        ]
+    );
+}
 #[test]
 fn test_legacy_logical_operators_are_rejected() {
     assert!(

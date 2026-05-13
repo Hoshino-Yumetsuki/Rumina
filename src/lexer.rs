@@ -412,10 +412,36 @@ impl Lexer {
                     } else if self.current_char == Some('*') {
                         self.advance();
                         Token::DotStar
+                    } else if self.current_char == Some('/') {
+                        self.advance();
+                        Token::DotSlash
+                    } else if self.current_char == Some('^') {
+                        self.advance();
+                        Token::DotCaret
                     } else if self.current_char == Some('=') && self.peek() == Some('=') {
                         self.advance();
                         self.advance();
                         Token::DotEqualEqual
+                    } else if self.current_char == Some('!') && self.peek() == Some('=') {
+                        self.advance();
+                        self.advance();
+                        Token::DotBangEqual
+                    } else if self.current_char == Some('>') {
+                        self.advance();
+                        if self.current_char == Some('=') {
+                            self.advance();
+                            Token::DotGreaterEqual
+                        } else {
+                            Token::DotGreater
+                        }
+                    } else if self.current_char == Some('<') {
+                        self.advance();
+                        if self.current_char == Some('=') {
+                            self.advance();
+                            Token::DotLessEqual
+                        } else {
+                            Token::DotLess
+                        }
                     } else {
                         Token::Dot
                     }

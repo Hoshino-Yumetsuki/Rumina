@@ -57,19 +57,26 @@ pub enum Token {
     TypeArray,
 
     // 运算符
-    Plus,          // +
-    DotPlus,       // .+
-    DotMinus,      // .-
-    DotStar,       // .*
-    DotEqualEqual, // .==
-    Minus,         // -
-    Star,          // *
-    Slash,         // /
-    Percent,       // %
-    Caret,         // ^ (幂运算)
-    Bang,          // !
-    Question,      // ?
-    Apostrophe,    // '
+    Plus,            // +
+    DotPlus,         // .+
+    DotMinus,        // .-
+    DotStar,         // .*
+    DotSlash,        // ./
+    DotCaret,        // .^
+    DotEqualEqual,   // .==
+    DotBangEqual,    // .!=
+    DotGreater,      // .>
+    DotGreaterEqual, // .>=
+    DotLess,         // .<
+    DotLessEqual,    // .<=
+    Minus,           // -
+    Star,            // *
+    Slash,           // /
+    Percent,         // %
+    Caret,           // ^ (幂运算)
+    Bang,            // !
+    Question,        // ?
+    Apostrophe,      // '
 
     // 比较运算符
     Equal,           // =

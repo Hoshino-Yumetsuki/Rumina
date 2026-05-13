@@ -1083,6 +1083,7 @@ impl Parser {
                 Token::EqualEqual => BinOp::Equal,
                 Token::DotEqualEqual => BinOp::BroadcastEqual,
                 Token::BangEqual => BinOp::NotEqual,
+                Token::DotBangEqual => BinOp::BroadcastNotEqual,
                 _ => break,
             };
             self.advance();
@@ -1104,8 +1105,12 @@ impl Parser {
             let op = match self.current_token() {
                 Token::Greater => BinOp::Greater,
                 Token::GreaterEqual => BinOp::GreaterEq,
+                Token::DotGreater => BinOp::BroadcastGreater,
+                Token::DotGreaterEqual => BinOp::BroadcastGreaterEq,
                 Token::Less => BinOp::Less,
                 Token::LessEqual => BinOp::LessEq,
+                Token::DotLess => BinOp::BroadcastLess,
+                Token::DotLessEqual => BinOp::BroadcastLessEq,
                 Token::In => BinOp::In,
                 Token::Subset => BinOp::Subset,
                 Token::Not if self.tokens.get(self.current + 1) == Some(&Token::In) => {
@@ -1159,6 +1164,7 @@ impl Parser {
                 Token::Star => BinOp::Mul,
                 Token::DotStar => BinOp::BroadcastMul,
                 Token::Slash => BinOp::Div,
+                Token::DotSlash => BinOp::BroadcastDiv,
                 Token::Percent => BinOp::Mod,
                 Token::Ampersand => BinOp::SetIntersection,
                 _ => break,

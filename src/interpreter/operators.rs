@@ -48,6 +48,86 @@ impl Interpreter {
         Ok(Value::normalize_multi(results))
     }
 
+    fn broadcast_inner_op(op: BinOp) -> Option<BinOp> {
+        match op {
+            BinOp::BroadcastAdd => Some(BinOp::Add),
+            BinOp::BroadcastSub => Some(BinOp::Sub),
+            BinOp::BroadcastMul => Some(BinOp::Mul),
+            BinOp::BroadcastDiv => Some(BinOp::Div),
+            BinOp::BroadcastPow => Some(BinOp::Pow),
+            BinOp::BroadcastEqual => Some(BinOp::Equal),
+            BinOp::BroadcastNotEqual => Some(BinOp::NotEqual),
+            BinOp::BroadcastGreater => Some(BinOp::Greater),
+            BinOp::BroadcastGreaterEq => Some(BinOp::GreaterEq),
+            BinOp::BroadcastLess => Some(BinOp::Less),
+            BinOp::BroadcastLessEq => Some(BinOp::LessEq),
+            _ => None,
+        }
+    }
+
+    fn eval_vector_broadcast(
+        &mut self,
+        left: &[Value],
+        op: BinOp,
+        right: &Value,
+    ) -> Result<Value, String> {
+        let result = if let Value::Vector(right_values) = right {
+            let right_values = right_values.borrow();
+            if left.len() != right_values.len() {
+                return Err("Vectors must have same length for broadcast operation".to_string());
+            }
+            left.iter()
+                .zip(right_values.iter())
+                .map(|(left, right)| self.eval_binary_op(left, op, right))
+                .collect::<Result<Vec<_>, _>>()?
+        } else {
+            left.iter()
+                .map(|value| self.eval_binary_op(value, op, right))
+                .collect::<Result<Vec<_>, _>>()?
+        };
+
+        Ok(Value::Vector(Rc::new(RefCell::new(result))))
+    }
+
+    fn eval_matrix_broadcast(
+        &mut self,
+        left: &[Vec<Value>],
+        op: BinOp,
+        right: &Value,
+    ) -> Result<Value, String> {
+        let result = if let Value::Matrix(right_rows) = right {
+            let right_rows = right_rows.borrow();
+            if left.len() != right_rows.len() {
+                return Err("Matrices must have same shape for broadcast operation".to_string());
+            }
+            left.iter()
+                .zip(right_rows.iter())
+                .map(|(left_row, right_row)| {
+                    if left_row.len() != right_row.len() {
+                        return Err(
+                            "Matrices must have same shape for broadcast operation".to_string()
+                        );
+                    }
+                    left_row
+                        .iter()
+                        .zip(right_row.iter())
+                        .map(|(left, right)| self.eval_binary_op(left, op, right))
+                        .collect::<Result<Vec<_>, _>>()
+                })
+                .collect::<Result<Vec<_>, _>>()?
+        } else {
+            left.iter()
+                .map(|row| {
+                    row.iter()
+                        .map(|value| self.eval_binary_op(value, op, right))
+                        .collect::<Result<Vec<_>, _>>()
+                })
+                .collect::<Result<Vec<_>, _>>()?
+        };
+
+        Ok(Value::Matrix(Rc::new(RefCell::new(result))))
+    }
+
     pub(super) fn compute_power(&self, base: f64, exponent: f64) -> Result<Value, String> {
         // Check if exponent is a simple rational (1/n form)
         let denom_approx = (1.0 / exponent).round();
@@ -190,6 +270,20 @@ impl Interpreter {
         }
 
         match (left, right) {
+            (Value::Vector(values), _) if Self::broadcast_inner_op(op).is_some() => self
+                .eval_vector_broadcast(
+                    &values.borrow(),
+                    Self::broadcast_inner_op(op).unwrap(),
+                    right,
+                ),
+
+            (Value::Matrix(rows), _) if Self::broadcast_inner_op(op).is_some() => self
+                .eval_matrix_broadcast(
+                    &rows.borrow(),
+                    Self::broadcast_inner_op(op).unwrap(),
+                    right,
+                ),
+
             (Value::Matrix(_), Value::Matrix(_)) if op == BinOp::LeftDiv => {
                 crate::builtin::linalg::solve_left(&[left.clone(), right.clone()])
             }

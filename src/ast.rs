@@ -292,8 +292,15 @@ pub enum BinOp {
     Sub, // -
     BroadcastSub,
     BroadcastEqual,
+    BroadcastNotEqual,
+    BroadcastGreater,
+    BroadcastGreaterEq,
+    BroadcastLess,
+    BroadcastLessEq,
     Mul, // *
     BroadcastMul,
+    BroadcastDiv,
+    BroadcastPow,
     LeftDiv, // \
     Div,     // /
     Mod,     // %
@@ -332,10 +339,17 @@ impl fmt::Display for BinOp {
             BinOp::Add => write!(f, "+"),
             BinOp::BroadcastAdd => write!(f, ".+"),
             BinOp::BroadcastEqual => write!(f, ".=="),
+            BinOp::BroadcastNotEqual => write!(f, ".!="),
+            BinOp::BroadcastGreater => write!(f, ".>"),
+            BinOp::BroadcastGreaterEq => write!(f, ".>="),
+            BinOp::BroadcastLess => write!(f, ".<"),
+            BinOp::BroadcastLessEq => write!(f, ".<="),
             BinOp::Sub => write!(f, "-"),
             BinOp::BroadcastSub => write!(f, ".-"),
             BinOp::Mul => write!(f, "*"),
             BinOp::BroadcastMul => write!(f, ".*"),
+            BinOp::BroadcastDiv => write!(f, "./"),
+            BinOp::BroadcastPow => write!(f, ".^"),
             BinOp::LeftDiv => write!(f, "\\"),
             BinOp::Div => write!(f, "/"),
             BinOp::Mod => write!(f, "%"),
@@ -369,11 +383,18 @@ mod tests {
         assert_eq!(BinOp::Add.to_string(), "+");
         assert_eq!(BinOp::BroadcastAdd.to_string(), ".+");
         assert_eq!(BinOp::BroadcastEqual.to_string(), ".==");
+        assert_eq!(BinOp::BroadcastNotEqual.to_string(), ".!=");
+        assert_eq!(BinOp::BroadcastGreater.to_string(), ".>");
+        assert_eq!(BinOp::BroadcastGreaterEq.to_string(), ".>=");
+        assert_eq!(BinOp::BroadcastLess.to_string(), ".<");
+        assert_eq!(BinOp::BroadcastLessEq.to_string(), ".<=");
         assert_eq!(BinOp::Sub.to_string(), "-");
         assert_eq!(BinOp::BroadcastSub.to_string(), ".-");
         assert_eq!(BinOp::LeftDiv.to_string(), "\\");
         assert_eq!(BinOp::Mul.to_string(), "*");
         assert_eq!(BinOp::BroadcastMul.to_string(), ".*");
+        assert_eq!(BinOp::BroadcastDiv.to_string(), "./");
+        assert_eq!(BinOp::BroadcastPow.to_string(), ".^");
         assert_eq!(BinOp::Div.to_string(), "/");
         assert_eq!(BinOp::Mod.to_string(), "%");
         assert_eq!(BinOp::Pow.to_string(), "^");
