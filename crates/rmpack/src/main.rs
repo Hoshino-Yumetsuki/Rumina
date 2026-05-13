@@ -317,6 +317,25 @@ impl Packager {
             )));
         }
 
+        if !interface_path.is_file()
+            || interface_path
+                .extension()
+                .and_then(|extension| extension.to_str())
+                != Some("lm")
+        {
+            return Err(RuminaError::runtime(format!(
+                "InterfaceBindError: extension interface '{}' must be a readable .lm file",
+                interface_path.display()
+            )));
+        }
+
+        fs::read_to_string(&interface_path).map_err(|err| {
+            RuminaError::runtime(format!(
+                "InterfaceBindError: extension interface '{}' must be a readable .lm file: {err}",
+                interface_path.display()
+            ))
+        })?;
+
         println!("Extension entry symbol: {}", manifest.entry);
         Ok(interface_path)
     }
@@ -325,6 +344,15 @@ impl Packager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_temp_dir(name: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        env::temp_dir().join(format!("rmpack-{name}-{}-{nonce}", process::id()))
+    }
 
     #[test]
     fn lsr003_extension_manifest_uses_default_interface_and_entry_when_absent() {
@@ -332,5 +360,29 @@ mod tests {
 
         assert_eq!(manifest.interface, "lib.lm");
         assert_eq!(manifest.entry, "lsr_init");
+    }
+
+    #[test]
+    fn lsr003_extension_interface_must_be_readable_file() {
+        let extension_dir = unique_temp_dir("interface-dir");
+        let interface_dir = extension_dir.join("iface.lm");
+        fs::create_dir_all(&interface_dir).unwrap();
+        fs::write(
+            extension_dir.join("lampm.json"),
+            r#"{"interface":"iface.lm"}"#,
+        )
+        .unwrap();
+
+        let packager = Packager::new(PackageConfig {
+            input_file: extension_dir.display().to_string(),
+            output_file: "unused".to_string(),
+            ..PackageConfig::default()
+        });
+
+        let error = packager.resolve_input_source().unwrap_err().to_string();
+
+        fs::remove_dir_all(&extension_dir).unwrap();
+        assert!(error.contains("InterfaceBindError"));
+        assert!(error.contains("readable .lm file"));
     }
 }
