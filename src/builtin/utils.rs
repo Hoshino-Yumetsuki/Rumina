@@ -8,10 +8,32 @@ use std::rc::Rc;
 
 thread_local! {
     static EQV_PROFILE: RefCell<String> = RefCell::new("Core".to_string());
+    static EQV_BUDGET: RefCell<EqvBudget> = RefCell::new(EqvBudget::default());
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct EqvBudget {
+    pub max_rewrite_steps: usize,
+    pub max_rewrite_depth: usize,
+    pub max_node_growth_factor: usize,
+}
+
+impl Default for EqvBudget {
+    fn default() -> Self {
+        Self {
+            max_rewrite_steps: 256,
+            max_rewrite_depth: 64,
+            max_node_growth_factor: 4,
+        }
+    }
 }
 
 pub fn current_eqv_profile() -> String {
     EQV_PROFILE.with(|profile| profile.borrow().clone())
+}
+
+pub fn current_eqv_budget() -> EqvBudget {
+    EQV_BUDGET.with(|budget| *budget.borrow())
 }
 
 pub fn print(args: &[Value]) -> Result<Value, String> {
@@ -116,6 +138,43 @@ pub fn set_eqv_profile(args: &[Value]) -> Result<Value, String> {
         )),
         other => Err(format!(
             "EqvInvalidProfile: expected string profile, got {}",
+            other.type_name()
+        )),
+    }
+}
+
+pub fn set_eqv_budget(args: &[Value]) -> Result<Value, String> {
+    if args.len() != 3 {
+        return Err(
+            "EqvBudgetInvalid: set_eqv_budget expects 3 arguments (steps, depth, growth)"
+                .to_string(),
+        );
+    }
+
+    let steps = eqv_budget_arg(&args[0], "steps")?;
+    let depth = eqv_budget_arg(&args[1], "depth")?;
+    let growth = eqv_budget_arg(&args[2], "growth")?;
+
+    EQV_BUDGET.with(|current| {
+        *current.borrow_mut() = EqvBudget {
+            max_rewrite_steps: steps,
+            max_rewrite_depth: depth,
+            max_node_growth_factor: growth,
+        };
+    });
+    Ok(Value::Null)
+}
+
+fn eqv_budget_arg(value: &Value, name: &str) -> Result<usize, String> {
+    match value {
+        Value::Int(n) if *n > 0 => Ok(*n as usize),
+        Value::Int(_) => Err(format!(
+            "EqvBudgetInvalid: {} must be a positive integer",
+            name
+        )),
+        other => Err(format!(
+            "EqvBudgetInvalid: {} must be a positive integer, got {}",
+            name,
             other.type_name()
         )),
     }

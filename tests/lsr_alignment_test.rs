@@ -879,6 +879,60 @@ fn test_lsr007_set_eqv_profile_rejects_invalid_profile() {
 }
 
 #[test]
+fn test_lsr007_set_eqv_budget_accepts_positive_limits() {
+    let result = run_rumina("set_eqv_budget(256, 64, 4); x + 0 === x;").unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_lsr007_set_eqv_budget_rejects_non_positive_limits() {
+    let error = run_rumina("set_eqv_budget(0, 64, 4);").unwrap_err();
+    assert!(
+        error.to_string().contains("EqvBudgetInvalid"),
+        "expected EqvBudgetInvalid diagnostic, got {error}"
+    );
+}
+
+#[test]
+fn test_lsr007_set_eqv_budget_rejects_non_integer_limits() {
+    let error = run_rumina("set_eqv_budget(\"1\", 64, 4);").unwrap_err();
+    assert!(
+        error.to_string().contains("EqvBudgetInvalid"),
+        "expected EqvBudgetInvalid diagnostic, got {error}"
+    );
+}
+
+#[test]
+fn test_lsr007_equivalence_reports_budget_exhaustion() {
+    let error = run_rumina("set_eqv_budget(1, 64, 4); x + 0 + 0 === x;").unwrap_err();
+    assert!(
+        error.to_string().contains("EqvBudgetExceeded"),
+        "expected EqvBudgetExceeded diagnostic, got {error}"
+    );
+}
+
+#[test]
+fn test_lsr007_equivalence_reports_depth_budget_exhaustion() {
+    let error = run_rumina("set_eqv_budget(256, 1, 4); x + 0 + 0 === x;").unwrap_err();
+    assert!(
+        error.to_string().contains("EqvBudgetExceeded"),
+        "expected EqvBudgetExceeded diagnostic, got {error}"
+    );
+}
+
+#[test]
+fn test_lsr007_core_equivalence_combines_finite_constants() {
+    let result = run_rumina("x + 1 + 2 === x + 3 and x * 2 * 3 === x * 6;").unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
 fn test_lsr000_table_literal_and_read() {
     let result = expect_int(run_rumina(
         "let scores = table{\"alice\" => 98}; scores[\"alice\"];",

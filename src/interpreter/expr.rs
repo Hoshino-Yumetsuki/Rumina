@@ -350,7 +350,7 @@ impl Interpreter {
                             "EqvTypeMismatch: === expects mathematical Expr operands".to_string()
                         );
                     }
-                    Ok(Value::Bool(self.expr_equivalent(left, right)))
+                    Ok(Value::Bool(self.expr_equivalent(left, right)?))
                 } else {
                     let l = self.eval_expr(left)?;
                     let r = self.eval_expr(right)?;
@@ -849,10 +849,19 @@ impl Interpreter {
         }
     }
 
-    fn expr_equivalent(&self, left: &Expr, right: &Expr) -> bool {
+    fn expr_equivalent(&self, left: &Expr, right: &Expr) -> Result<bool, String> {
         let profile = crate::builtin::utils::current_eqv_profile();
-        Self::normalize_equivalence_expr(left, &profile)
-            == Self::normalize_equivalence_expr(right, &profile)
+        let budget = crate::builtin::utils::current_eqv_budget();
+        let original_node_count =
+            Self::equivalence_node_count(left) + Self::equivalence_node_count(right);
+        let mut budget_state = EqvBudgetState::new(budget);
+        let left = Self::normalize_equivalence_expr(left, &profile, &mut budget_state, 0)?;
+        let right = Self::normalize_equivalence_expr(right, &profile, &mut budget_state, 0)?;
+        budget_state.check_growth(
+            original_node_count,
+            Self::equivalence_node_count(&left) + Self::equivalence_node_count(&right),
+        )?;
+        Ok(left == right)
     }
 
     fn is_equivalence_operand(expr: &Expr) -> bool {
@@ -897,25 +906,43 @@ impl Interpreter {
         }
     }
 
-    fn normalize_equivalence_expr(expr: &Expr, profile: &str) -> Expr {
+    fn normalize_equivalence_expr(
+        expr: &Expr,
+        profile: &str,
+        budget: &mut EqvBudgetState,
+        depth: usize,
+    ) -> Result<Expr, String> {
+        budget.enter(depth)?;
+
         match expr {
             Expr::Binary { left, op, right } => {
-                let left = Self::normalize_equivalence_expr(left, profile);
-                let right = Self::normalize_equivalence_expr(right, profile);
+                let left = Self::normalize_equivalence_expr(left, profile, budget, depth + 1)?;
+                let right = Self::normalize_equivalence_expr(right, profile, budget, depth + 1)?;
 
-                match (left, *op, right) {
-                    (Expr::Int(a), crate::ast::BinOp::Add, Expr::Int(b)) => Expr::Int(a + b),
-                    (Expr::Int(a), crate::ast::BinOp::Sub, Expr::Int(b)) => Expr::Int(a - b),
-                    (Expr::Int(a), crate::ast::BinOp::Mul, Expr::Int(b)) => Expr::Int(a * b),
+                Ok(match (left, *op, right) {
+                    (Expr::Int(a), crate::ast::BinOp::Add, Expr::Int(b)) => {
+                        budget.rewrite()?;
+                        Expr::Int(a + b)
+                    }
+                    (Expr::Int(a), crate::ast::BinOp::Sub, Expr::Int(b)) => {
+                        budget.rewrite()?;
+                        Expr::Int(a - b)
+                    }
+                    (Expr::Int(a), crate::ast::BinOp::Mul, Expr::Int(b)) => {
+                        budget.rewrite()?;
+                        Expr::Int(a * b)
+                    }
                     (Expr::Int(a), crate::ast::BinOp::Div, Expr::Int(b))
                         if b != 0 && a % b == 0 =>
                     {
+                        budget.rewrite()?;
                         Expr::Int(a / b)
                     }
                     (Expr::Int(a), crate::ast::BinOp::Pow, Expr::Int(b))
                         if b >= 0 && b <= u32::MAX as i64 =>
                     {
                         if let Some(value) = a.checked_pow(b as u32) {
+                            budget.rewrite()?;
                             Expr::Int(value)
                         } else {
                             Expr::Binary {
@@ -926,45 +953,86 @@ impl Interpreter {
                         }
                     }
                     (expr, crate::ast::BinOp::Add, Expr::Int(0))
-                    | (Expr::Int(0), crate::ast::BinOp::Add, expr) => expr,
+                    | (Expr::Int(0), crate::ast::BinOp::Add, expr) => {
+                        budget.rewrite()?;
+                        expr
+                    }
                     (expr, crate::ast::BinOp::Mul, Expr::Int(1))
-                    | (Expr::Int(1), crate::ast::BinOp::Mul, expr) => expr,
+                    | (Expr::Int(1), crate::ast::BinOp::Mul, expr) => {
+                        budget.rewrite()?;
+                        expr
+                    }
                     (_, crate::ast::BinOp::Mul, Expr::Int(0))
-                    | (Expr::Int(0), crate::ast::BinOp::Mul, _) => Expr::Int(0),
-                    (expr, crate::ast::BinOp::Sub, Expr::Int(0)) => expr,
-                    (expr, crate::ast::BinOp::Div, Expr::Int(1)) => expr,
-                    (expr, crate::ast::BinOp::Pow, Expr::Int(1)) => expr,
-                    (_, crate::ast::BinOp::Pow, Expr::Int(0)) => Expr::Int(1),
-                    (left, crate::ast::BinOp::Sub, right) if left == right => Expr::Int(0),
+                    | (Expr::Int(0), crate::ast::BinOp::Mul, _) => {
+                        budget.rewrite()?;
+                        Expr::Int(0)
+                    }
+                    (expr, crate::ast::BinOp::Sub, Expr::Int(0)) => {
+                        budget.rewrite()?;
+                        expr
+                    }
+                    (expr, crate::ast::BinOp::Div, Expr::Int(1)) => {
+                        budget.rewrite()?;
+                        expr
+                    }
+                    (expr, crate::ast::BinOp::Pow, Expr::Int(1)) => {
+                        budget.rewrite()?;
+                        expr
+                    }
+                    (_, crate::ast::BinOp::Pow, Expr::Int(0)) => {
+                        budget.rewrite()?;
+                        Expr::Int(1)
+                    }
+                    (left, crate::ast::BinOp::Sub, right) if left == right => {
+                        budget.rewrite()?;
+                        Expr::Int(0)
+                    }
                     (left, crate::ast::BinOp::Add, right)
                         if profile == "Trig-Basic"
                             && Self::is_trig_pythagorean_identity(&left, &right) =>
                     {
+                        budget.rewrite()?;
                         Expr::Int(1)
                     }
-                    (left, crate::ast::BinOp::Add, right) => {
-                        Self::normalize_commutative_expr(crate::ast::BinOp::Add, left, right)
-                    }
-                    (left, crate::ast::BinOp::Mul, right) => {
-                        Self::normalize_commutative_expr(crate::ast::BinOp::Mul, left, right)
-                    }
+                    (left, crate::ast::BinOp::Add, right) => Self::normalize_commutative_expr(
+                        crate::ast::BinOp::Add,
+                        left,
+                        right,
+                        budget,
+                    )?,
+                    (left, crate::ast::BinOp::Mul, right) => Self::normalize_commutative_expr(
+                        crate::ast::BinOp::Mul,
+                        left,
+                        right,
+                        budget,
+                    )?,
                     (left, op, right) => Expr::Binary {
                         left: Box::new(left),
                         op,
                         right: Box::new(right),
                     },
-                }
+                })
             }
-            Expr::Unary { op, expr } => Expr::Unary {
+            Expr::Unary { op, expr } => Ok(Expr::Unary {
                 op: *op,
-                expr: Box::new(Self::normalize_equivalence_expr(expr, profile)),
-            },
+                expr: Box::new(Self::normalize_equivalence_expr(
+                    expr,
+                    profile,
+                    budget,
+                    depth + 1,
+                )?),
+            }),
             Expr::Call { func, args } => {
-                let func = Box::new(Self::normalize_equivalence_expr(func, profile));
+                let func = Box::new(Self::normalize_equivalence_expr(
+                    func,
+                    profile,
+                    budget,
+                    depth + 1,
+                )?);
                 let args: Vec<Expr> = args
                     .iter()
-                    .map(|arg| Self::normalize_equivalence_expr(arg, profile))
-                    .collect();
+                    .map(|arg| Self::normalize_equivalence_expr(arg, profile, budget, depth + 1))
+                    .collect::<Result<_, _>>()?;
 
                 if profile == "ExpLog-Basic" {
                     if let Expr::Ident(func_name) = func.as_ref() {
@@ -976,25 +1044,28 @@ impl Interpreter {
                             {
                                 if let Expr::Ident(inner_func_name) = inner_func.as_ref() {
                                     if inner_func_name == "log" && inner_args.len() == 1 {
-                                        return inner_args[0].clone();
+                                        budget.rewrite()?;
+                                        return Ok(inner_args[0].clone());
                                     }
                                 }
                             }
                         }
 
                         if func_name == "log" && args == [Expr::Int(1)] {
-                            return Expr::Int(0);
+                            budget.rewrite()?;
+                            return Ok(Expr::Int(0));
                         }
 
                         if func_name == "exp" && args == [Expr::Int(0)] {
-                            return Expr::Int(1);
+                            budget.rewrite()?;
+                            return Ok(Expr::Int(1));
                         }
                     }
                 }
 
-                Expr::Call { func, args }
+                Ok(Expr::Call { func, args })
             }
-            other => other.clone(),
+            other => Ok(other.clone()),
         }
     }
 
@@ -1031,22 +1102,83 @@ impl Interpreter {
         }
     }
 
-    fn normalize_commutative_expr(op: crate::ast::BinOp, left: Expr, right: Expr) -> Expr {
+    fn normalize_commutative_expr(
+        op: crate::ast::BinOp,
+        left: Expr,
+        right: Expr,
+        budget: &mut EqvBudgetState,
+    ) -> Result<Expr, String> {
         let mut terms = Vec::new();
         Self::collect_commutative_terms(op, left, &mut terms);
         Self::collect_commutative_terms(op, right, &mut terms);
 
+        if terms.len() > 2 {
+            budget.rewrite()?;
+        }
+
+        match op {
+            crate::ast::BinOp::Add => Self::combine_add_terms(&mut terms, budget)?,
+            crate::ast::BinOp::Mul => Self::combine_mul_terms(&mut terms, budget)?,
+            _ => {}
+        }
+
         terms.sort_by_key(|expr| format!("{:?}", expr));
         let mut terms = terms.into_iter();
         let Some(first) = terms.next() else {
-            return Expr::Int(0);
+            return Ok(Expr::Int(0));
         };
 
-        terms.fold(first, |left, right| Expr::Binary {
+        Ok(terms.fold(first, |left, right| Expr::Binary {
             left: Box::new(left),
             op,
             right: Box::new(right),
-        })
+        }))
+    }
+
+    fn combine_add_terms(terms: &mut Vec<Expr>, budget: &mut EqvBudgetState) -> Result<(), String> {
+        let constant: i64 = terms
+            .iter()
+            .filter_map(|term| match term {
+                Expr::Int(value) => Some(*value),
+                _ => None,
+            })
+            .sum();
+        let original_len = terms.len();
+        terms.retain(|term| !matches!(term, Expr::Int(_)));
+        if constant != 0 {
+            terms.push(Expr::Int(constant));
+        }
+        if terms.len() != original_len {
+            budget.rewrite()?;
+        }
+        Ok(())
+    }
+
+    fn combine_mul_terms(terms: &mut Vec<Expr>, budget: &mut EqvBudgetState) -> Result<(), String> {
+        if terms.iter().any(|term| matches!(term, Expr::Int(0))) {
+            terms.clear();
+            terms.push(Expr::Int(0));
+            budget.rewrite()?;
+            return Ok(());
+        }
+
+        let constant: i64 = terms
+            .iter()
+            .filter_map(|term| match term {
+                Expr::Int(value) => Some(*value),
+                _ => None,
+            })
+            .product();
+        let had_constant = terms.iter().any(|term| matches!(term, Expr::Int(_)));
+        let original_len = terms.len();
+        terms.retain(|term| !matches!(term, Expr::Int(_)));
+        if constant != 1 || terms.is_empty() {
+            terms.push(Expr::Int(constant));
+        }
+        if had_constant && terms.len() != original_len {
+            budget.rewrite()?;
+        }
+        Ok(())
     }
 
     fn collect_commutative_terms(op: crate::ast::BinOp, expr: Expr, terms: &mut Vec<Expr>) {
@@ -1061,6 +1193,114 @@ impl Interpreter {
             }
             other => terms.push(other),
         }
+    }
+
+    fn equivalence_node_count(expr: &Expr) -> usize {
+        match expr {
+            Expr::Binary { left, right, .. } => {
+                1 + Self::equivalence_node_count(left) + Self::equivalence_node_count(right)
+            }
+            Expr::Unary { expr, .. }
+            | Expr::UnitStrip { expr, .. }
+            | Expr::UnitConvert { expr, .. }
+            | Expr::UnitAttach { expr, .. }
+            | Expr::MatrixTranspose { expr, .. }
+            | Expr::Try(expr) => 1 + Self::equivalence_node_count(expr),
+            Expr::Call { func, args } => {
+                1 + Self::equivalence_node_count(func)
+                    + args.iter().map(Self::equivalence_node_count).sum::<usize>()
+            }
+            Expr::Member { object, .. } => 1 + Self::equivalence_node_count(object),
+            Expr::Index { object, index } => {
+                1 + Self::equivalence_node_count(object) + Self::equivalence_node_count(index)
+            }
+            Expr::Array(values)
+            | Expr::Vector(values)
+            | Expr::Set(values)
+            | Expr::Multi(values) => {
+                1 + values
+                    .iter()
+                    .map(Self::equivalence_node_count)
+                    .sum::<usize>()
+            }
+            Expr::Matrix(rows) => {
+                1 + rows
+                    .iter()
+                    .flatten()
+                    .map(Self::equivalence_node_count)
+                    .sum::<usize>()
+            }
+            Expr::Struct(entries) => {
+                1 + entries
+                    .iter()
+                    .map(|(_, value)| Self::equivalence_node_count(value))
+                    .sum::<usize>()
+            }
+            Expr::Table(entries) => {
+                1 + entries
+                    .iter()
+                    .map(|(key, value)| {
+                        Self::equivalence_node_count(key) + Self::equivalence_node_count(value)
+                    })
+                    .sum::<usize>()
+            }
+            Expr::Range { start, end } => {
+                1 + Self::equivalence_node_count(start) + Self::equivalence_node_count(end)
+            }
+            Expr::Lambda { .. } | Expr::Match { .. } => 1,
+            Expr::Namespace { .. }
+            | Expr::Int(_)
+            | Expr::BigInt(_)
+            | Expr::Float(_)
+            | Expr::String(_)
+            | Expr::Bool(_)
+            | Expr::Null
+            | Expr::Ident(_)
+            | Expr::Wildcard => 1,
+        }
+    }
+}
+
+struct EqvBudgetState {
+    budget: crate::builtin::utils::EqvBudget,
+    rewrite_steps: usize,
+}
+
+impl EqvBudgetState {
+    fn new(budget: crate::builtin::utils::EqvBudget) -> Self {
+        Self {
+            budget,
+            rewrite_steps: 0,
+        }
+    }
+
+    fn enter(&self, depth: usize) -> Result<(), String> {
+        if depth > self.budget.max_rewrite_depth {
+            return Err(
+                "EqvBudgetExceeded: equivalence normalization depth budget exceeded".to_string(),
+            );
+        }
+        Ok(())
+    }
+
+    fn rewrite(&mut self) -> Result<(), String> {
+        self.rewrite_steps += 1;
+        if self.rewrite_steps > self.budget.max_rewrite_steps {
+            return Err(
+                "EqvBudgetExceeded: equivalence normalization rewrite budget exceeded".to_string(),
+            );
+        }
+        Ok(())
+    }
+
+    fn check_growth(&self, original_nodes: usize, normalized_nodes: usize) -> Result<(), String> {
+        if normalized_nodes > original_nodes.saturating_mul(self.budget.max_node_growth_factor) {
+            return Err(
+                "EqvBudgetExceeded: equivalence normalization node growth budget exceeded"
+                    .to_string(),
+            );
+        }
+        Ok(())
     }
 }
 
