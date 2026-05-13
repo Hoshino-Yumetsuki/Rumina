@@ -1,4 +1,4 @@
-use rumina::{
+﻿use rumina::{
     Lexer, Parser, Value,
     ast::{ExtensionParamOwnership, Stmt},
     run_rumina,
@@ -939,6 +939,14 @@ fn test_lsr008_rejects_incompatible_unit_conversion() {
     );
 }
 
+#[test]
+fn test_lsr008_rejects_unit_strip_overflow() {
+    let err = run_rumina("9223372036854776<km> as num;").unwrap_err();
+    assert!(
+        err.to_string().contains("UnitStripOverflow"),
+        "expected UnitStripOverflow diagnostic, got {err}"
+    );
+}
 #[test]
 fn test_lsr008_rejects_non_numeric_unit_strip_with_diagnostic() {
     let err = run_rumina("true as num;").unwrap_err();
