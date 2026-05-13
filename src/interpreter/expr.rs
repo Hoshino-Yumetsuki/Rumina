@@ -31,7 +31,10 @@ impl Interpreter {
 
     pub(super) fn scale_unit_value(&self, value: Value, scale: i64) -> Result<Value, String> {
         match value {
-            Value::Int(n) => Ok(Value::Int(n * scale)),
+            Value::Int(n) => n
+                .checked_mul(scale)
+                .map(Value::Int)
+                .ok_or_else(|| "UnitStripOverflow: unit strip scaling overflowed i64".to_string()),
             Value::BigInt(n) => Ok(Value::BigInt(n * crate::numeric::BigInt::from(scale))),
             Value::Float(n) => Ok(Value::Float(n * scale as f64)),
             Value::Rational(n) => Ok(Value::Rational(
