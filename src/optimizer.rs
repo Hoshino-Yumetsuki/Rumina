@@ -440,6 +440,7 @@ impl ASTOptimizer {
 
             Expr::Lambda {
                 params,
+                param_types,
                 body,
                 is_simple,
             } => {
@@ -452,6 +453,7 @@ impl ASTOptimizer {
                 };
                 Ok(Expr::Lambda {
                     params,
+                    param_types,
                     body: Box::new(opt_body),
                     is_simple,
                 })

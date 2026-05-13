@@ -1082,6 +1082,7 @@ mod tests {
     #[test]
     fn test_lambda() {
         let mut interp = new_interpreter();
+            param_types: vec![None],
         let lambda = Expr::Lambda {
             params: vec!["x".into()],
             body: Box::new(Stmt::Expr(Expr::Ident("x".into()))),

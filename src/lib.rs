@@ -51,6 +51,13 @@ enum BindingKind {
 }
 
 fn check_lsr006_lambda_capture_mutation(statements: &[ast::Stmt]) -> Result<(), RuminaError> {
+    fn has_unannotated_lambda_param(expr: &ast::Expr) -> bool {
+        matches!(
+            expr,
+            ast::Expr::Lambda { param_types, .. } if param_types.iter().any(Option::is_none)
+        )
+    }
+
     fn lookup_captured_var(
         scopes: &[std::collections::HashMap<String, BindingKind>],
         name: &str,
@@ -73,12 +80,24 @@ fn check_lsr006_lambda_capture_mutation(statements: &[ast::Stmt]) -> Result<(), 
     ) -> Result<(), RuminaError> {
         match stmt {
             ast::Stmt::VarDecl { name, value, .. } => {
+                if has_unannotated_lambda_param(value) {
+                    return Err(RuminaError::runtime(format!(
+                        "LambdaTypeAmbiguous: lambda assigned to '{}' has parameter types that cannot be inferred",
+                        name
+                    )));
+                }
                 expr_check(value, scopes, lambda_depth)?;
                 if let Some(scope) = scopes.last_mut() {
                     scope.insert(name.clone(), BindingKind::Var);
                 }
             }
             ast::Stmt::LetDecl { name, value, .. } => {
+                if has_unannotated_lambda_param(value) {
+                    return Err(RuminaError::runtime(format!(
+                        "LambdaTypeAmbiguous: lambda assigned to '{}' has parameter types that cannot be inferred",
+                        name
+                    )));
+                }
                 expr_check(value, scopes, lambda_depth)?;
                 if let Some(scope) = scopes.last_mut() {
                     scope.insert(name.clone(), BindingKind::Immutable);

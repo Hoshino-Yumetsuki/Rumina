@@ -243,6 +243,7 @@ pub enum Expr {
     // Lambda表达式
     Lambda {
         params: Vec<String>,
+        param_types: Vec<Option<DeclaredType>>,
         body: Box<Stmt>,
         is_simple: bool, // 简单形式 |a, b| a + b
     },

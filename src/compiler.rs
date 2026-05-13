@@ -1440,6 +1440,7 @@ mod tests {
 
         // Compile: let add = |a, b| a + b; add(10, 20)
         let stmts = vec![
+                    param_types: vec![None, None],
             Stmt::VarDecl {
                 name: "add".to_string(),
                 is_bigint: false,
@@ -1490,6 +1491,7 @@ mod tests {
                 declared_type: None,
                 value: Expr::Int(5),
             },
+                    param_types: vec![None],
             Stmt::VarDecl {
                 name: "add_x".to_string(),
                 is_bigint: false,

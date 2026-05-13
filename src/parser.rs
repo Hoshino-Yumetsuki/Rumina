@@ -1673,6 +1673,7 @@ impl Parser {
             self.expect(Token::Do)?;
         }
 
+        let mut param_types = Vec::new();
         // 检查是否有参数列表（以 | 开始）
         let mut params = Vec::new();
         if self.match_token(&Token::Pipe) {
@@ -1680,6 +1681,7 @@ impl Parser {
             if self.current_token() != &Token::Pipe {
                 loop {
                     if let Token::Ident(param) = self.current_token() {
+                        param_types.push(self.declared_type_from_current_token());
                         params.push(param.clone());
                         self.advance();
                         self.consume_optional_declared_type();
@@ -1710,6 +1712,7 @@ impl Parser {
             Box::new(Stmt::Block(stmts))
         };
 
+            param_types,
         Ok(Expr::Lambda {
             params,
             body,
