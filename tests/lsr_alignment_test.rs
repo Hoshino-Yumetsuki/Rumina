@@ -112,15 +112,15 @@ fn test_lsr_logical_keywords() {
 }
 
 #[test]
-fn test_legacy_logical_operators_are_rejected() {
-    assert!(
-        run_rumina("true && true;").is_err(),
-#[test]
 fn test_lsr_broadcast_vector_scalar_add() {
     let values = expect_vector(run_rumina("vec[1, 2, 3] .+ 1;"));
     assert_eq!(values, vec![Value::Int(2), Value::Int(3), Value::Int(4)]);
 }
 
+#[test]
+fn test_legacy_logical_operators_are_rejected() {
+    assert!(
+        run_rumina("true && true;").is_err(),
         "&& should be rejected"
     );
     assert!(
