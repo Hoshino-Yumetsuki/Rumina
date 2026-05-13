@@ -48,6 +48,7 @@ fn should_use_interpreter_runtime(statements: &[ast::Stmt]) -> bool {
     fn stmt_requires_interpreter(stmt: &ast::Stmt) -> bool {
         match stmt {
             ast::Stmt::Include(path) => path.starts_with("rumina:"),
+            ast::Stmt::ExtensionModule { .. } => true,
             ast::Stmt::Import { .. } | ast::Stmt::Use { .. } => true,
             ast::Stmt::UnitDecl { .. } => true,
             ast::Stmt::TryCatch(_, _, _) => true,
@@ -104,6 +105,7 @@ fn should_use_interpreter_runtime(statements: &[ast::Stmt]) -> bool {
     fn expr_requires_interpreter(expr: &ast::Expr) -> bool {
         match expr {
             ast::Expr::Try(_) => true,
+            ast::Expr::Wildcard => true,
             ast::Expr::Member { object, .. } => {
                 matches!(object.as_ref(), ast::Expr::Array(_)) || expr_requires_interpreter(object)
             }

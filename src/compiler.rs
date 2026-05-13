@@ -171,7 +171,9 @@ impl Compiler {
                 // Keep expression result on stack for potential return value
             }
 
-            Stmt::Import { .. } | Stmt::Use { .. } | Stmt::ExtensionModule { .. } => {}
+            Stmt::Import { .. } | Stmt::Use { .. } => {}
+
+            Stmt::ExtensionModule { .. } => {}
 
             Stmt::UnitDecl { .. } => {}
 
@@ -818,6 +820,12 @@ impl Compiler {
 
             Expr::Ident(name) => {
                 self.emit(OpCode::PushVar(name.clone()));
+            }
+
+            Expr::Wildcard => {
+                return Err(RuminaError::runtime(
+                    "wildcard slices are not yet supported by the bytecode compiler".to_string(),
+                ));
             }
 
             Expr::Binary { left, op, right } => {

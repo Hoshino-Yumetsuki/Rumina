@@ -242,6 +242,8 @@ impl Interpreter {
 
             Expr::Ident(name) => self.get_variable(name),
 
+            Expr::Wildcard => Err("Wildcard can only be used inside a matrix slice".to_string()),
+
             Expr::Array(elements) => {
                 let mut arr = Vec::new();
                 for elem in elements {
@@ -474,6 +476,24 @@ impl Interpreter {
                 let obj = self.eval_expr(object)?;
                 if let (Value::Matrix(rows), Expr::Multi(indices)) = (&obj, index.as_ref()) {
                     if indices.len() == 2 {
+                        if matches!(indices[0], Expr::Wildcard) {
+                            let col = self.eval_expr(&indices[1])?.to_int()?;
+                            if col <= 0 {
+                                return Err(format!("Matrix column index out of bounds: {}", col));
+                            }
+
+                            let rows = rows.borrow();
+                            let mut values = Vec::with_capacity(rows.len());
+                            for row in rows.iter() {
+                                let value =
+                                    row.get((col - 1) as usize).cloned().ok_or_else(|| {
+                                        format!("Matrix column index out of bounds: {}", col)
+                                    })?;
+                                values.push(value);
+                            }
+                            return Ok(Value::Vector(Rc::new(RefCell::new(values))));
+                        }
+
                         let row = self.eval_expr(&indices[0])?.to_int()?;
                         let col = self.eval_expr(&indices[1])?.to_int()?;
                         if row <= 0 {
@@ -661,12 +681,34 @@ impl Interpreter {
                     (Expr::Int(a), crate::ast::BinOp::Add, Expr::Int(b)) => Expr::Int(a + b),
                     (Expr::Int(a), crate::ast::BinOp::Sub, Expr::Int(b)) => Expr::Int(a - b),
                     (Expr::Int(a), crate::ast::BinOp::Mul, Expr::Int(b)) => Expr::Int(a * b),
+                    (Expr::Int(a), crate::ast::BinOp::Div, Expr::Int(b))
+                        if b != 0 && a % b == 0 =>
+                    {
+                        Expr::Int(a / b)
+                    }
+                    (Expr::Int(a), crate::ast::BinOp::Pow, Expr::Int(b))
+                        if b >= 0 && b <= u32::MAX as i64 =>
+                    {
+                        if let Some(value) = a.checked_pow(b as u32) {
+                            Expr::Int(value)
+                        } else {
+                            Expr::Binary {
+                                left: Box::new(Expr::Int(a)),
+                                op: crate::ast::BinOp::Pow,
+                                right: Box::new(Expr::Int(b)),
+                            }
+                        }
+                    }
                     (expr, crate::ast::BinOp::Add, Expr::Int(0))
                     | (Expr::Int(0), crate::ast::BinOp::Add, expr) => expr,
                     (expr, crate::ast::BinOp::Mul, Expr::Int(1))
                     | (Expr::Int(1), crate::ast::BinOp::Mul, expr) => expr,
                     (_, crate::ast::BinOp::Mul, Expr::Int(0))
                     | (Expr::Int(0), crate::ast::BinOp::Mul, _) => Expr::Int(0),
+                    (expr, crate::ast::BinOp::Sub, Expr::Int(0)) => expr,
+                    (expr, crate::ast::BinOp::Div, Expr::Int(1)) => expr,
+                    (expr, crate::ast::BinOp::Pow, Expr::Int(1)) => expr,
+                    (_, crate::ast::BinOp::Pow, Expr::Int(0)) => Expr::Int(1),
                     (left, crate::ast::BinOp::Sub, right) if left == right => Expr::Int(0),
                     (left, crate::ast::BinOp::Add, right) => {
                         Self::normalize_commutative_expr(crate::ast::BinOp::Add, left, right)

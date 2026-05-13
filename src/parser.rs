@@ -1141,9 +1141,9 @@ impl Parser {
                 Token::LBracket => {
                     // 索引访问
                     self.advance();
-                    let mut indices = vec![self.parse_expression()?];
+                    let mut indices = vec![self.parse_index_component()?];
                     while self.match_token(&Token::Comma) {
-                        indices.push(self.parse_expression()?);
+                        indices.push(self.parse_index_component()?);
                     }
                     let index = if indices.len() == 1 {
                         indices.remove(0)
@@ -1203,6 +1203,14 @@ impl Parser {
         }
 
         Ok(expr)
+    }
+
+    fn parse_index_component(&mut self) -> Result<Expr, String> {
+        if self.match_token(&Token::Star) {
+            Ok(Expr::Wildcard)
+        } else {
+            self.parse_expression()
+        }
     }
 
     fn parse_arguments(&mut self) -> Result<Vec<Expr>, String> {

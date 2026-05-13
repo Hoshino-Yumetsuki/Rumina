@@ -47,6 +47,10 @@ pub enum Value {
         decorators: Vec<String>, // LSR-011: Decorators applied to this function
     },
     Module(Rc<RefCell<HashMap<String, Value>>>),
+    ExtensionFunction {
+        module: String,
+        function: ExtensionFunction,
+    },
     NativeFunction {
         name: String,
         func: fn(&[Value]) -> Result<Value, String>,
@@ -97,6 +101,7 @@ impl Value {
             Value::Lambda { .. } => "lambda",
             Value::Function { .. } => "function",
             Value::Module(_) => "module",
+            Value::ExtensionFunction { .. } => "extension_function",
             Value::NativeFunction { .. } => "native_function",
             Value::CurriedFunction { .. } => "curried_function",
             Value::MemoizedFunction { .. } => "memoized_function",
@@ -352,6 +357,13 @@ impl fmt::Display for Value {
                 write!(f, "<function {}({})>", name, params.join(", "))
             }
             Value::Module(_) => write!(f, "<module>"),
+            Value::ExtensionFunction { module, function } => {
+                write!(
+                    f,
+                    "<extension function {}::{} -> {}>",
+                    module, function.name, function.symbol
+                )
+            }
             Value::NativeFunction { name, .. } => write!(f, "<native function {}>", name),
             Value::CurriedFunction {
                 collected_args,

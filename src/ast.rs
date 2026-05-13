@@ -155,6 +155,9 @@ pub enum Expr {
     // 标识符
     Ident(String),
 
+    // Matrix/vector slice wildcard used inside index expressions.
+    Wildcard,
+
     // 数组字面量
     Array(Vec<Expr>),
 

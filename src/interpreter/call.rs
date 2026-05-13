@@ -131,7 +131,7 @@ impl Interpreter {
             } => {
                 if params.len() != args.len() {
                     return Err(format!(
-                        "Expected {} arguments, got {}",
+                        "LambdaArityMismatch: expected {} arguments, got {}",
                         params.len(),
                         args.len()
                     ));
@@ -201,6 +201,11 @@ impl Interpreter {
                 func(&args)
             }
 
+            Value::ExtensionFunction { module, function } => Err(format!(
+                "ExtensionRuntimeUnavailable: extension function {}::{} is bound to C symbol '{}' but no extension runtime is loaded",
+                module, function.name, function.symbol
+            )),
+
             _ => Err(format!("Cannot call {}", func.type_name())),
         }
     }
@@ -258,7 +263,7 @@ impl Interpreter {
             } => {
                 if params.len() != args.len() {
                     return Err(format!(
-                        "Expected {} arguments, got {}",
+                        "LambdaArityMismatch: expected {} arguments, got {}",
                         params.len(),
                         args.len()
                     ));
@@ -477,6 +482,24 @@ mod tests {
     }
 
     #[test]
+    fn test_lambda_wrong_arg_count_reports_lsr006_diagnostic() {
+        let mut interp = create_test_interpreter();
+        let lambda = Value::Lambda {
+            params: vec!["x".to_string(), "y".to_string()],
+            body: Box::new(Stmt::Block(vec![])),
+            closure: Rc::new(RefCell::new(HashMap::new())),
+        };
+
+        let error = interp
+            .call_function(lambda, vec![Value::Int(1)])
+            .unwrap_err();
+        assert!(
+            error.contains("LambdaArityMismatch: expected 2 arguments, got 1"),
+            "expected LambdaArityMismatch diagnostic, got {error}"
+        );
+    }
+
+    #[test]
     fn test_call_non_callable() {
         let mut interp = create_test_interpreter();
         let result = interp.call_function(Value::Int(42), vec![]);
@@ -638,6 +661,24 @@ mod tests {
         let result = interp.call_method(func, Value::Null, vec![]);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Expected 1 arguments, got 0"));
+    }
+
+    #[test]
+    fn test_lambda_method_wrong_arg_count_reports_lsr006_diagnostic() {
+        let mut interp = create_test_interpreter();
+        let lambda = Value::Lambda {
+            params: vec!["x".to_string(), "y".to_string()],
+            body: Box::new(Stmt::Block(vec![])),
+            closure: Rc::new(RefCell::new(HashMap::new())),
+        };
+
+        let error = interp
+            .call_method(lambda, Value::Null, vec![Value::Int(1)])
+            .unwrap_err();
+        assert!(
+            error.contains("LambdaArityMismatch: expected 2 arguments, got 1"),
+            "expected LambdaArityMismatch diagnostic, got {error}"
+        );
     }
 
     #[test]

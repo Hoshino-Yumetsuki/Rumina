@@ -397,6 +397,12 @@ fn test_lsr000_matrix_direct_two_dimensional_indexing() {
 }
 
 #[test]
+fn test_lsr000_matrix_column_wildcard_slice_returns_vector() {
+    let values = expect_vector(run_rumina("let m = mat[1, 2, 3; 4, 5, 6]; m[*, 2];"));
+    assert_eq!(values, vec![Value::Int(2), Value::Int(5)]);
+}
+
+#[test]
 fn test_lsr004_std_linalg_shape_transpose_trace() {
     let result = run_rumina(
         "import std.linalg as la; let m = mat[1, 2; 3, 4]; let s = la.shape(m); let t = la.transpose(m); s[1] == 2 and s[2] == 2 and t[1][2] == 3 and la.trace(m) == 5;",
@@ -520,6 +526,15 @@ fn test_lsr007_equivalence_is_not_structural_equality() {
 #[test]
 fn test_lsr007_core_equivalence_commutative_add_and_mul() {
     let result = run_rumina("x + 1 === 1 + x and x * 2 === 2 * x;").unwrap();
+    match result {
+        Some(Value::Bool(b)) => assert!(b),
+        other => panic!("Expected Bool(true), got {:?}", other),
+    }
+}
+
+#[test]
+fn test_lsr007_core_equivalence_non_commutative_identities() {
+    let result = run_rumina("x - 0 === x and x / 1 === x and x^1 === x and x^0 === 1;").unwrap();
     match result {
         Some(Value::Bool(b)) => assert!(b),
         other => panic!("Expected Bool(true), got {:?}", other),
@@ -842,5 +857,46 @@ fn test_lsr003_extension_func_requires_c_symbol_string() {
     assert!(
         error.contains("InterfaceBindError") && error.contains("string C symbol"),
         "expected InterfaceBindError for missing C symbol string, got {error}"
+    );
+}
+
+#[test]
+fn test_lsr003_extension_declaration_exposes_callable_stub() {
+    let result = run_rumina(
+        r#"
+module example {
+  func det(x num) -> num = "c_ext_det";
+}
+typeof(example::det);
+"#,
+    )
+    .unwrap();
+
+    match result {
+        Some(Value::String(kind)) => assert_eq!(kind, "extension_function"),
+        other => panic!("Expected extension_function typeof result, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_lsr003_extension_stub_call_routes_to_bound_symbol_diagnostic() {
+    let err = run_rumina(
+        r#"
+module example {
+  func det(x num) -> num = "c_ext_det";
+}
+example::det(1);
+"#,
+    )
+    .unwrap_err();
+    let message = err.to_string();
+
+    assert!(
+        message.contains("ExtensionRuntimeUnavailable"),
+        "expected extension runtime diagnostic, got {message}"
+    );
+    assert!(
+        message.contains("example::det") && message.contains("c_ext_det"),
+        "expected routed function and C symbol in diagnostic, got {message}"
     );
 }

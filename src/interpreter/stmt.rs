@@ -281,7 +281,23 @@ impl Interpreter {
 
     pub(super) fn execute_stmt(&mut self, stmt: &Stmt) -> Result<(), String> {
         match stmt {
-            Stmt::ExtensionModule { .. } => Ok(()),
+            Stmt::ExtensionModule { name, functions } => {
+                let mut module = HashMap::new();
+                for function in functions {
+                    let stub = Value::ExtensionFunction {
+                        module: name.clone(),
+                        function: function.clone(),
+                    };
+                    module.insert(function.name.clone(), stub.clone());
+                    self.set_variable(format!("{}::{}", name, function.name), stub, true);
+                }
+                self.set_variable(
+                    name.clone(),
+                    Value::Module(Rc::new(RefCell::new(module))),
+                    true,
+                );
+                Ok(())
+            }
 
             Stmt::VarDecl {
                 name,
