@@ -2,6 +2,7 @@ use rumina::RuminaError;
 use std::env;
 use std::fs;
 use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::process;
 
 const MAGIC: &[u8] = b"\x52\x4D\x50\x4B\x53\x52\x43\x00"; // RMPKSRC\0 (8 bytes)
@@ -131,7 +132,8 @@ fn run_as_packager() {
         process::exit(1);
     }
 
-    if !input_file.ends_with(".lm") {
+    let input_path = Path::new(&input_file);
+    if input_path.is_file() && !input_file.ends_with(".lm") {
         eprintln!("Warning: Input file is not a .lm file");
     }
 
@@ -150,16 +152,75 @@ fn print_usage() {
     println!("Rumina Packager - Package .lm files into standalone executables");
     println!();
     println!("Usage:");
-    println!("  rmpack <input.lm> [output]");
+    println!("  rmpack <input.lm|extension-dir> [output]");
     println!();
     println!("Arguments:");
-    println!("  <input.lm>   Input Lamina source file");
+    println!("  <input>      Input Lamina source file or LSR-003 extension directory");
     println!("  [output]     Output executable name (optional)");
     println!();
     println!("Options:");
     println!("  --no-optimize   Disable optimization");
     println!("  --debug         Include debug information");
     println!("  --help, -h      Show this help message");
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ExtensionManifest {
+    interface: String,
+    entry: String,
+}
+
+impl ExtensionManifest {
+    fn from_optional_manifest(manifest: Option<&str>) -> Result<Self, RuminaError> {
+        let mut extension_manifest = Self::default();
+        let Some(manifest) = manifest else {
+            return Ok(extension_manifest);
+        };
+
+        let value: serde_json::Value = serde_json::from_str(manifest).map_err(|err| {
+            RuminaError::runtime(format!("InterfaceBindError: invalid lampm.json: {err}"))
+        })?;
+        let object = value.as_object().ok_or_else(|| {
+            RuminaError::runtime("InterfaceBindError: lampm.json must be a JSON object")
+        })?;
+
+        if let Some(interface) = object.get("interface") {
+            extension_manifest.interface = interface
+                .as_str()
+                .ok_or_else(|| {
+                    RuminaError::runtime(
+                        "InterfaceBindError: lampm.json interface must be a string",
+                    )
+                })?
+                .to_string();
+        }
+
+        if let Some(entry) = object.get("entry") {
+            extension_manifest.entry = entry
+                .as_str()
+                .ok_or_else(|| {
+                    RuminaError::runtime("InterfaceBindError: lampm.json entry must be a string")
+                })?
+                .to_string();
+        }
+
+        if extension_manifest.interface.is_empty() || extension_manifest.entry.is_empty() {
+            return Err(RuminaError::runtime(
+                "InterfaceBindError: lampm.json interface and entry must be non-empty",
+            ));
+        }
+
+        Ok(extension_manifest)
+    }
+}
+
+impl Default for ExtensionManifest {
+    fn default() -> Self {
+        Self {
+            interface: "lib.lm".to_string(),
+            entry: "lsr_init".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -191,9 +252,10 @@ impl Packager {
     }
 
     fn package(&self) -> Result<(), RuminaError> {
-        println!("Reading {} ...", self.config.input_file);
+        let source_path = self.resolve_input_source()?;
+        println!("Reading {} ...", source_path.display());
 
-        let source = fs::read_to_string(&self.config.input_file)
+        let source = fs::read_to_string(&source_path)
             .map_err(|e| RuminaError::runtime(format!("Failed to read input file: {}", e)))?;
 
         println!("Source code size: {} bytes", source.len());
@@ -228,5 +290,47 @@ impl Packager {
 
         println!("✓ Packaging completed successfully!");
         Ok(())
+    }
+
+    fn resolve_input_source(&self) -> Result<PathBuf, RuminaError> {
+        let input_path = Path::new(&self.config.input_file);
+        if !input_path.is_dir() {
+            return Ok(input_path.to_path_buf());
+        }
+
+        let manifest_path = input_path.join("lampm.json");
+        let manifest_source = if manifest_path.exists() {
+            Some(
+                fs::read_to_string(&manifest_path)
+                    .map_err(|e| RuminaError::runtime(format!("Failed to read lampm.json: {e}")))?,
+            )
+        } else {
+            None
+        };
+        let manifest = ExtensionManifest::from_optional_manifest(manifest_source.as_deref())?;
+        let interface_path = input_path.join(&manifest.interface);
+
+        if !interface_path.exists() {
+            return Err(RuminaError::runtime(format!(
+                "InterfaceBindError: extension interface '{}' does not exist",
+                interface_path.display()
+            )));
+        }
+
+        println!("Extension entry symbol: {}", manifest.entry);
+        Ok(interface_path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lsr003_extension_manifest_uses_default_interface_and_entry_when_absent() {
+        let manifest = ExtensionManifest::from_optional_manifest(None).unwrap();
+
+        assert_eq!(manifest.interface, "lib.lm");
+        assert_eq!(manifest.entry, "lsr_init");
     }
 }

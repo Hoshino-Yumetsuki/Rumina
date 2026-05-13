@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 rumina = { path = "../.." }
+serde_json = "1.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 ctrlc = "^3"
