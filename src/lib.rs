@@ -383,6 +383,7 @@ fn should_use_interpreter_runtime(statements: &[ast::Stmt]) -> bool {
             | ast::Stmt::VarDecl { value: expr, .. }
             | ast::Stmt::LetDecl { value: expr, .. }
             | ast::Stmt::Assign { value: expr, .. } => expr_requires_interpreter(expr),
+            ast::Stmt::IndexAssign { .. } => true,
             ast::Stmt::MemberAssign { object, value, .. } => {
                 expr_requires_interpreter(object) || expr_requires_interpreter(value)
             }
@@ -443,13 +444,29 @@ fn should_use_interpreter_runtime(statements: &[ast::Stmt]) -> bool {
                     || expr_requires_interpreter(func)
                     || args.iter().any(expr_requires_interpreter)
             }
-            ast::Expr::Binary { left, right, .. } => {
+            ast::Expr::Binary { left, op, right } => {
                 matches!(
-                    expr,
-                    ast::Expr::Binary {
-                        op: ast::BinOp::Pipe | ast::BinOp::Equivalent,
-                        ..
-                    }
+                    op,
+                    ast::BinOp::Pipe
+                        | ast::BinOp::Equivalent
+                        | ast::BinOp::BroadcastAdd
+                        | ast::BinOp::BroadcastSub
+                        | ast::BinOp::BroadcastMul
+                        | ast::BinOp::BroadcastDiv
+                        | ast::BinOp::BroadcastPow
+                        | ast::BinOp::BroadcastEqual
+                        | ast::BinOp::BroadcastNotEqual
+                        | ast::BinOp::BroadcastGreater
+                        | ast::BinOp::BroadcastGreaterEq
+                        | ast::BinOp::BroadcastLess
+                        | ast::BinOp::BroadcastLessEq
+                        | ast::BinOp::LeftDiv
+                        | ast::BinOp::In
+                        | ast::BinOp::NotIn
+                        | ast::BinOp::Subset
+                        | ast::BinOp::SetUnion
+                        | ast::BinOp::SetIntersection
+                        | ast::BinOp::SetSymmetricDifference
                 ) || expr_requires_interpreter(left)
                     || expr_requires_interpreter(right)
             }
@@ -598,6 +615,63 @@ if (path.basename("/tmp/demo.txt") == "demo.txt") {
             Some(Value::String(s)) => assert_eq!(s, "ok"),
             other => panic!("Expected Some(String), got {:?}", other),
         }
+    }
+
+    #[test]
+    fn routes_all_bytecode_unsupported_binary_ops_to_interpreter() {
+        fn unsupported_binary(op: ast::BinOp) -> ast::Stmt {
+            ast::Stmt::Return(Some(ast::Expr::Binary {
+                left: Box::new(ast::Expr::Ident("left".to_string())),
+                op,
+                right: Box::new(ast::Expr::Ident("right".to_string())),
+            }))
+        }
+
+        let unsupported_ops = [
+            ast::BinOp::BroadcastAdd,
+            ast::BinOp::BroadcastSub,
+            ast::BinOp::BroadcastMul,
+            ast::BinOp::BroadcastDiv,
+            ast::BinOp::BroadcastPow,
+            ast::BinOp::BroadcastEqual,
+            ast::BinOp::BroadcastNotEqual,
+            ast::BinOp::BroadcastGreater,
+            ast::BinOp::BroadcastGreaterEq,
+            ast::BinOp::BroadcastLess,
+            ast::BinOp::BroadcastLessEq,
+            ast::BinOp::LeftDiv,
+            ast::BinOp::In,
+            ast::BinOp::NotIn,
+            ast::BinOp::Subset,
+            ast::BinOp::SetUnion,
+            ast::BinOp::SetIntersection,
+            ast::BinOp::SetSymmetricDifference,
+        ];
+
+        for op in unsupported_ops {
+            let statements = vec![ast::Stmt::FuncDef {
+                name: "uses_op".to_string(),
+                params: vec!["left".to_string(), "right".to_string()],
+                body: vec![unsupported_binary(op)],
+                decorators: vec![],
+            }];
+
+            assert!(
+                should_use_interpreter_runtime(&statements),
+                "{op} should route to the interpreter runtime"
+            );
+        }
+    }
+
+    #[test]
+    fn routes_index_assignment_to_interpreter() {
+        let statements = vec![ast::Stmt::IndexAssign {
+            object: ast::Expr::Ident("items".to_string()),
+            index: ast::Expr::Int(0),
+            value: ast::Expr::Int(42),
+        }];
+
+        assert!(should_use_interpreter_runtime(&statements));
     }
 
     #[test]

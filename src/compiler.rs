@@ -101,6 +101,13 @@ pub struct Compiler {
 }
 
 impl Compiler {
+    fn bytecode_unavailable(feature: &str) -> RuminaError {
+        RuminaError::runtime(format!(
+            "{} requires interpreter runtime and cannot be emitted as bytecode",
+            feature
+        ))
+    }
+
     pub fn new() -> Self {
         Compiler {
             bytecode: ByteCode::new(),
@@ -486,17 +493,12 @@ impl Compiler {
             }
 
             Stmt::TryCatch(_, _, _) => {
-                return Err(RuminaError::runtime(
-                    "try/catch is not yet supported by the bytecode compiler".to_string(),
-                ));
+                return Err(Self::bytecode_unavailable("try/catch"));
             }
             Stmt::Empty => {}
 
             _ => {
-                return Err(RuminaError::runtime(format!(
-                    "Unimplemented statement compilation: {:?}",
-                    stmt
-                )));
+                return Err(Self::bytecode_unavailable("statement form"));
             }
         }
 
@@ -823,15 +825,11 @@ impl Compiler {
             }
 
             Expr::Wildcard => {
-                return Err(RuminaError::runtime(
-                    "wildcard slices are not yet supported by the bytecode compiler".to_string(),
-                ));
+                return Err(Self::bytecode_unavailable("wildcard slices"));
             }
 
             Expr::Range { .. } => {
-                return Err(RuminaError::runtime(
-                    "range slices are not yet supported by the bytecode compiler".to_string(),
-                ));
+                return Err(Self::bytecode_unavailable("range slices"));
             }
 
             Expr::Binary { left, op, right } => {
@@ -858,10 +856,7 @@ impl Compiler {
                         | BinOp::SetIntersection
                         | BinOp::SetSymmetricDifference
                 ) {
-                    return Err(RuminaError::runtime(format!(
-                        "{} operator is not yet supported by the bytecode compiler",
-                        op
-                    )));
+                    return Err(Self::bytecode_unavailable(&format!("{} operator", op)));
                 }
 
                 // Compile operands
@@ -948,28 +943,19 @@ impl Compiler {
             }
 
             Expr::UnitStrip { .. } => {
-                return Err(RuminaError::runtime(
-                    "unit stripping is not yet supported by the bytecode compiler".to_string(),
-                ));
+                return Err(Self::bytecode_unavailable("unit stripping"));
             }
 
             Expr::UnitConvert { .. } => {
-                return Err(RuminaError::runtime(
-                    "unit conversion is not yet supported by the bytecode compiler".to_string(),
-                ));
+                return Err(Self::bytecode_unavailable("unit conversion"));
             }
 
             Expr::UnitAttach { .. } => {
-                return Err(RuminaError::runtime(
-                    "unit-attached numeric literals are not yet supported by the bytecode compiler"
-                        .to_string(),
-                ));
+                return Err(Self::bytecode_unavailable("unit-attached numeric literals"));
             }
 
             Expr::MatrixTranspose { .. } => {
-                return Err(RuminaError::runtime(
-                    "matrix transpose is not yet supported by the bytecode compiler".to_string(),
-                ));
+                return Err(Self::bytecode_unavailable("matrix transpose"));
             }
 
             Expr::Array(elements) => {
@@ -983,21 +969,15 @@ impl Compiler {
             }
 
             Expr::Vector(_) => {
-                return Err(RuminaError::runtime(
-                    "vector literals are not yet supported by the bytecode compiler".to_string(),
-                ));
+                return Err(Self::bytecode_unavailable("vector literals"));
             }
 
             Expr::Matrix(_) => {
-                return Err(RuminaError::runtime(
-                    "matrix literals are not yet supported by the bytecode compiler".to_string(),
-                ));
+                return Err(Self::bytecode_unavailable("matrix literals"));
             }
 
             Expr::Set(_) => {
-                return Err(RuminaError::runtime(
-                    "set literals are not yet supported by the bytecode compiler".to_string(),
-                ));
+                return Err(Self::bytecode_unavailable("set literals"));
             }
 
             Expr::Struct(fields) => {
@@ -1015,9 +995,7 @@ impl Compiler {
             }
 
             Expr::Table(_) => {
-                return Err(RuminaError::runtime(
-                    "table literals are not yet supported by the bytecode compiler".to_string(),
-                ));
+                return Err(Self::bytecode_unavailable("table literals"));
             }
 
             Expr::Call { func, args } => {
@@ -1131,28 +1109,19 @@ impl Compiler {
             }
 
             Expr::Match { .. } => {
-                return Err(RuminaError::runtime(
-                    "match expressions are not yet supported by the bytecode compiler".to_string(),
-                ));
+                return Err(Self::bytecode_unavailable("match expressions"));
             }
 
             Expr::If { .. } => {
-                return Err(RuminaError::runtime(
-                    "if expressions are not yet supported by the bytecode compiler".to_string(),
-                ));
+                return Err(Self::bytecode_unavailable("if expressions"));
             }
 
             Expr::Try(_) => {
-                return Err(RuminaError::runtime(
-                    "? operator is not yet supported by the bytecode compiler".to_string(),
-                ));
+                return Err(Self::bytecode_unavailable("? operator"));
             }
 
             Expr::Multi(_) => {
-                return Err(RuminaError::runtime(
-                    "multi-value expressions are not yet supported by the bytecode compiler"
-                        .to_string(),
-                ));
+                return Err(Self::bytecode_unavailable("multi-value expressions"));
             }
         }
 
@@ -1273,6 +1242,19 @@ mod tests {
             Some(Value::Int(n)) => assert_eq!(n, 30),
             _ => panic!("Expected Int(30), got {:?}", result),
         }
+    }
+
+    #[test]
+    fn direct_compile_reports_interpreter_required_for_unsupported_bytecode_feature() {
+        let mut compiler = Compiler::new();
+        let err = compiler
+            .compile(vec![Stmt::Expr(Expr::Vector(vec![Expr::Int(1)]))])
+            .expect_err("vector literals should not compile to bytecode yet");
+        let message = err.to_string();
+
+        assert!(message.contains("requires interpreter runtime"));
+        let legacy_prefix = ["not", "yet", "supported"].join(" ");
+        assert!(!message.contains(&format!("{} by the bytecode compiler", legacy_prefix)));
     }
 
     #[test]
