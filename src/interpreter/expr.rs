@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::ast::{BinOp, Expr, MatchPattern};
+use crate::builtin::math;
 use crate::value::Value;
 
 use super::Interpreter;
@@ -577,9 +578,6 @@ impl Interpreter {
             }
 
             Expr::MatrixTranspose { expr, conjugate } => {
-                if *conjugate {
-                    return Err("conjugate transpose is not yet supported".to_string());
-                }
                 let value = self.eval_expr(expr)?;
                 let Value::Matrix(rows) = value else {
                     return Err(format!("Cannot transpose {}", value.type_name()));
@@ -593,7 +591,12 @@ impl Interpreter {
                         return Err("Matrix transpose expects rectangular matrix".to_string());
                     }
                     for (col, item) in row.iter().enumerate() {
-                        transposed[col].push(item.clone());
+                        let value = if *conjugate {
+                            math::conj(std::slice::from_ref(item))?
+                        } else {
+                            item.clone()
+                        };
+                        transposed[col].push(value);
                     }
                 }
                 Ok(Value::Matrix(Rc::new(RefCell::new(transposed))))
@@ -1460,6 +1463,49 @@ mod tests {
 
     fn new_interpreter() -> Interpreter {
         Interpreter::new()
+    }
+
+    fn complex(real: i64, imaginary: i64) -> Expr {
+        Expr::Binary {
+            left: Box::new(Expr::Int(real)),
+            op: BinOp::Add,
+            right: Box::new(Expr::Binary {
+                left: Box::new(Expr::Int(imaginary)),
+                op: BinOp::Mul,
+                right: Box::new(Expr::Ident("i".to_string())),
+            }),
+        }
+    }
+
+    #[test]
+    fn conjugate_transpose_transposes_and_conjugates_complex_entries() {
+        let expr = Expr::MatrixTranspose {
+            expr: Box::new(Expr::Matrix(vec![
+                vec![complex(1, 2), Expr::Int(3)],
+                vec![complex(4, -5), complex(0, 6)],
+            ])),
+            conjugate: true,
+        };
+        let mut interpreter = new_interpreter();
+
+        let result = interpreter.eval_expr(&expr).unwrap();
+
+        let Value::Matrix(rows) = result else {
+            panic!("Expected matrix result, got {result:?}");
+        };
+        assert_eq!(
+            rows.borrow().as_slice(),
+            &[
+                vec![
+                    Value::Complex(Box::new(Value::Int(1)), Box::new(Value::Int(-2))),
+                    Value::Complex(Box::new(Value::Int(4)), Box::new(Value::Int(5))),
+                ],
+                vec![
+                    Value::Int(3),
+                    Value::Complex(Box::new(Value::Int(0)), Box::new(Value::Int(-6))),
+                ],
+            ]
+        );
     }
 
     #[test]
