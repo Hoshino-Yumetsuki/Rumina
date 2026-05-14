@@ -957,15 +957,15 @@ impl Parser {
                 continue;
             }
 
-            if let Token::Ident(unit) = self.current_token() {
-                if unit != "scalar" {
-                    let unit = self.parse_unit_name()?;
-                    expr = Expr::UnitConvert {
-                        expr: Box::new(expr),
-                        unit,
-                    };
-                    continue;
-                }
+            if let Token::Ident(unit) = self.current_token()
+                && unit != "scalar"
+            {
+                let unit = self.parse_unit_name()?;
+                expr = Expr::UnitConvert {
+                    expr: Box::new(expr),
+                    unit,
+                };
+                continue;
             }
 
             let mode = match self.current_token() {
@@ -1528,19 +1528,19 @@ impl Parser {
             };
             self.expect(Token::FatArrow)?;
             let expr = self.parse_expression()?;
-            if let MatchPattern::Literal(pattern_expr) = &pattern {
-                if arms.iter().any(|arm| {
+            if let MatchPattern::Literal(pattern_expr) = &pattern
+                && arms.iter().any(|arm| {
                     arm.guard.is_none()
                         && match &arm.pattern {
                             MatchPattern::Literal(previous) => previous == pattern_expr,
                             _ => false,
                         }
-                }) {
-                    return Err(format!(
-                        "UnreachablePattern: duplicate literal match arm {:?}",
-                        pattern_expr
-                    ));
-                }
+                })
+            {
+                return Err(format!(
+                    "UnreachablePattern: duplicate literal match arm {:?}",
+                    pattern_expr
+                ));
             }
             arms.push(MatchArm {
                 pattern,

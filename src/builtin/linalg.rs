@@ -314,16 +314,17 @@ fn matrix_rank(values: &mut [Vec<f64>]) -> usize {
 
         values.swap(rank, pivot);
         let pivot_value = values[rank][col];
-        for c in col..col_count {
-            values[rank][c] /= pivot_value;
+        for value in values[rank].iter_mut().take(col_count).skip(col) {
+            *value /= pivot_value;
         }
-        for row in 0..row_count {
-            if row == rank {
+        let pivot_row = values[rank].clone();
+        for (row_index, row_values) in values.iter_mut().enumerate().take(row_count) {
+            if row_index == rank {
                 continue;
             }
-            let factor = values[row][col];
-            for c in col..col_count {
-                values[row][c] -= factor * values[rank][c];
+            let factor = row_values[col];
+            for (value, pivot) in row_values.iter_mut().zip(pivot_row.iter()).skip(col) {
+                *value -= factor * pivot;
             }
         }
         rank += 1;

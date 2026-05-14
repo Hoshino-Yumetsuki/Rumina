@@ -679,136 +679,128 @@ impl Interpreter {
 
             Expr::Index { object, index } => {
                 let obj = self.eval_expr(object)?;
-                if let (Value::Matrix(rows), Expr::Multi(indices)) = (&obj, index.as_ref()) {
-                    if indices.len() == 2 {
-                        if let Expr::Range { start, end } = &indices[0] {
-                            let start = self.eval_expr(start)?.to_int()?;
-                            let end = self.eval_expr(end)?.to_int()?;
-                            if start <= 0 {
-                                return Err(format!("Matrix row index out of bounds: {}", start));
-                            }
-                            if end < start {
+                if let (Value::Matrix(rows), Expr::Multi(indices)) = (&obj, index.as_ref())
+                    && indices.len() == 2
+                {
+                    if let Expr::Range { start, end } = &indices[0] {
+                        let start = self.eval_expr(start)?.to_int()?;
+                        let end = self.eval_expr(end)?.to_int()?;
+                        if start <= 0 {
+                            return Err(format!("Matrix row index out of bounds: {}", start));
+                        }
+                        if end < start {
+                            return Err(format!("Invalid matrix row range: {}..{}", start, end));
+                        }
+
+                        if let Expr::Range {
+                            start: col_start,
+                            end: col_end,
+                        } = &indices[1]
+                        {
+                            let col_start = self.eval_expr(col_start)?.to_int()?;
+                            let col_end = self.eval_expr(col_end)?.to_int()?;
+                            if col_start <= 0 {
                                 return Err(format!(
-                                    "Invalid matrix row range: {}..{}",
-                                    start, end
+                                    "Matrix column index out of bounds: {}",
+                                    col_start
+                                ));
+                            }
+                            if col_end < col_start {
+                                return Err(format!(
+                                    "Invalid matrix column range: {}..{}",
+                                    col_start, col_end
                                 ));
                             }
 
-                            if let Expr::Range {
-                                start: col_start,
-                                end: col_end,
-                            } = &indices[1]
-                            {
-                                let col_start = self.eval_expr(col_start)?.to_int()?;
-                                let col_end = self.eval_expr(col_end)?.to_int()?;
-                                if col_start <= 0 {
-                                    return Err(format!(
-                                        "Matrix column index out of bounds: {}",
-                                        col_start
-                                    ));
-                                }
-                                if col_end < col_start {
-                                    return Err(format!(
-                                        "Invalid matrix column range: {}..{}",
-                                        col_start, col_end
-                                    ));
-                                }
-
-                                let rows = rows.borrow();
-                                let mut sliced_rows = Vec::new();
-                                for row_number in start..=end {
-                                    let row =
-                                        rows.get((row_number - 1) as usize).ok_or_else(|| {
-                                            format!(
-                                                "Matrix row index out of bounds: {}",
-                                                row_number
-                                            )
-                                        })?;
-
-                                    let mut sliced_row = Vec::new();
-                                    for col_number in col_start..=col_end {
-                                        let value = row
-                                            .get((col_number - 1) as usize)
-                                            .cloned()
-                                            .ok_or_else(|| {
-                                                format!(
-                                                    "Matrix column index out of bounds: {}",
-                                                    col_number
-                                                )
-                                            })?;
-                                        sliced_row.push(value);
-                                    }
-                                    sliced_rows.push(sliced_row);
-                                }
-                                return Ok(Value::Matrix(Rc::new(RefCell::new(sliced_rows))));
-                            }
-
-                            let col = self.eval_expr(&indices[1])?.to_int()?;
-                            if col <= 0 {
-                                return Err(format!("Matrix column index out of bounds: {}", col));
-                            }
-
                             let rows = rows.borrow();
-                            let mut values = Vec::new();
+                            let mut sliced_rows = Vec::new();
                             for row_number in start..=end {
                                 let row = rows.get((row_number - 1) as usize).ok_or_else(|| {
                                     format!("Matrix row index out of bounds: {}", row_number)
                                 })?;
-                                let value =
-                                    row.get((col - 1) as usize).cloned().ok_or_else(|| {
-                                        format!("Matrix column index out of bounds: {}", col)
-                                    })?;
-                                values.push(value);
+
+                                let mut sliced_row = Vec::new();
+                                for col_number in col_start..=col_end {
+                                    let value = row
+                                        .get((col_number - 1) as usize)
+                                        .cloned()
+                                        .ok_or_else(|| {
+                                            format!(
+                                                "Matrix column index out of bounds: {}",
+                                                col_number
+                                            )
+                                        })?;
+                                    sliced_row.push(value);
+                                }
+                                sliced_rows.push(sliced_row);
                             }
-                            return Ok(Value::Vector(Rc::new(RefCell::new(values))));
+                            return Ok(Value::Matrix(Rc::new(RefCell::new(sliced_rows))));
                         }
 
-                        if matches!(indices[0], Expr::Wildcard) {
-                            let col = self.eval_expr(&indices[1])?.to_int()?;
-                            if col <= 0 {
-                                return Err(format!("Matrix column index out of bounds: {}", col));
-                            }
-
-                            let rows = rows.borrow();
-                            let mut values = Vec::with_capacity(rows.len());
-                            for row in rows.iter() {
-                                let value =
-                                    row.get((col - 1) as usize).cloned().ok_or_else(|| {
-                                        format!("Matrix column index out of bounds: {}", col)
-                                    })?;
-                                values.push(value);
-                            }
-                            return Ok(Value::Vector(Rc::new(RefCell::new(values))));
-                        }
-
-                        if matches!(indices[1], Expr::Wildcard) {
-                            let row = self.eval_expr(&indices[0])?.to_int()?;
-                            if row <= 0 {
-                                return Err(format!("Matrix row index out of bounds: {}", row));
-                            }
-
-                            let values =
-                                rows.borrow().get((row - 1) as usize).cloned().ok_or_else(
-                                    || format!("Matrix row index out of bounds: {}", row),
-                                )?;
-                            return Ok(Value::Vector(Rc::new(RefCell::new(values))));
-                        }
-
-                        let row = self.eval_expr(&indices[0])?.to_int()?;
                         let col = self.eval_expr(&indices[1])?.to_int()?;
-                        if row <= 0 {
-                            return Err(format!("Matrix row index out of bounds: {}", row));
-                        }
                         if col <= 0 {
                             return Err(format!("Matrix column index out of bounds: {}", col));
                         }
-                        return rows
+
+                        let rows = rows.borrow();
+                        let mut values = Vec::new();
+                        for row_number in start..=end {
+                            let row = rows.get((row_number - 1) as usize).ok_or_else(|| {
+                                format!("Matrix row index out of bounds: {}", row_number)
+                            })?;
+                            let value = row.get((col - 1) as usize).cloned().ok_or_else(|| {
+                                format!("Matrix column index out of bounds: {}", col)
+                            })?;
+                            values.push(value);
+                        }
+                        return Ok(Value::Vector(Rc::new(RefCell::new(values))));
+                    }
+
+                    if matches!(indices[0], Expr::Wildcard) {
+                        let col = self.eval_expr(&indices[1])?.to_int()?;
+                        if col <= 0 {
+                            return Err(format!("Matrix column index out of bounds: {}", col));
+                        }
+
+                        let rows = rows.borrow();
+                        let mut values = Vec::with_capacity(rows.len());
+                        for row in rows.iter() {
+                            let value = row.get((col - 1) as usize).cloned().ok_or_else(|| {
+                                format!("Matrix column index out of bounds: {}", col)
+                            })?;
+                            values.push(value);
+                        }
+                        return Ok(Value::Vector(Rc::new(RefCell::new(values))));
+                    }
+
+                    if matches!(indices[1], Expr::Wildcard) {
+                        let row = self.eval_expr(&indices[0])?.to_int()?;
+                        if row <= 0 {
+                            return Err(format!("Matrix row index out of bounds: {}", row));
+                        }
+
+                        let values = rows
                             .borrow()
                             .get((row - 1) as usize)
-                            .and_then(|values| values.get((col - 1) as usize))
                             .cloned()
-                            .ok_or_else(|| format!("Matrix index out of bounds: {},{}", row, col));
+                            .ok_or_else(|| format!("Matrix row index out of bounds: {}", row))?;
+                        return Ok(Value::Vector(Rc::new(RefCell::new(values))));
                     }
+
+                    let row = self.eval_expr(&indices[0])?.to_int()?;
+                    let col = self.eval_expr(&indices[1])?.to_int()?;
+                    if row <= 0 {
+                        return Err(format!("Matrix row index out of bounds: {}", row));
+                    }
+                    if col <= 0 {
+                        return Err(format!("Matrix column index out of bounds: {}", col));
+                    }
+                    return rows
+                        .borrow()
+                        .get((row - 1) as usize)
+                        .and_then(|values| values.get((col - 1) as usize))
+                        .cloned()
+                        .ok_or_else(|| format!("Matrix index out of bounds: {},{}", row, col));
                 }
                 let idx = self.eval_expr(index)?;
                 match (obj, idx) {
