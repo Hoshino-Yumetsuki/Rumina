@@ -946,6 +946,106 @@ pub struct VM {
     max_recursion_depth: usize,
 }
 
+fn split_array_higher_order_args(
+    name: &str,
+    args: Vec<Value>,
+) -> Result<(Value, Vec<Value>), RuminaError> {
+    if args.is_empty() {
+        return Err(RuminaError::runtime(format!(
+            "{} expects array and function",
+            name
+        )));
+    }
+
+    let mut args = args.into_iter();
+    let object = args
+        .next()
+        .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
+    Ok((object, args.collect()))
+}
+
+fn assign_index_value(object: Value, index: Value, value: Value) -> Result<(), RuminaError> {
+    match object {
+        Value::Array(values) => {
+            let index = index.to_int().map_err(RuminaError::runtime)?;
+            if index < 0 {
+                return Err(RuminaError::runtime(format!(
+                    "Array index out of bounds: {}",
+                    index
+                )));
+            }
+
+            let mut values = values.borrow_mut();
+            let slot = values.get_mut(index as usize).ok_or_else(|| {
+                RuminaError::runtime(format!("Array index out of bounds: {}", index))
+            })?;
+            *slot = value;
+            Ok(())
+        }
+        Value::Vector(values) => {
+            let index = index.to_int().map_err(RuminaError::runtime)?;
+            if index <= 0 {
+                return Err(RuminaError::runtime(format!(
+                    "Vector index out of bounds: {}",
+                    index
+                )));
+            }
+
+            let mut values = values.borrow_mut();
+            let slot = values.get_mut((index - 1) as usize).ok_or_else(|| {
+                RuminaError::runtime(format!("Vector index out of bounds: {}", index))
+            })?;
+            *slot = value;
+            Ok(())
+        }
+        Value::Matrix(rows) => {
+            let Value::MultiValue(indices) = index else {
+                return Err(RuminaError::runtime(
+                    "Matrix assignment expects row and column indices",
+                ));
+            };
+            if indices.len() != 2 {
+                return Err(RuminaError::runtime(
+                    "Matrix assignment expects row and column indices",
+                ));
+            }
+
+            let row = indices[0].to_int().map_err(RuminaError::runtime)?;
+            let col = indices[1].to_int().map_err(RuminaError::runtime)?;
+            if row <= 0 {
+                return Err(RuminaError::runtime(format!(
+                    "Matrix row index out of bounds: {}",
+                    row
+                )));
+            }
+            if col <= 0 {
+                return Err(RuminaError::runtime(format!(
+                    "Matrix column index out of bounds: {}",
+                    col
+                )));
+            }
+
+            let mut rows = rows.borrow_mut();
+            let row_values = rows.get_mut((row - 1) as usize).ok_or_else(|| {
+                RuminaError::runtime(format!("Matrix row index out of bounds: {}", row))
+            })?;
+            let slot = row_values.get_mut((col - 1) as usize).ok_or_else(|| {
+                RuminaError::runtime(format!("Matrix column index out of bounds: {}", col))
+            })?;
+            *slot = value;
+            Ok(())
+        }
+        Value::Struct(fields) => {
+            fields.borrow_mut().insert(index.to_string(), value);
+            Ok(())
+        }
+        other => Err(RuminaError::runtime(format!(
+            "Cannot assign index to {}",
+            other.type_name()
+        ))),
+    }
+}
+
 impl VM {
     /// Create new VM instance
     pub fn new(globals: Rc<RefCell<HashMap<String, Value>>>) -> Self {
@@ -1357,8 +1457,21 @@ impl VM {
                 // Call the function
                 match func {
                     Value::NativeFunction {
-                        func: native_fn, ..
+                        name: native_name,
+                        func: native_fn,
+                        ..
                     } => {
+                        if matches!(
+                            native_name.as_str(),
+                            "foreach" | "map" | "filter" | "reduce" | "fold"
+                        ) {
+                            let (object, args) = split_array_higher_order_args(&native_name, args)?;
+                            let result =
+                                self.call_array_higher_order_method(&native_name, object, args)?;
+                            self.stack.push(result);
+                            return Ok(());
+                        }
+
                         // Call native function
                         let result = native_fn(&args).map_err(RuminaError::runtime)?;
                         self.stack.push(result);
@@ -1859,10 +1972,10 @@ impl VM {
                             name.as_str(),
                             "foreach" | "map" | "filter" | "reduce" | "fold"
                         ) {
-                            return Err(RuminaError::runtime(format!(
-                                "Higher-order array method '{}' is not yet supported by the VM",
-                                name
-                            )));
+                            let result =
+                                self.call_array_higher_order_method(name.as_str(), object, args)?;
+                            self.stack.push(result);
+                            return Ok(());
                         }
                         let mut native_args = Vec::with_capacity(args.len() + 1);
                         native_args.push(object);
@@ -2009,9 +2122,20 @@ impl VM {
             }
 
             OpCode::IndexAssign => {
-                return Err(RuminaError::runtime(
-                    "Opcode not yet implemented".to_string(),
-                ));
+                let value = self
+                    .stack
+                    .pop()
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
+                let index = self
+                    .stack
+                    .pop()
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
+                let object = self
+                    .stack
+                    .pop()
+                    .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))?;
+
+                assign_index_value(object, index, value)?;
             }
 
             OpCode::ConvertType(dtype) => {
@@ -2055,6 +2179,230 @@ impl VM {
     fn convert_to_type(&self, val: Value, dtype: &DeclaredType) -> Result<Value, RuminaError> {
         use crate::interpreter::convert;
         convert::convert_to_declared_type(val, dtype).map_err(RuminaError::runtime)
+    }
+
+    fn call_array_higher_order_method(
+        &mut self,
+        name: &str,
+        object: Value,
+        args: Vec<Value>,
+    ) -> Result<Value, RuminaError> {
+        let array = match object {
+            Value::Array(values) => values,
+            other => {
+                return Err(RuminaError::runtime(format!(
+                    "{} expects array, got {}",
+                    name,
+                    other.type_name()
+                )));
+            }
+        };
+
+        match name {
+            "foreach" => {
+                if args.len() != 1 {
+                    return Err(RuminaError::runtime(
+                        "foreach expects 2 arguments (array, function)".to_string(),
+                    ));
+                }
+                let callback = args[0].clone();
+                let items = array.borrow().clone();
+                for (index, element) in items.into_iter().enumerate() {
+                    self.call_value_sync(
+                        callback.clone(),
+                        vec![Value::Int(index as i64), element],
+                    )?;
+                }
+                Ok(Value::Null)
+            }
+            "map" => {
+                if args.len() != 1 {
+                    return Err(RuminaError::runtime(
+                        "map expects 2 arguments (array, function)".to_string(),
+                    ));
+                }
+                let callback = args[0].clone();
+                let items = array.borrow().clone();
+                let mut mapped = Vec::with_capacity(items.len());
+                for element in items {
+                    mapped.push(self.call_value_sync(callback.clone(), vec![element])?);
+                }
+                Ok(Value::Array(Rc::new(RefCell::new(mapped))))
+            }
+            "filter" => {
+                if args.len() != 1 {
+                    return Err(RuminaError::runtime(
+                        "filter expects 2 arguments (array, function)".to_string(),
+                    ));
+                }
+                let callback = args[0].clone();
+                let items = array.borrow().clone();
+                let mut filtered = Vec::new();
+                for element in items {
+                    if self
+                        .call_value_sync(callback.clone(), vec![element.clone()])?
+                        .is_truthy()
+                    {
+                        filtered.push(element);
+                    }
+                }
+                Ok(Value::Array(Rc::new(RefCell::new(filtered))))
+            }
+            "reduce" | "fold" => {
+                if args.is_empty() || args.len() > 2 {
+                    return Err(RuminaError::runtime(
+                        "reduce expects 2 or 3 arguments (array, function, [initial])".to_string(),
+                    ));
+                }
+                let callback = args[0].clone();
+                let items = array.borrow().clone();
+                if items.is_empty() {
+                    return args.get(1).cloned().ok_or_else(|| {
+                        RuminaError::runtime("reduce of empty array with no initial value")
+                    });
+                }
+
+                let (mut accumulator, start_index) = if let Some(initial) = args.get(1) {
+                    (initial.clone(), 0)
+                } else {
+                    (items[0].clone(), 1)
+                };
+
+                for element in items.into_iter().skip(start_index) {
+                    accumulator =
+                        self.call_value_sync(callback.clone(), vec![accumulator, element])?;
+                }
+
+                Ok(accumulator)
+            }
+            _ => Err(RuminaError::runtime(format!(
+                "Unknown array method '{}'",
+                name
+            ))),
+        }
+    }
+
+    fn call_value_sync(&mut self, callable: Value, args: Vec<Value>) -> Result<Value, RuminaError> {
+        match callable {
+            Value::NativeFunction {
+                func: native_fn, ..
+            } => native_fn(&args).map_err(RuminaError::runtime),
+            Value::Function { name, .. } => {
+                let func_info = self
+                    .functions
+                    .get(&name)
+                    .ok_or_else(|| {
+                        RuminaError::runtime(format!(
+                            "Function '{}' not found in function table",
+                            name
+                        ))
+                    })?
+                    .clone();
+
+                if args.len() != func_info.params.len() {
+                    return Err(RuminaError::runtime(format!(
+                        "Function '{}' expects {} arguments, got {}",
+                        name,
+                        func_info.params.len(),
+                        args.len()
+                    )));
+                }
+
+                let mut locals =
+                    FxHashMap::with_capacity_and_hasher(func_info.params.len(), Default::default());
+                for (param_name, arg_value) in func_info.params.iter().zip(args) {
+                    locals.insert(param_name.clone(), arg_value);
+                }
+
+                self.run_callable_frame(name, func_info.body_start, locals)
+            }
+            Value::Lambda {
+                params,
+                body,
+                closure,
+            } => {
+                if args.len() != params.len() {
+                    return Err(RuminaError::runtime(format!(
+                        "LambdaArityMismatch: expected {} arguments, got {}",
+                        params.len(),
+                        args.len()
+                    )));
+                }
+
+                let lambda_id = match body.as_ref() {
+                    crate::ast::Stmt::Include(id) => id.clone(),
+                    _ => return Err(RuminaError::runtime(ERR_LAMBDA_ID_NOT_FOUND)),
+                };
+                let func_info = self
+                    .functions
+                    .get(&lambda_id)
+                    .ok_or_else(|| {
+                        RuminaError::runtime(format!("Lambda '{}' not found", lambda_id))
+                    })?
+                    .clone();
+
+                let closure_ref = closure.borrow();
+                let mut locals = FxHashMap::with_capacity_and_hasher(
+                    closure_ref.len() + params.len(),
+                    Default::default(),
+                );
+                for (key, value) in closure_ref.iter() {
+                    locals.insert(key.clone(), value.clone());
+                }
+                drop(closure_ref);
+                for (param_name, arg_value) in params.iter().zip(args) {
+                    locals.insert(param_name.clone(), arg_value);
+                }
+
+                self.run_callable_frame(lambda_id, func_info.body_start, locals)
+            }
+            other => Err(RuminaError::runtime(format!(
+                "Cannot call type {}",
+                other.type_name()
+            ))),
+        }
+    }
+
+    fn run_callable_frame(
+        &mut self,
+        function_name: String,
+        body_start: usize,
+        locals: FxHashMap<String, Value>,
+    ) -> Result<Value, RuminaError> {
+        if self.recursion_depth >= self.max_recursion_depth {
+            return Err(RuminaError::runtime(format!(
+                "Maximum recursion depth ({}) exceeded",
+                self.max_recursion_depth
+            )));
+        }
+
+        let frame_depth = self.call_stack.len();
+        let frame = CallFrame {
+            return_address: self.ip,
+            base_pointer: self.stack.len(),
+            function_name,
+            locals: std::mem::take(&mut self.locals),
+            immutable_locals: std::mem::take(&mut self.immutable_locals),
+        };
+
+        self.call_stack.push(frame);
+        self.recursion_depth += 1;
+        self.locals = locals;
+        self.immutable_locals = HashSet::new();
+        self.ip = body_start;
+
+        while self.call_stack.len() > frame_depth && !self.halted {
+            if self.ip >= self.bytecode.instructions.len() {
+                return Err(RuminaError::runtime("Instruction pointer out of bounds"));
+            }
+            let current_ip = self.ip;
+            self.ip += 1;
+            self.execute_instruction_at(current_ip)?;
+        }
+
+        self.stack
+            .pop()
+            .ok_or_else(|| RuminaError::runtime(ERR_STACK_UNDERFLOW))
     }
 
     /// Get variable from locals or globals

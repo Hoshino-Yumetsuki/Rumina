@@ -10,8 +10,7 @@ pub fn foreach(args: &[Value]) -> Result<Value, String> {
 
     match (&args[0], &args[1]) {
         (Value::Array(_arr), _func) => {
-            // foreach需要在interpreter中实现，因为需要调用回调函数
-            Err("foreach not yet fully implemented - use in interpreter".to_string())
+            Err("foreach requires interpreter or VM callback runtime".to_string())
         }
         _ => Err(format!(
             "foreach expects array and function, got {} and {}",
@@ -26,7 +25,7 @@ pub fn map(args: &[Value]) -> Result<Value, String> {
         return Err("map expects 2 arguments (array, function)".to_string());
     }
 
-    Err("map not yet implemented".to_string())
+    Err("map requires interpreter or VM callback runtime".to_string())
 }
 
 pub fn filter(args: &[Value]) -> Result<Value, String> {
@@ -34,7 +33,7 @@ pub fn filter(args: &[Value]) -> Result<Value, String> {
         return Err("filter expects 2 arguments (array, function)".to_string());
     }
 
-    Err("filter implemented in interpreter".to_string())
+    Err("filter requires interpreter or VM callback runtime".to_string())
 }
 
 pub fn reduce(args: &[Value]) -> Result<Value, String> {
