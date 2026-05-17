@@ -113,29 +113,27 @@ impl BytecodeOptimizer {
                 OpCode::PushConstPooled(idx2),
                 OpCode::Add | OpCode::Sub | OpCode::Mul,
             ) = (first, second, third)
-            {
-                if let (Some(val1), Some(val2)) =
+                && let (Some(val1), Some(val2)) =
                     (bytecode.constants.get(*idx1), bytecode.constants.get(*idx2))
-                {
-                    use crate::value::Value;
+            {
+                use crate::value::Value;
 
-                    if let (Value::Int(a), Value::Int(b)) = (val1, val2) {
-                        let result = match third {
-                            OpCode::Add => a.checked_add(*b),
-                            OpCode::Sub => a.checked_sub(*b),
-                            OpCode::Mul => a.checked_mul(*b),
-                            _ => {
-                                i += 1;
-                                continue;
-                            }
-                        };
-
-                        if let Some(result) = result {
-                            changes.push((i, OpCode::PushConst(Value::Int(result)), 3));
-                            self.modified = true;
-                            i += 3;
+                if let (Value::Int(a), Value::Int(b)) = (val1, val2) {
+                    let result = match third {
+                        OpCode::Add => a.checked_add(*b),
+                        OpCode::Sub => a.checked_sub(*b),
+                        OpCode::Mul => a.checked_mul(*b),
+                        _ => {
+                            i += 1;
                             continue;
                         }
+                    };
+
+                    if let Some(result) = result {
+                        changes.push((i, OpCode::PushConst(Value::Int(result)), 3));
+                        self.modified = true;
+                        i += 3;
+                        continue;
                     }
                 }
             }
