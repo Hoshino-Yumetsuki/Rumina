@@ -153,7 +153,6 @@ impl Lexer {
                 break;
             } else if ch == '\\' {
                 self.advance();
-                // 处理转义字符
                 if let Some(escaped) = self.current_char {
                     match escaped {
                         'n' => string.push('\n'),
@@ -187,7 +186,6 @@ impl Lexer {
                 break;
             } else if ch == '\\' {
                 self.advance();
-                // 处理转义字符
                 if let Some(escaped) = self.current_char {
                     match escaped {
                         'n' => string.push('\n'),
@@ -224,7 +222,6 @@ impl Lexer {
             }
         }
 
-        // 检查是否为关键字
         match ident.as_str() {
             "var" => Token::Var,
             "let" => Token::Let,
@@ -263,7 +260,6 @@ impl Lexer {
         loop {
             self.skip_whitespace();
 
-            // 跳过注释
             if (self.current_char == Some('/')
                 && (self.peek() == Some('/') || self.peek() == Some('*')))
                 || self.current_char == Some('#')

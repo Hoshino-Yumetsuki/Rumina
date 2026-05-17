@@ -1,4 +1,3 @@
-// 数学函数模块
 use crate::numeric::BigInt;
 use crate::value::{IrrationalValue, Value};
 use mathcore::MathCore;
@@ -12,17 +11,14 @@ pub fn sqrt(args: &[Value]) -> Result<Value, String> {
         Value::Int(n) => {
             if *n < 0 {
                 // LSR-010: sqrt of negative returns imaginary number
-                // sqrt(-n) = sqrt(n) * i
                 let abs_n = n.abs();
                 let sqrt_val = (abs_n as f64).sqrt();
                 if sqrt_val.fract() == 0.0 {
-                    // Perfect square: sqrt(-4) = 2i
                     Ok(Value::Complex(
                         Box::new(Value::Int(0)),
                         Box::new(Value::Int(sqrt_val as i64)),
                     ))
                 } else {
-                    // Irrational: sqrt(-2) = 0 + sqrt(2)*i
                     Ok(Value::Complex(
                         Box::new(Value::Int(0)),
                         Box::new(Value::Irrational(IrrationalValue::Sqrt(Box::new(
@@ -43,7 +39,6 @@ pub fn sqrt(args: &[Value]) -> Result<Value, String> {
         }
         Value::Float(f) => {
             if *f < 0.0 {
-                // sqrt of negative float: return complex
                 let abs_f = f.abs();
                 Ok(Value::Complex(
                     Box::new(Value::Int(0)),
@@ -53,13 +48,9 @@ pub fn sqrt(args: &[Value]) -> Result<Value, String> {
                 Ok(Value::Float(f.sqrt()))
             }
         }
-        Value::Irrational(irr) => {
-            // Keep sqrt of irrational in symbolic form
-            // sqrt(irrational) = sqrt(irrational)
-            Ok(Value::Irrational(IrrationalValue::Sqrt(Box::new(
-                Value::Irrational(irr.clone()),
-            ))))
-        }
+        Value::Irrational(irr) => Ok(Value::Irrational(IrrationalValue::Sqrt(Box::new(
+            Value::Irrational(irr.clone()),
+        )))),
         _ => Err(format!("sqrt expects number, got {}", args[0].type_name())),
     }
 }
@@ -123,14 +114,12 @@ pub fn abs_fn(args: &[Value]) -> Result<Value, String> {
         Value::Int(n) => Ok(Value::Int(n.abs())),
         Value::Float(f) => Ok(Value::Float(f.abs())),
         Value::Irrational(irr) => {
-            // abs of irrational: keep symbolic for positive values
-            // For now, we'll convert to float since we can't determine sign symbolically
+            // Can't determine sign symbolically, convert to float
             use crate::value::irrational_to_float;
             let val = irrational_to_float(irr);
             if val < 0.0 {
                 Ok(Value::Float(-val))
             } else {
-                // Keep as irrational if positive
                 Ok(Value::Irrational(irr.clone()))
             }
         }
@@ -140,7 +129,6 @@ pub fn abs_fn(args: &[Value]) -> Result<Value, String> {
             let im_val = im.to_float().unwrap_or(0.0);
             let magnitude = (re_val * re_val + im_val * im_val).sqrt();
 
-            // Check if result is integer
             if magnitude.fract() == 0.0 {
                 Ok(Value::Int(magnitude as i64))
             } else {
@@ -166,7 +154,6 @@ pub fn arg(args: &[Value]) -> Result<Value, String> {
             Ok(Value::Float(im_val.atan2(re_val)))
         }
         Value::Int(n) => {
-            // 实数的幅角是0（正数）或π（负数）
             if *n < 0 {
                 Ok(Value::Irrational(IrrationalValue::Pi))
             } else {
@@ -174,7 +161,6 @@ pub fn arg(args: &[Value]) -> Result<Value, String> {
             }
         }
         Value::Float(f) => {
-            // 浮点数实数的幅角
             if *f < 0.0 {
                 Ok(Value::Irrational(IrrationalValue::Pi))
             } else {
@@ -197,13 +183,11 @@ pub fn conj(args: &[Value]) -> Result<Value, String> {
     match &args[0] {
         Value::Complex(re, im) => {
             // conj(a + bi) = a - bi
-            // 取虚部的负数
             match im.as_ref() {
                 Value::Int(i) => Ok(Value::Complex(re.clone(), Box::new(Value::Int(-i)))),
                 Value::Float(f) => Ok(Value::Complex(re.clone(), Box::new(Value::Float(-f)))),
                 Value::Rational(r) => Ok(Value::Complex(re.clone(), Box::new(Value::Rational(-r)))),
                 _ => {
-                    // 对于其他类型，转换为float再取负
                     let im_val = im.to_float().unwrap_or(0.0);
                     Ok(Value::Complex(re.clone(), Box::new(Value::Float(-im_val))))
                 }

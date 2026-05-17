@@ -1,6 +1,4 @@
-/// Bytecode compiler for Rumina
-///
-/// This module compiles AST to bytecode instructions for the VM.
+/// Compiles AST to bytecode instructions for the VM.
 use crate::ast::*;
 use crate::error::RuminaError;
 use crate::lexer::Lexer;
@@ -14,17 +12,15 @@ use std::path::Path;
 /// Symbol table for variable resolution
 #[derive(Debug, Clone)]
 struct SymbolTable {
-    /// Scopes stack (innermost scope is last)
+    /// Innermost scope is last
     scopes: Vec<HashMap<String, SymbolInfo>>,
 }
 
 #[derive(Debug, Clone)]
 struct SymbolInfo {
-    /// Variable name
     #[allow(dead_code)]
     name: String,
 
-    /// Scope depth
     #[allow(dead_code)]
     depth: usize,
 }
@@ -53,7 +49,6 @@ impl SymbolTable {
 
     #[allow(dead_code)]
     fn resolve(&self, name: &str) -> Option<&SymbolInfo> {
-        // Search from innermost to outermost scope
         for scope in self.scopes.iter().rev() {
             if let Some(info) = scope.get(name) {
                 return Some(info);
@@ -66,37 +61,26 @@ impl SymbolTable {
 /// Loop context for break/continue
 #[derive(Debug, Clone)]
 struct LoopContext {
-    /// Address to jump to for continue
     continue_target: usize,
-
-    /// Addresses to patch for break statements
     break_patches: Vec<usize>,
 }
 
-/// Bytecode compiler
 pub struct Compiler {
-    /// Output bytecode
     bytecode: ByteCode,
-
-    /// Symbol table
     symbols: SymbolTable,
-
-    /// Loop context stack
     loop_stack: Vec<LoopContext>,
 
-    /// Current line number (for debugging)
+    /// For debugging
     current_line: Option<usize>,
-
-    /// Lambda counter for unique IDs
     lambda_counter: usize,
 
-    /// Set of already included files to prevent circular includes
+    /// Prevents circular includes
     included_files: HashSet<String>,
 
-    /// Current working directory for resolving relative includes
+    /// For resolving relative includes
     current_dir: Option<String>,
 
-    /// Module namespace mappings (module_name -> prefix for variables)
+    /// module_name -> prefix for variables
     module_namespaces: HashMap<String, String>,
 }
 
@@ -134,7 +118,6 @@ impl Compiler {
             self.compile_stmt(&stmt)?;
         }
 
-        // Add halt at the end
         self.emit(OpCode::Halt);
 
         Ok(self.bytecode.clone())
@@ -177,7 +160,6 @@ impl Compiler {
                 is_bigint,
                 declared_type,
             } => {
-                // Compile the value expression
                 self.compile_expr(value)?;
 
                 // Apply type conversion if declared_type is specified
@@ -188,7 +170,6 @@ impl Compiler {
                     self.emit(OpCode::ConvertType(DeclaredType::BigInt));
                 }
 
-                // Store in variable
                 self.emit(OpCode::PopVar(name.clone()));
                 self.symbols.define(name.clone());
             }
@@ -213,10 +194,7 @@ impl Compiler {
             }
 
             Stmt::Assign { name, value } => {
-                // Compile the value expression
                 self.compile_expr(value)?;
-
-                // Store in variable
                 self.emit(OpCode::PopVar(name.clone()));
             }
 
@@ -225,36 +203,24 @@ impl Compiler {
                 member,
                 value,
             } => {
-                // Check if object is a variable identifier
                 if let Expr::Ident(var_name) = object {
-                    // For variable identifiers, use MemberAssignVar to enable null auto-vivification
-                    // Compile the value expression
+                    // Use MemberAssignVar to enable null auto-vivification
                     self.compile_expr(value)?;
-
-                    // Emit member assignment with variable name
                     self.emit(OpCode::MemberAssignVar(var_name.clone(), member.clone()));
                 } else {
-                    // For other expressions, use regular MemberAssign
-                    // Compile the object expression
                     self.compile_expr(object)?;
-
-                    // Compile the value expression
                     self.compile_expr(value)?;
-
-                    // Emit member assignment
                     self.emit(OpCode::MemberAssign(member.clone()));
                 }
             }
 
             Stmt::Block(statements) => {
                 self.symbols.enter_scope();
-                // EnterScope and ExitScope opcodes are no-ops, so we omit them for performance
 
                 for stmt in statements {
                     self.compile_stmt(stmt)?;
                 }
 
-                // ExitScope is also a no-op
                 self.symbols.exit_scope();
             }
 
@@ -263,33 +229,24 @@ impl Compiler {
                 then_branch,
                 else_branch,
             } => {
-                // Compile condition
                 self.compile_expr(condition)?;
 
-                // Jump to else if false
                 let else_jump = self.emit_jump(OpCode::JumpIfFalse(0));
 
-                // Compile then branch
                 for stmt in then_branch {
                     self.compile_stmt(stmt)?;
                 }
 
                 if let Some(else_stmts) = else_branch {
-                    // Jump over else branch
                     let end_jump = self.emit_jump(OpCode::Jump(0));
-
-                    // Patch else jump to here
                     self.patch_jump(else_jump);
 
-                    // Compile else branch
                     for stmt in else_stmts {
                         self.compile_stmt(stmt)?;
                     }
 
-                    // Patch end jump
                     self.patch_jump(end_jump);
                 } else {
-                    // No else branch, just patch the jump
                     self.patch_jump(else_jump);
                 }
             }
@@ -297,30 +254,21 @@ impl Compiler {
             Stmt::While { condition, body } => {
                 let loop_start = self.current_address();
 
-                // Push loop context
                 self.loop_stack.push(LoopContext {
                     continue_target: loop_start,
                     break_patches: Vec::new(),
                 });
 
-                // Compile condition
                 self.compile_expr(condition)?;
-
-                // Jump to end if false
                 let end_jump = self.emit_jump(OpCode::JumpIfFalse(0));
 
-                // Compile body
                 for stmt in body {
                     self.compile_stmt(stmt)?;
                 }
 
-                // Jump back to start
                 self.emit(OpCode::Jump(loop_start));
-
-                // Patch end jump
                 self.patch_jump(end_jump);
 
-                // Patch all break statements
                 if let Some(loop_ctx) = self.loop_stack.pop() {
                     let break_target = self.current_address();
                     for break_addr in loop_ctx.break_patches {
@@ -335,15 +283,12 @@ impl Compiler {
                 update,
                 body,
             } => {
-                // Compile initialization (if present)
                 if let Some(init_stmt) = init {
                     self.compile_stmt(init_stmt)?;
                 }
 
-                // Mark loop start (for continue, we'll jump to update)
                 let condition_start = self.current_address();
 
-                // Compile condition (if present)
                 let end_jump = if let Some(cond_expr) = condition {
                     self.compile_expr(cond_expr)?;
                     Some(self.emit_jump(OpCode::JumpIfFalse(0)))
@@ -351,10 +296,9 @@ impl Compiler {
                     None
                 };
 
-                // Remember where update starts (for continue)
                 let update_placeholder = self.current_address();
 
-                // Push loop context - continue jumps to update section
+                // continue jumps to update section
                 self.loop_stack.push(LoopContext {
                     continue_target: update_placeholder,
                     break_patches: Vec::new(),
@@ -363,36 +307,28 @@ impl Compiler {
                 // Jump over update to body
                 let body_jump = self.emit_jump(OpCode::Jump(0));
 
-                // Compile update section
                 let update_start = self.current_address();
                 if let Some(update_stmt) = update {
                     self.compile_stmt(update_stmt)?;
                 }
-                // Jump back to condition
                 self.emit(OpCode::Jump(condition_start));
 
-                // Patch body jump to here
                 self.patch_jump(body_jump);
 
-                // Update the loop context with correct continue target
                 if let Some(loop_ctx) = self.loop_stack.last_mut() {
                     loop_ctx.continue_target = update_start;
                 }
 
-                // Compile body
                 for stmt in body {
                     self.compile_stmt(stmt)?;
                 }
 
-                // Jump to update
                 self.emit(OpCode::Jump(update_start));
 
-                // Patch end jump (if condition exists)
                 if let Some(end_addr) = end_jump {
                     self.patch_jump(end_addr);
                 }
 
-                // Patch all break statements
                 if let Some(loop_ctx) = self.loop_stack.pop() {
                     let break_target = self.current_address();
                     for break_addr in loop_ctx.break_patches {
@@ -435,12 +371,9 @@ impl Compiler {
                 body,
                 decorators,
             } => {
-                // Store function definition
                 let skip_jump = self.emit_jump(OpCode::Jump(0));
-
                 let body_start = self.current_address();
 
-                // Compile function body
                 self.symbols.enter_scope();
                 for param in params {
                     self.symbols.define(param.clone());
@@ -458,11 +391,8 @@ impl Compiler {
                 self.symbols.exit_scope();
 
                 let body_end = self.current_address();
-
-                // Patch skip jump
                 self.patch_jump(skip_jump);
 
-                // Define the function
                 self.emit(OpCode::DefineFunc(Box::new(crate::vm::FuncDefInfo {
                     name: name.clone(),
                     params: params.clone(),
@@ -475,7 +405,6 @@ impl Compiler {
             }
 
             Stmt::Include(path) => {
-                // Resolve include at compile time
                 self.compile_include(path)?;
             }
 
@@ -559,34 +488,31 @@ impl Compiler {
         // Construct file path
         let mut file_path = path.to_string();
 
-        // Add .lm extension if not present
         if !file_path.ends_with(".lm") {
             file_path.push_str(".lm");
         }
 
-        // Resolve relative path based on current directory
+        // Resolve relative path
         let resolved_path = if let Some(ref current_dir) = self.current_dir {
             Path::new(current_dir).join(&file_path)
         } else {
             Path::new(&file_path).to_path_buf()
         };
 
-        // Convert to canonical string for duplicate checking
+        // Canonical path for duplicate checking
         let canonical_path = resolved_path
             .canonicalize()
             .unwrap_or_else(|_| resolved_path.clone())
             .to_string_lossy()
             .to_string();
 
-        // Check if already included to prevent circular includes
+        // Prevent circular includes
         if self.included_files.contains(&canonical_path) {
-            return Ok(()); // Already included, skip
+            return Ok(());
         }
 
-        // Mark as included
         self.included_files.insert(canonical_path.clone());
 
-        // Read the file
         let contents = fs::read_to_string(&resolved_path).map_err(|e| {
             RuminaError::runtime(format!(
                 "Cannot read included file '{}': {}",
@@ -595,7 +521,6 @@ impl Compiler {
             ))
         })?;
 
-        // Parse the included file
         let mut lexer = Lexer::new(contents.clone());
         let tokens = lexer.tokenize();
         let mut parser = Parser::new(tokens);
@@ -607,15 +532,13 @@ impl Compiler {
             ))
         })?;
 
-        // Extract module name from the included file
-        // Look for: define module_name = "..."
+        // Extract module name (look for: define module_name = "...")
         let module_name = self.extract_module_name(&statements, &contents, path);
 
-        // Store the module namespace mapping
         self.module_namespaces
             .insert(module_name.clone(), module_name.clone());
 
-        // Compile each statement from the included file with namespace prefix
+        // Compile with namespace prefix
         for stmt in statements {
             self.compile_stmt_with_namespace(&stmt, &module_name)?;
         }
@@ -625,7 +548,6 @@ impl Compiler {
 
     /// Extract module name from statements or derive from file path
     fn extract_module_name(&self, statements: &[Stmt], _contents: &str, path: &str) -> String {
-        // Look for: define module_name = "..." or var module_name = "..."
         for stmt in statements {
             match stmt {
                 Stmt::VarDecl {
@@ -637,9 +559,7 @@ impl Compiler {
                     name,
                     value: Expr::String(s),
                 } if name == "module_name" => return s.clone(),
-                // Also check expression statements that might be assignments
                 Stmt::Expr(Expr::Call { func, args }) => {
-                    // Check for: define module_name = "..." (which is parsed as a call expression)
                     if let Expr::Ident(fn_name) = &**func
                         && fn_name == "define"
                         && args.len() == 2
@@ -654,7 +574,7 @@ impl Compiler {
             }
         }
 
-        // Fallback: use filename without extension
+        // Derive from filename
         path.split('/')
             .next_back()
             .or_else(|| path.split('\\').next_back())
@@ -687,17 +607,14 @@ impl Compiler {
             } => {
                 let prefixed_name = format!("{}::{}", namespace, name);
 
-                // Compile the value expression
                 self.compile_expr(value)?;
 
-                // Apply type conversion if declared_type is specified
                 if let Some(dtype) = declared_type {
                     self.emit(OpCode::ConvertType(dtype.clone()));
                 } else if *is_bigint {
                     self.emit(OpCode::ConvertType(DeclaredType::BigInt));
                 }
 
-                // Store in prefixed variable
                 self.emit(OpCode::PopVar(prefixed_name.clone()));
                 self.symbols.define(prefixed_name);
                 Ok(())
@@ -734,12 +651,9 @@ impl Compiler {
             } => {
                 let prefixed_name = format!("{}::{}", namespace, name);
 
-                // Store function definition
                 let skip_jump = self.emit_jump(OpCode::Jump(0));
-
                 let body_start = self.current_address();
 
-                // Compile function body
                 self.symbols.enter_scope();
                 for param in params {
                     self.symbols.define(param.clone());
@@ -757,11 +671,8 @@ impl Compiler {
                 self.symbols.exit_scope();
 
                 let body_end = self.current_address();
-
-                // Patch skip jump
                 self.patch_jump(skip_jump);
 
-                // Define the function with prefixed name
                 self.emit(OpCode::DefineFunc(Box::new(crate::vm::FuncDefInfo {
                     name: prefixed_name.clone(),
                     params: params.clone(),
@@ -823,11 +734,9 @@ impl Compiler {
                     ));
                 }
 
-                // Compile operands
                 self.compile_expr(left)?;
                 self.compile_expr(right)?;
 
-                // Emit operation - always use generic opcodes
                 let opcode = match op {
                     BinOp::Add => OpCode::Add,
                     BinOp::Sub => OpCode::Sub,
@@ -862,39 +771,28 @@ impl Compiler {
             }
 
             Expr::Array(elements) => {
-                // Compile each element
                 for elem in elements {
                     self.compile_expr(elem)?;
                 }
-
-                // Create array from N elements
                 self.emit(OpCode::MakeArray(elements.len()));
             }
 
             Expr::Struct(fields) => {
-                // Compile each field (key, value) pair
                 for (key, value) in fields {
-                    // Push key as string constant
                     let key_index = self.bytecode.add_constant(Value::String(key.clone()));
                     self.emit(OpCode::PushConstPooled(key_index));
-                    // Push value
                     self.compile_expr(value)?;
                 }
-
-                // Create struct from N field pairs
                 self.emit(OpCode::MakeStruct(fields.len()));
             }
 
             Expr::Call { func, args } => {
-                // Check if it's a simple function call
                 if let Expr::Ident(name) = &**func {
-                    // Compile arguments
                     for arg in args {
                         self.compile_expr(arg)?;
                     }
                     self.emit(OpCode::CallVar(name.clone(), args.len()));
                 } else if let Expr::Namespace { module, name } = &**func {
-                    // Namespace function call: module::function(args)
                     for arg in args {
                         self.compile_expr(arg)?;
                     }
@@ -902,27 +800,20 @@ impl Compiler {
                     self.emit(OpCode::CallVar(prefixed_name, args.len()));
                 } else if let Expr::Member { object, member } = &**func {
                     // Method call: obj.method(args)
-                    // Compile the object
                     self.compile_expr(object)?;
-                    // Duplicate it (one for self, one for getting the method)
                     self.emit(OpCode::Dup);
-                    // Get the method value (consumes the top copy)
                     self.emit(OpCode::Member(member.clone()));
-                    // Compile arguments
                     for arg in args {
                         self.compile_expr(arg)?;
                     }
-                    // Emit method call (expects stack: [object, method, args...])
+                    // Stack: [object, method, args...]
                     self.emit(OpCode::CallMethod(args.len()));
                 } else {
                     // Dynamic function call (e.g., (expr)())
-                    // First compile the function expression
                     self.compile_expr(func)?;
-                    // Then compile arguments
                     for arg in args {
                         self.compile_expr(arg)?;
                     }
-                    // Emit dynamic call
                     self.emit(OpCode::Call(args.len()));
                 }
             }
@@ -939,37 +830,25 @@ impl Compiler {
             }
 
             Expr::Lambda { params, body, .. } => {
-                // Generate unique lambda ID
                 let lambda_id = format!("__lambda_{}", self.lambda_counter);
                 self.lambda_counter += 1;
 
-                // Skip over the lambda body (similar to function definition)
                 let skip_jump = self.emit_jump(OpCode::Jump(0));
-
                 let body_start = self.current_address();
 
-                // Compile lambda body
                 self.symbols.enter_scope();
                 for param in params {
                     self.symbols.define(param.clone());
                 }
 
-                // Lambda body is a statement - could be a block or an expression
                 self.compile_stmt(body)?;
-
-                // For simple lambdas (expressions), the result is already on stack
-                // For complex lambdas, we need to ensure proper return
                 self.emit(OpCode::Return);
 
                 self.symbols.exit_scope();
 
                 let body_end = self.current_address();
-
-                // Patch skip jump
                 self.patch_jump(skip_jump);
 
-                // Create the lambda value and push it on stack
-                // Store lambda_id in the bytecode so VM can register it
                 self.emit(OpCode::DefineFunc(Box::new(crate::vm::FuncDefInfo {
                     name: lambda_id.clone(),
                     params: params.clone(),
@@ -978,7 +857,6 @@ impl Compiler {
                     decorators: vec![],
                 })));
 
-                // Now push a marker that tells VM this is a lambda with this ID
                 let index = self.bytecode.add_constant(Value::String(lambda_id.clone()));
                 self.emit(OpCode::PushConstPooled(index));
                 self.emit(OpCode::MakeLambda(Box::new(crate::vm::LambdaInfo {
@@ -989,8 +867,6 @@ impl Compiler {
             }
 
             Expr::Namespace { module, name } => {
-                // Namespace access: module::name
-                // We compile this as a regular variable access with :: separator
                 let prefixed_name = format!("{}::{}", module, name);
                 self.emit(OpCode::PushVar(prefixed_name));
             }

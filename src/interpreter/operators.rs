@@ -37,23 +37,18 @@ impl Interpreter {
         if is_simple_root && denom_approx > 0.0 {
             let n = denom_approx as u32;
 
-            // Handle negative bases
             if base < 0.0 {
                 let is_odd_root = n % 2 == 1;
 
                 if is_odd_root {
-                    // Odd root of negative number: return negative irrational
-                    // e.g., (-8)^(1/3) = -2 or -(8^(1/3))
+                    // Odd root of negative: e.g., (-8)^(1/3) = -2
                     let abs_base = base.abs();
 
-                    // Check if it's a perfect root
                     let root_val = abs_base.powf(exponent);
                     if (root_val.round() - root_val).abs() < 1e-10 {
-                        // Perfect root - return as integer
                         return Ok(Value::Int(-(root_val.round() as i64)));
                     }
 
-                    // Return as symbolic irrational: -(abs_base^(1/n))
                     let root = if n == 2 {
                         IrrationalValue::Sqrt(Box::new(Value::Int(abs_base as i64)))
                     } else {
@@ -66,14 +61,11 @@ impl Interpreter {
                         Box::new(root),
                     )));
                 } else {
-                    // Even root of negative: return symbolic complex number
-                    // For even root of negative: base^(1/n) where n is even
-                    // Result is: 0 + |base|^(1/n) * i
+                    // Even root of negative: result is complex
                     let abs_base = base.abs();
                     let root_val = abs_base.powf(exponent);
 
                     if (root_val.round() - root_val).abs() < 1e-10 {
-                        // Perfect root - return as i * integer
                         return Ok(Value::Complex(
                             Box::new(Value::Int(0)),
                             Box::new(Value::Int(root_val.round() as i64)),
@@ -94,10 +86,8 @@ impl Interpreter {
                 }
             } else {
                 // Positive base
-                // Check if it's a perfect root
                 let root_val = base.powf(exponent);
                 if (root_val.round() - root_val).abs() < 1e-10 {
-                    // Perfect root - return as integer
                     return Ok(Value::Int(root_val.round() as i64));
                 }
 
@@ -118,7 +108,6 @@ impl Interpreter {
 
         match math.evaluate(&expr) {
             Ok(mathcore::Expr::Number(result)) => {
-                // Check if result is close to an integer
                 if (result.round() - result).abs() < 1e-10 {
                     Ok(Value::Int(result.round() as i64))
                 } else {
@@ -133,9 +122,7 @@ impl Interpreter {
                 expr, other
             )),
             Err(_) => {
-                // Mathcore failed - try complex number evaluation for negative bases
                 if base < 0.0 {
-                    // Return symbolic complex number
                     let c = Complex64::new(base, 0.0).powf(exponent);
                     Ok(Value::Complex(
                         Box::new(Value::Float(c.re)),
@@ -163,49 +150,42 @@ impl Interpreter {
         }
 
         match (left, right) {
-            (Value::Int(a), Value::Int(b)) => {
-                match op {
-                    BinOp::Add => match a.checked_add(*b) {
-                        Some(result) => Ok(Value::Int(result)),
-                        None => Ok(Value::BigInt(BigInt::from(*a) + BigInt::from(*b))),
-                    },
-                    BinOp::Sub => match a.checked_sub(*b) {
-                        Some(result) => Ok(Value::Int(result)),
-                        None => Ok(Value::BigInt(BigInt::from(*a) - BigInt::from(*b))),
-                    },
-                    BinOp::Mul => match a.checked_mul(*b) {
-                        Some(result) => Ok(Value::Int(result)),
-                        None => Ok(Value::BigInt(BigInt::from(*a) * BigInt::from(*b))),
-                    },
-                    BinOp::Div => {
-                        if *b == 0 {
-                            return Err("Division by zero".to_string());
-                        }
-                        // 返回有理数
-                        let rational = rational_new(BigInt::from(*a), BigInt::from(*b));
-                        Ok(Value::Rational(rational))
+            (Value::Int(a), Value::Int(b)) => match op {
+                BinOp::Add => match a.checked_add(*b) {
+                    Some(result) => Ok(Value::Int(result)),
+                    None => Ok(Value::BigInt(BigInt::from(*a) + BigInt::from(*b))),
+                },
+                BinOp::Sub => match a.checked_sub(*b) {
+                    Some(result) => Ok(Value::Int(result)),
+                    None => Ok(Value::BigInt(BigInt::from(*a) - BigInt::from(*b))),
+                },
+                BinOp::Mul => match a.checked_mul(*b) {
+                    Some(result) => Ok(Value::Int(result)),
+                    None => Ok(Value::BigInt(BigInt::from(*a) * BigInt::from(*b))),
+                },
+                BinOp::Div => {
+                    if *b == 0 {
+                        return Err("Division by zero".to_string());
                     }
-                    BinOp::Mod => Ok(Value::Int(a % b)),
-                    BinOp::Pow => {
-                        // Try as int first, promote to BigInt on overflow
-                        match a.checked_pow(*b as u32) {
-                            Some(result) => Ok(Value::Int(result)),
-                            None => {
-                                // Overflow: promote to BigInt
-                                let a_big = BigInt::from(*a);
-                                Ok(Value::BigInt(a_big.pow_u32(*b as u32)))
-                            }
-                        }
-                    }
-                    BinOp::Equal => Ok(Value::Bool(a == b)),
-                    BinOp::NotEqual => Ok(Value::Bool(a != b)),
-                    BinOp::Greater => Ok(Value::Bool(a > b)),
-                    BinOp::GreaterEq => Ok(Value::Bool(a >= b)),
-                    BinOp::Less => Ok(Value::Bool(a < b)),
-                    BinOp::LessEq => Ok(Value::Bool(a <= b)),
-                    _ => Err(format!("Unsupported operation: int {} int", op)),
+                    let rational = rational_new(BigInt::from(*a), BigInt::from(*b));
+                    Ok(Value::Rational(rational))
                 }
-            }
+                BinOp::Mod => Ok(Value::Int(a % b)),
+                BinOp::Pow => match a.checked_pow(*b as u32) {
+                    Some(result) => Ok(Value::Int(result)),
+                    None => {
+                        let a_big = BigInt::from(*a);
+                        Ok(Value::BigInt(a_big.pow_u32(*b as u32)))
+                    }
+                },
+                BinOp::Equal => Ok(Value::Bool(a == b)),
+                BinOp::NotEqual => Ok(Value::Bool(a != b)),
+                BinOp::Greater => Ok(Value::Bool(a > b)),
+                BinOp::GreaterEq => Ok(Value::Bool(a >= b)),
+                BinOp::Less => Ok(Value::Bool(a < b)),
+                BinOp::LessEq => Ok(Value::Bool(a <= b)),
+                _ => Err(format!("Unsupported operation: int {} int", op)),
+            },
 
             // BigInt 与 BigInt 的运算
             (Value::BigInt(a), Value::BigInt(b)) => {
@@ -217,7 +197,6 @@ impl Interpreter {
                         if b == &BigInt::from(0) {
                             return Err("Division by zero".to_string());
                         }
-                        // 返回有理数
                         let rational = rational_new(a.clone(), b.clone());
                         Ok(Value::Rational(rational))
                     }
@@ -288,7 +267,6 @@ impl Interpreter {
                             if *b >= 0 {
                                 Ok(Value::BigInt(a.pow_u32(*b as u32)))
                             } else {
-                                // Negative exponent
                                 let a_float = a.to_string().parse::<f64>().unwrap_or(0.0);
                                 Ok(Value::Float(a_float.powf(*b as f64)))
                             }
@@ -758,14 +736,8 @@ impl Interpreter {
 
             // Struct comparison operations
             (Value::Struct(a), Value::Struct(b)) => match op {
-                BinOp::Equal => {
-                    // Reference equality - same Rc pointer
-                    Ok(Value::Bool(Rc::ptr_eq(a, b)))
-                }
-                BinOp::NotEqual => {
-                    // Negation of reference equality
-                    Ok(Value::Bool(!Rc::ptr_eq(a, b)))
-                }
+                BinOp::Equal => Ok(Value::Bool(Rc::ptr_eq(a, b))),
+                BinOp::NotEqual => Ok(Value::Bool(!Rc::ptr_eq(a, b))),
                 _ => Err(format!(
                     "Unsupported operation: {} {} {}",
                     left.type_name(),
@@ -1008,12 +980,10 @@ impl Interpreter {
                 }
                 BinOp::Div => {
                     // (a + bi) / (c + di) = ((ac + bd) + (bc - ad)i) / (c² + d²)
-                    // Check for division by zero
                     let c_sq = self.eval_binary_op(b_re, BinOp::Mul, b_re)?;
                     let d_sq = self.eval_binary_op(b_im, BinOp::Mul, b_im)?;
                     let denom = self.eval_binary_op(&c_sq, BinOp::Add, &d_sq)?;
 
-                    // Check if denominator is zero
                     let denom_is_zero = match &denom {
                         Value::Int(0) => true,
                         Value::Rational(r) => r.numer().to_string() == "0",
@@ -1477,18 +1447,15 @@ impl Interpreter {
             // √a * √b = √(a*b), with simplification
             (Sqrt(x), Sqrt(y)) => {
                 let product = self.eval_binary_op(x, BinOp::Mul, y)?;
-                // Check if the product is a perfect square
                 match &product {
                     Value::Int(n) if *n >= 0 => {
                         let sqrt = (*n as f64).sqrt();
                         if sqrt.fract() == 0.0 {
-                            // Perfect square, return as Int
                             return Ok(Value::Int(sqrt as i64));
                         }
                     }
                     _ => {}
                 }
-                // Not a perfect square, return as Irrational with simplification
                 Ok(Value::Irrational(Sqrt(Box::new(product))))
             }
 

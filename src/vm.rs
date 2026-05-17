@@ -1,4 +1,3 @@
-/// Virtual Machine implementation for Rumina
 use crate::ast::DeclaredType;
 use crate::error::RuminaError;
 use crate::value::Value;
@@ -41,7 +40,6 @@ pub struct LambdaInfo {
 /// VM Instruction Set
 #[derive(Debug, Clone, PartialEq)]
 pub enum OpCode {
-    // ===== Data Movement Instructions (MOV family) =====
     /// Push a constant value onto the stack
     PushConst(Value),
 
@@ -63,7 +61,6 @@ pub enum OpCode {
     /// Pop and discard top stack value
     Pop,
 
-    // ===== Arithmetic Instructions (ADD, SUB, MUL, DIV family) =====
     /// Add top two stack values
     Add,
 
@@ -88,7 +85,6 @@ pub enum OpCode {
     /// Factorial operation (postfix !)
     Factorial,
 
-    // ===== Logical Instructions =====
     /// Logical NOT
     Not,
 
@@ -116,7 +112,6 @@ pub enum OpCode {
     /// Compare less or equal
     Lte,
 
-    // ===== Control Flow Instructions =====
     /// Unconditional jump to address
     Jump(usize),
 
@@ -140,7 +135,6 @@ pub enum OpCode {
     /// Return from function
     Return,
 
-    // ===== Array/Structure Instructions =====
     /// Create array from N stack values
     MakeArray(usize),
 
@@ -164,25 +158,21 @@ pub enum OpCode {
     /// Pops: value from stack
     MemberAssignVar(String, String),
 
-    // ===== Function Definition Instructions =====
     /// Define a function (boxed to reduce OpCode size)
     DefineFunc(Box<FuncDefInfo>),
 
     /// Create lambda/closure (boxed to reduce OpCode size)
     MakeLambda(Box<LambdaInfo>),
 
-    // ===== Control Structures =====
     /// Break from loop
     Break,
 
     /// Continue loop
     Continue,
 
-    // ===== Special Instructions =====
     /// Halt execution
     Halt,
 
-    // ===== Type Conversion Instructions =====
     /// Convert top stack value to specified type
     ConvertType(DeclaredType),
 }
@@ -279,7 +269,6 @@ impl ByteCode {
             }
         }
 
-        // Add new constant
         let index = self.constants.len();
         self.constants.push(value.clone());
 
@@ -317,11 +306,9 @@ impl ByteCode {
     pub fn serialize(&self) -> String {
         let mut output = String::new();
 
-        // Header
         output.push_str("RUMINA-BYTECODE-V1\n");
         output.push_str(&format!("CONSTANTS: {}\n", self.constants.len()));
 
-        // Constants section
         for (i, constant) in self.constants.iter().enumerate() {
             output.push_str(&format!(
                 "CONST[{}]: {}\n",
@@ -332,7 +319,6 @@ impl ByteCode {
 
         output.push_str("\nINSTRUCTIONS:\n");
 
-        // Instructions section
         for (i, (op, line)) in self
             .instructions
             .iter()
@@ -357,13 +343,11 @@ impl ByteCode {
         let lines: Vec<&str> = input.lines().collect();
         let mut i = 0;
 
-        // Check header
         if i >= lines.len() || lines[i] != "RUMINA-BYTECODE-V1" {
             return Err("Invalid bytecode header".to_string());
         }
         i += 1;
 
-        // Parse constants count
         if i >= lines.len() || !lines[i].starts_with("CONSTANTS: ") {
             return Err("Missing constants section".to_string());
         }
@@ -372,7 +356,6 @@ impl ByteCode {
             .map_err(|_| "Invalid constants count")?;
         i += 1;
 
-        // Parse constants
         for _ in 0..const_count {
             if i >= lines.len() {
                 return Err("Unexpected end of constants section".to_string());
@@ -394,7 +377,6 @@ impl ByteCode {
             i += 1;
         }
 
-        // Parse instructions
         while i < lines.len() {
             let line = lines[i].trim();
             if line.is_empty() {
@@ -435,7 +417,6 @@ impl ByteCode {
             Value::Float(f) => format!("Float({})", f),
             Value::Bool(b) => format!("Bool({})", b),
             Value::String(s) => {
-                // Properly escape special characters
                 let escaped = s
                     .replace('\\', "\\\\")
                     .replace('"', "\\\"")
@@ -478,7 +459,6 @@ impl ByteCode {
             .strip_prefix("String(\"")
             .and_then(|s| s.strip_suffix("\")"))
         {
-            // Properly unescape special characters
             let mut unescaped = String::new();
             let mut chars = str_val.chars();
             while let Some(ch) = chars.next() {
@@ -978,24 +958,18 @@ impl VM {
     /// Execute loaded bytecode
     pub fn run(&mut self) -> Result<Option<Value>, RuminaError> {
         // Safe alternative to unsafe pointer: Use index-based access with immutable borrow
-        // This avoids cloning by borrowing the instruction for pattern matching only
         while !self.halted && self.ip < self.bytecode.instructions.len() {
-            // Get current instruction index
             let current_ip = self.ip;
             self.ip += 1;
 
-            // Execute by matching on the instruction at current index
-            // This is safe and doesn't require cloning the entire OpCode
             self.execute_instruction_at(current_ip)?;
         }
 
-        // Return top of stack if present, otherwise None
         Ok(self.stack.pop())
     }
 
     /// Execute a single instruction at the given index (safe, no cloning)
     fn execute_instruction_at(&mut self, ip: usize) -> Result<(), RuminaError> {
-        // Pattern match directly on the instruction reference
         // The borrow checker allows this because we only need immutable access for matching
         match &self.bytecode.instructions[ip] {
             OpCode::PushConst(value) => {
@@ -1084,7 +1058,6 @@ impl VM {
                 self.stack.push(result);
             }
 
-            // Comparison operations
             OpCode::Eq => self.binary_op(|a, b| a.vm_eq(b))?,
             OpCode::Neq => self.binary_op(|a, b| a.vm_neq(b))?,
             OpCode::Gt => self.binary_op(|a, b| a.vm_gt(b))?,
@@ -1092,11 +1065,9 @@ impl VM {
             OpCode::Lt => self.binary_op(|a, b| a.vm_lt(b))?,
             OpCode::Lte => self.binary_op(|a, b| a.vm_lte(b))?,
 
-            // Logical operations
             OpCode::And => self.binary_op(|a, b| a.vm_and(b))?,
             OpCode::Or => self.binary_op(|a, b| a.vm_or(b))?,
 
-            // Control flow
             OpCode::Jump(addr) => {
                 self.ip = *addr;
             }
@@ -1121,7 +1092,6 @@ impl VM {
                 }
             }
 
-            // Array/Struct operations
             OpCode::MakeArray(count) => {
                 let mut elements = Vec::new();
                 for _ in 0..*count {
@@ -1212,23 +1182,18 @@ impl VM {
                     Value::Struct(s) | Value::Module(s) => {
                         let s_ref = s.borrow();
                         if let Some(value) = s_ref.get(member_name) {
-                            // Check if we have a cache entry for this instruction
                             if let Some(cache) = self.member_cache.get_mut(&cache_addr) {
-                                // Cache exists - increment hits
                                 cache.hits += 1;
                             } else {
-                                // First access - initialize cache entry
                                 self.member_cache
                                     .insert(cache_addr, InlineCache::new(member_name.clone()));
                             }
 
                             self.stack.push(value.clone());
                         } else {
-                            // Member not found - track miss
                             if let Some(cache) = self.member_cache.get_mut(&cache_addr) {
                                 cache.misses += 1;
                             } else {
-                                // Initialize cache with miss
                                 let mut cache = InlineCache::new(member_name.clone());
                                 cache.misses = 1;
                                 self.member_cache.insert(cache_addr, cache);

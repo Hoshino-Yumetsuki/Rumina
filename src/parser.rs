@@ -66,7 +66,6 @@ impl Parser {
     }
 
     fn decimal_to_rational(&self, decimal_str: &str) -> Result<Expr, String> {
-        // Split by decimal point
         let parts: Vec<&str> = decimal_str.split('.').collect();
         if parts.len() != 2 {
             return Err(format!("Invalid decimal format: {}", decimal_str));
@@ -78,13 +77,11 @@ impl Parser {
         let num_decimal_places = fractional_part.len();
         let denominator = BigInt::from(10u8).pow_u32(num_decimal_places as u32);
 
-        // Combine integer and fractional parts to create numerator
         let numerator_str = format!("{}{}", integer_part, fractional_part);
         let numerator_expr = self.integer_literal_expr(&numerator_str)?;
         let denominator_expr = self.integer_literal_expr(&denominator.to_string())?;
 
-        // Create division expression: numerator / denominator
-        // The division operation will automatically simplify to a rational
+        // Division will automatically simplify to a rational
         Ok(Expr::Binary {
             left: Box::new(numerator_expr),
             op: BinOp::Div,
@@ -167,15 +164,12 @@ impl Parser {
             Token::LBrace => self.parse_block(),
             Token::Ident(_) => {
                 // 可能是赋值、成员赋值或表达式语句
-                // 先解析表达式（可能是标识符或成员访问）
                 let expr = self.parse_expression()?;
 
-                // 检查是否是赋值
                 if self.match_token(&Token::Equal) {
                     let value = self.parse_expression()?;
                     self.match_token(&Token::Semicolon);
 
-                    // 判断是简单赋值还是成员赋值
                     match expr {
                         Expr::Ident(name) => Ok(Stmt::Assign { name, value }),
                         Expr::Member { object, member } => Ok(Stmt::MemberAssign {
@@ -186,7 +180,6 @@ impl Parser {
                         _ => Err("Invalid assignment target".to_string()),
                     }
                 } else {
-                    // 表达式语句
                     self.match_token(&Token::Semicolon);
                     Ok(Stmt::Expr(expr))
                 }
@@ -256,9 +249,7 @@ impl Parser {
         };
         self.advance();
 
-        // 解析结构体字面量
         let value = self.parse_struct()?;
-
         // struct声明不需要分号
         Ok(Stmt::VarDecl {
             name,
@@ -269,7 +260,6 @@ impl Parser {
     }
 
     fn parse_decorated_func_def(&mut self) -> Result<Stmt, String> {
-        // Parse decorators (@decorator_name)
         let mut decorators = Vec::new();
         while self.current_token() == &Token::At {
             self.advance(); // Skip @
@@ -285,7 +275,6 @@ impl Parser {
             }
         }
 
-        // Expect func keyword after decorators
         if self.current_token() != &Token::Func {
             return Err(format!(
                 "Expected 'func' after decorator, found {:?}",
@@ -309,7 +298,6 @@ impl Parser {
         };
         self.advance();
 
-        // 参数列表（可选）
         let params = if self.match_token(&Token::LParen) {
             let mut params = Vec::new();
             if self.current_token() != &Token::RParen {
@@ -464,11 +452,8 @@ impl Parser {
         let update = if self.current_token() == &Token::RParen {
             None
         } else {
-            // 解析更新部分作为语句（可以是赋值或表达式）
-            // 尝试解析为表达式，然后检查是否是赋值
             let expr = self.parse_expression()?;
 
-            // 检查是否是赋值
             let stmt = if self.current_token() == &Token::Equal {
                 self.advance(); // 跳过 =
                 let value = self.parse_expression()?;
@@ -477,7 +462,6 @@ impl Parser {
                     _ => return Err("Invalid assignment target in for update".to_string()),
                 }
             } else {
-                // 否则作为表达式语句
                 Stmt::Expr(expr)
             };
 
@@ -485,7 +469,6 @@ impl Parser {
         };
         self.expect(Token::RParen)?;
 
-        // 解析循环体
         let body = if self.current_token() == &Token::LBrace {
             self.advance(); // 跳过 {
             let stmts = self.parse_block_statements()?;
@@ -762,7 +745,6 @@ impl Parser {
         loop {
             match self.current_token() {
                 Token::LParen => {
-                    // 函数调用
                     self.advance();
                     let args = self.parse_arguments()?;
                     self.expect(Token::RParen)?;
@@ -772,7 +754,6 @@ impl Parser {
                     };
                 }
                 Token::LBracket => {
-                    // 索引访问
                     self.advance();
                     let index = self.parse_expression()?;
                     self.expect(Token::RBracket)?;
@@ -782,7 +763,6 @@ impl Parser {
                     };
                 }
                 Token::Dot => {
-                    // 成员访问
                     self.advance();
                     if let Token::Ident(member) = self.current_token() {
                         let member = member.clone();
@@ -848,8 +828,6 @@ impl Parser {
             }
             Token::Decimal(s) => {
                 self.advance();
-                // Convert decimal string to rational (numerator/denominator)
-                // e.g., "0.1" -> 1/10, "0.25" -> 25/100 -> 1/4
                 self.decimal_to_rational(&s)
             }
             Token::String(s) => {
@@ -870,7 +848,6 @@ impl Parser {
             }
             Token::Ident(name) => {
                 self.advance();
-                // 检查是否是命名空间访问
                 if self.match_token(&Token::DoubleColon) {
                     if let Token::Ident(member) = self.current_token() {
                         let member = member.clone();
@@ -904,7 +881,6 @@ impl Parser {
             }
             Token::TypeString => {
                 self.advance();
-                // 检查是否是命名空间访问
                 if self.match_token(&Token::DoubleColon) {
                     if let Token::Ident(member) = self.current_token() {
                         let member = member.clone();
@@ -994,7 +970,6 @@ impl Parser {
                 self.match_token(&Token::Comma);
             }
 
-            // 如果下一个是右大括号，退出循环
             if self.current_token() == &Token::RBrace {
                 break;
             }
@@ -1009,10 +984,8 @@ impl Parser {
             self.expect(Token::Do)?;
         }
 
-        // 检查是否有参数列表（以 | 开始）
         let mut params = Vec::new();
         if self.match_token(&Token::Pipe) {
-            // 有参数列表
             if self.current_token() != &Token::Pipe {
                 loop {
                     if let Token::Ident(param) = self.current_token() {

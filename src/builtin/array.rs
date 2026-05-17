@@ -1,4 +1,3 @@
-// 数组函数模块
 use crate::value::Value;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -211,7 +210,6 @@ pub fn det(args: &[Value]) -> Result<Value, String> {
         Value::Array(matrix) => {
             let matrix = matrix.borrow();
 
-            // Convert to 2D float matrix
             let n = matrix.len();
             if n == 0 {
                 return Err("Cannot compute determinant of empty matrix".to_string());
@@ -256,7 +254,6 @@ fn calculate_determinant(matrix: &[Vec<f64>]) -> f64 {
 
     let mut det = 0.0;
     for col in 0..n {
-        // Create submatrix
         let mut submatrix = Vec::new();
         for row_data in matrix.iter().skip(1) {
             let mut subrow = Vec::new();

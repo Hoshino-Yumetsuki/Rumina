@@ -176,7 +176,6 @@ impl Interpreter {
             }
 
             Expr::Call { func, args } => {
-                // 检查是否是成员调用 (obj.method())
                 if let Expr::Member { object, member } = &**func {
                     let obj = self.eval_expr(object)?;
 
@@ -210,7 +209,6 @@ impl Interpreter {
                         return Err(format!("Set does not have method '{}'", member));
                     }
 
-                    // 获取方法
                     let method = match &obj {
                         Value::Struct(s) | Value::Module(s) => {
                             let s = s.borrow();
@@ -224,7 +222,6 @@ impl Interpreter {
                     // 调用方法，并注入self
                     self.call_method(method, obj, arg_vals)
                 } else {
-                    // 普通函数调用
                     let func_val = self.eval_expr(func)?;
                     let arg_vals: Result<Vec<_>, _> =
                         args.iter().map(|a| self.eval_expr(a)).collect();
@@ -291,7 +288,6 @@ impl Interpreter {
             }
 
             Expr::Namespace { module, name } => {
-                // 尝试从模块中获取
                 let module_val = self.get_variable(module)?;
                 match module_val {
                     Value::Module(m) => {

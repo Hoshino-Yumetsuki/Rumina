@@ -75,7 +75,6 @@ impl ASTOptimizer {
                     }
 
                     if let Some(opt_stmt) = self.optimize_stmt(stmt)? {
-                        // Check if this is a return statement
                         if matches!(opt_stmt, Stmt::Return(_)) {
                             has_return = true;
                         }
@@ -547,10 +546,8 @@ impl ASTOptimizer {
             return None;
         }
 
-        // Unroll the loop
         let mut unrolled = Vec::new();
 
-        // Add init
         unrolled.push(Stmt::VarDecl {
             name: loop_var.clone(),
             value: Expr::Int(start_val),
@@ -560,7 +557,6 @@ impl ASTOptimizer {
 
         // Unroll body for each iteration
         for i in start_val..end_val {
-            // Clone and substitute loop variable with constant
             for stmt in body {
                 let substituted = self.substitute_var_in_stmt(stmt, &loop_var, i);
                 unrolled.push(substituted);

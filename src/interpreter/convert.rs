@@ -68,7 +68,7 @@ pub(super) fn convert_to_bool(val: Value) -> Result<Value, String> {
 }
 
 pub(super) fn convert_to_string(val: Value) -> Result<Value, String> {
-    Ok(Value::String(format!("{}", val)))
+    Ok(Value::String(val.to_string()))
 }
 
 pub(super) fn convert_to_rational(val: Value) -> Result<Value, String> {

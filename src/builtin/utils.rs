@@ -311,30 +311,25 @@ pub fn decimal(args: &[Value]) -> Result<Value, String> {
                     let denom = r.denom().to_f64_checked().ok_or("Denominator too large")?;
                     numer / denom
                 }
-                Value::Irrational(irr) => {
-                    // Simple conversions for basic irrationals
-                    match irr {
-                        crate::value::IrrationalValue::Pi => std::f64::consts::PI,
-                        crate::value::IrrationalValue::E => std::f64::consts::E,
-                        crate::value::IrrationalValue::Sqrt(n) => {
-                            let n_val = match n.as_ref() {
-                                Value::Int(i) => *i as f64,
-                                Value::Float(f) => *f,
-                                _ => {
-                                    return Err(
-                                        "Cannot convert complex irrational to decimal".to_string()
-                                    );
-                                }
-                            };
-                            n_val.sqrt()
-                        }
-                        _ => {
-                            return Err(
-                                "Cannot convert composite irrational to decimal".to_string()
-                            );
-                        }
+                Value::Irrational(irr) => match irr {
+                    crate::value::IrrationalValue::Pi => std::f64::consts::PI,
+                    crate::value::IrrationalValue::E => std::f64::consts::E,
+                    crate::value::IrrationalValue::Sqrt(n) => {
+                        let n_val = match n.as_ref() {
+                            Value::Int(i) => *i as f64,
+                            Value::Float(f) => *f,
+                            _ => {
+                                return Err(
+                                    "Cannot convert complex irrational to decimal".to_string()
+                                );
+                            }
+                        };
+                        n_val.sqrt()
                     }
-                }
+                    _ => {
+                        return Err("Cannot convert composite irrational to decimal".to_string());
+                    }
+                },
                 _ => return Err("Cannot convert complex real part to decimal".to_string()),
             };
 
@@ -366,7 +361,6 @@ pub fn decimal(args: &[Value]) -> Result<Value, String> {
                 _ => return Err("Cannot convert complex imaginary part to decimal".to_string()),
             };
 
-            // Return as a string representation of complex number in float form
             use num::complex::Complex64;
             let c = Complex64::new(re_float, im_float);
             if c.im >= 0.0 {
@@ -392,9 +386,7 @@ pub fn assert(args: &[Value]) -> Result<Value, String> {
 
     let condition = &args[0];
 
-    // Check if condition is truthy
     if !condition.is_truthy() {
-        // Get error message (use provided message or default)
         let message = if args.len() == 2 {
             match &args[1] {
                 Value::String(s) => s.clone(),

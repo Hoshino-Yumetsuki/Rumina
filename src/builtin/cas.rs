@@ -3,14 +3,12 @@ use crate::value::Value;
 use mathcore::MathCore;
 use std::collections::HashMap;
 
-// 全局CAS存储
 use std::sync::Mutex;
 
 lazy_static::lazy_static! {
     static ref CAS_STORAGE: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
 }
 
-// Helper function to convert Value to expression string
 fn value_to_expr_string(value: &Value) -> Result<String, String> {
     match value {
         Value::String(s) => Ok(s.clone()),
@@ -21,15 +19,12 @@ fn value_to_expr_string(value: &Value) -> Result<String, String> {
             body,
             ..
         } => {
-            // For lambda/function, we need to convert the body to an expression string
-            // This is a simplified conversion that handles common cases
             if params.len() != 1 {
                 return Err(
                     "Function must have exactly one parameter for calculus operations".to_string(),
                 );
             }
 
-            // Convert the body statement to an expression string
             stmt_to_expr_string(body, &params[0])
         }
         _ => Err(format!(
@@ -39,14 +34,12 @@ fn value_to_expr_string(value: &Value) -> Result<String, String> {
     }
 }
 
-// Helper function to convert Stmt to expression string
 fn stmt_to_expr_string(stmt: &Stmt, var: &str) -> Result<String, String> {
     match stmt {
         Stmt::Expr(expr) => expr_to_string(expr, var),
         Stmt::Return(Some(expr)) => expr_to_string(expr, var),
         Stmt::Return(None) => Err("Return statement has no expression".to_string()),
         Stmt::Block(stmts) => {
-            // For blocks, try to find a return statement or the last expression
             for stmt in stmts.iter().rev() {
                 match stmt {
                     Stmt::Return(Some(expr)) => return expr_to_string(expr, var),
@@ -60,7 +53,6 @@ fn stmt_to_expr_string(stmt: &Stmt, var: &str) -> Result<String, String> {
     }
 }
 
-// Helper function to convert Expr to string
 fn expr_to_string(expr: &Expr, var: &str) -> Result<String, String> {
     match expr {
         Expr::Int(n) => Ok(n.to_string()),
@@ -108,20 +100,16 @@ fn expr_to_string(expr: &Expr, var: &str) -> Result<String, String> {
     }
 }
 
-// CAS内置函数接口
 pub fn parse(args: &[Value]) -> Result<Value, String> {
     if args.len() != 1 {
         return Err("parse expects 1 argument".to_string());
     }
 
     match &args[0] {
-        Value::String(s) => {
-            // 解析表达式以验证语法
-            match MathCore::parse(s) {
-                Ok(_expr) => Ok(Value::String(s.clone())),
-                Err(e) => Err(format!("Parse error: {}", e)),
-            }
-        }
+        Value::String(s) => match MathCore::parse(s) {
+            Ok(_expr) => Ok(Value::String(s.clone())),
+            Err(e) => Err(format!("Parse error: {}", e)),
+        },
         _ => Err("parse expects string".to_string()),
     }
 }
@@ -139,9 +127,8 @@ pub fn differentiate(args: &[Value]) -> Result<Value, String> {
         return Err("differentiate expects string variable as second argument".to_string());
     };
 
-    // 求导
     match MathCore::differentiate(&expr_str, &var) {
-        Ok(derivative) => Ok(Value::String(format!("{}", derivative))),
+        Ok(derivative) => Ok(Value::String(derivative.to_string())),
         Err(e) => Err(format!("Differentiation error: {}", e)),
     }
 }
@@ -159,10 +146,9 @@ pub fn solve_linear(args: &[Value]) -> Result<Value, String> {
         return Err("solve_linear expects string variable as second argument".to_string());
     };
 
-    // 求解方程
     match MathCore::solve(&expr_str, &var) {
         Ok(roots) => {
-            // 返回第一个根（对于线性方程通常只有一个根）
+            // Linear equations typically have one root
             if !roots.is_empty() {
                 if let mathcore::Expr::Number(n) = &roots[0] {
                     Ok(Value::Float(*n))
@@ -192,7 +178,6 @@ pub fn evaluate_at(args: &[Value]) -> Result<Value, String> {
 
     let value = args[2].to_float()?;
 
-    // 解析并求值
     let math = MathCore::new();
     let mut vars = std::collections::HashMap::new();
     vars.insert(var, value);
@@ -220,7 +205,6 @@ pub fn store(args: &[Value]) -> Result<Value, String> {
         return Err("store expects string expression".to_string());
     };
 
-    // 验证表达式是否可以解析
     MathCore::parse(&expr).map_err(|e| format!("Invalid expression: {}", e))?;
 
     CAS_STORAGE.lock().unwrap().insert(name, expr);
@@ -294,9 +278,8 @@ pub fn integrate(args: &[Value]) -> Result<Value, String> {
         return Err("integrate expects string variable as second argument".to_string());
     };
 
-    // 积分
     match MathCore::integrate(&expr_str, &var) {
-        Ok(integral) => Ok(Value::String(format!("{}", integral))),
+        Ok(integral) => Ok(Value::String(integral.to_string())),
         Err(e) => Err(format!("Integration error: {}", e)),
     }
 }
@@ -317,7 +300,6 @@ pub fn definite_integral(args: &[Value]) -> Result<Value, String> {
     let lower = args[2].to_float()?;
     let upper = args[3].to_float()?;
 
-    // 数值积分
     match MathCore::numerical_integrate(&expr_str, &var, lower, upper) {
         Ok(result) => Ok(Value::Float(result)),
         Err(e) => Err(format!("Integration error: {}", e)),

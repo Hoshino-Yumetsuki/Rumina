@@ -14,7 +14,6 @@ pub mod value_ops;
 pub mod vm;
 pub mod vm_ops;
 
-// WASM 接口模块
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
 
@@ -164,11 +163,9 @@ pub fn run_rumina_with_dir(
         return interpreter.interpret(ast);
     }
 
-    // Apply AST optimization passes
     let mut optimizer = ASTOptimizer::new();
     let optimized_ast = optimizer.optimize(ast)?;
 
-    // Compile to bytecode with directory context
     let mut compiler = if let Some(dir) = current_dir {
         Compiler::with_current_dir(dir)
     } else {
@@ -176,7 +173,6 @@ pub fn run_rumina_with_dir(
     };
     let mut bytecode = compiler.compile(optimized_ast)?;
 
-    // Apply bytecode optimization passes
     let mut bytecode_optimizer = BytecodeOptimizer::new();
     bytecode_optimizer.optimize(&mut bytecode);
 
@@ -212,7 +208,6 @@ mod vm_integration_tests {
 
     #[test]
     fn test_run_compatibility() {
-        // run() should work without returning value
         let result = run("15 + 15;");
         assert!(result.is_ok());
     }
@@ -268,7 +263,6 @@ if (path.basename("/tmp/demo.txt") == "demo.txt") {
 
     #[test]
     fn test_sin_with_bigint() {
-        // Test sin with bigint
         let result = run_rumina("sin(10^10);").unwrap();
         match result {
             Some(Value::Float(_)) => (), // Should return a float
@@ -278,7 +272,6 @@ if (path.basename("/tmp/demo.txt") == "demo.txt") {
 
     #[test]
     fn test_tan_with_bigint() {
-        // Test tan with bigint
         let result = run_rumina("tan(10^10);").unwrap();
         match result {
             Some(Value::Float(_)) => (), // Should return a float
@@ -298,7 +291,6 @@ if (path.basename("/tmp/demo.txt") == "demo.txt") {
 
     #[test]
     fn test_log_with_bigint() {
-        // Test log with bigint
         let result = run_rumina("log(10^10);").unwrap();
         match result {
             Some(Value::Float(_)) => (), // Should return a float

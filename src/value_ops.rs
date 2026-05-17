@@ -49,13 +49,10 @@ const PARALLEL_POW_THRESHOLD: u32 = 10000;
 /// For exponents >= PARALLEL_POW_THRESHOLD, uses parallel divide-and-conquer
 /// to improve CPU utilization on multi-core systems.
 fn bigint_pow_optimized(base: &BigInt, exponent: u32) -> BigInt {
-    // For small exponents, use the standard sequential algorithm
     if exponent < PARALLEL_POW_THRESHOLD {
         return base.pow_u32(exponent);
     }
 
-    // For large exponents, use parallel divide-and-conquer approach
-    // This splits the computation: base^exp = (base^(exp/2))^2 or (base^(exp/2))^2 * base
     bigint_pow_parallel(base, exponent)
 }
 
@@ -73,11 +70,7 @@ fn bigint_pow_parallel(base: &BigInt, exponent: u32) -> BigInt {
         return base.pow_u32(exponent);
     }
 
-    // For large exponents, split into chunks that can be computed independently
-    // then multiplied together. This allows parallel computation.
     // Strategy: base^exp = base^(chunk_size) * base^(chunk_size) * ... * base^(remainder)
-
-    // Choose chunk size based on exponent to create parallelizable work
     let num_chunks = if exponent >= 100000 {
         8 // More chunks for very large exponents
     } else if exponent >= 10000 {
@@ -90,23 +83,19 @@ fn bigint_pow_parallel(base: &BigInt, exponent: u32) -> BigInt {
     let remainder = exponent % num_chunks;
 
     if chunk_size < 100 {
-        // Chunks too small, just use sequential
         return base.pow_u32(exponent);
     }
 
-    // Compute all chunks in parallel
     let chunk_results: Vec<BigInt> = (0..num_chunks)
         .into_par_iter()
         .map(|_| bigint_pow_parallel(base, chunk_size))
         .collect();
 
-    // Multiply all chunk results together
     let mut result = BigInt::from(1);
     for chunk_result in chunk_results {
         result *= chunk_result;
     }
 
-    // Handle remainder
     if remainder > 0 {
         let remainder_result = base.pow_u32(remainder);
         result *= remainder_result;
@@ -125,47 +114,40 @@ fn compute_power(base: f64, exponent: f64) -> Result<Value, String> {
     if is_simple_root && denom_approx > 0.0 {
         let n = denom_approx as u32;
 
-        // Handle negative bases
         if base < 0.0 {
             let is_odd_root = n % 2 == 1;
 
             if is_odd_root {
-                // Odd root of negative number: return negative irrational
                 let abs_base = base.abs();
 
-                // Check if it's a perfect root
                 let root_val = abs_base.powf(exponent);
                 if (root_val.round() - root_val).abs() < 1e-10 {
-                    // Perfect root - return as integer
                     return Ok(Value::Int(-(root_val.round() as i64)));
                 }
 
-                // Return as symbolic irrational: -(abs_base^(1/n))
                 let root = if n == 2 {
                     IrrationalValue::Sqrt(Box::new(Value::Int(abs_base as i64)))
                 } else {
                     IrrationalValue::Root(n, Box::new(Value::Int(abs_base as i64)))
                 };
 
-                // Negate by using Product with -1
+                // Negate via Product with -1
                 return Ok(Value::Irrational(IrrationalValue::Product(
                     Box::new(Value::Int(-1)),
                     Box::new(root),
                 )));
             } else {
-                // Even root of negative: return symbolic complex number
+                // Even root of negative: complex number
                 let abs_base = base.abs();
                 let root_val = abs_base.powf(exponent);
 
                 if (root_val.round() - root_val).abs() < 1e-10 {
-                    // Perfect root - return as i * integer
                     return Ok(Value::Complex(
                         Box::new(Value::Int(0)),
                         Box::new(Value::Int(root_val.round() as i64)),
                     ));
                 }
 
-                // Return as symbolic: 0 + sqrt(abs_base) * i
                 let root = if n == 2 {
                     IrrationalValue::Sqrt(Box::new(Value::Int(abs_base as i64)))
                 } else {
@@ -179,14 +161,11 @@ fn compute_power(base: f64, exponent: f64) -> Result<Value, String> {
             }
         } else {
             // Positive base
-            // Check if it's a perfect root
             let root_val = base.powf(exponent);
             if (root_val.round() - root_val).abs() < 1e-10 {
-                // Perfect root - return as integer
                 return Ok(Value::Int(root_val.round() as i64));
             }
 
-            // Return as symbolic irrational
             let root = if n == 2 {
                 IrrationalValue::Sqrt(Box::new(Value::Int(base as i64)))
             } else {
@@ -203,7 +182,6 @@ fn compute_power(base: f64, exponent: f64) -> Result<Value, String> {
 
     match math.evaluate(&expr) {
         Ok(mathcore::Expr::Number(result)) => {
-            // Check if result is close to an integer
             if (result.round() - result).abs() < 1e-10 {
                 Ok(Value::Int(result.round() as i64))
             } else {
@@ -215,9 +193,8 @@ fn compute_power(base: f64, exponent: f64) -> Result<Value, String> {
             expr, other
         )),
         Err(_) => {
-            // Mathcore failed - try complex number evaluation for negative bases
+            // Negative bases may produce complex numbers
             if base < 0.0 {
-                // Return symbolic complex number
                 let c = Complex64::new(base, 0.0).powf(exponent);
                 Ok(Value::Complex(
                     Box::new(Value::Float(c.re)),
@@ -233,7 +210,6 @@ fn compute_power(base: f64, exponent: f64) -> Result<Value, String> {
 /// Multiply two irrational values
 #[allow(dead_code)]
 fn multiply_irrationals(a: &IrrationalValue, b: &IrrationalValue) -> Result<Value, String> {
-    // Product simplification (limited)
     match (a, b) {
         (IrrationalValue::Sqrt(v1), IrrationalValue::Sqrt(v2)) => {
             // sqrt(a) * sqrt(b) = sqrt(a*b)
@@ -241,9 +217,6 @@ fn multiply_irrationals(a: &IrrationalValue, b: &IrrationalValue) -> Result<Valu
             Ok(Value::Irrational(IrrationalValue::Sqrt(Box::new(product))))
         }
         _ => {
-            // For other combinations, wrap first irrational in Product with coefficient 1
-            // Then multiply by second irrational using Product wrapper again
-            // For simplicity, just convert to float for now or fallback to interpreter
             use crate::interpreter::Interpreter;
             let mut interp = Interpreter::new();
             let left = Value::Irrational(a.clone());
@@ -281,15 +254,12 @@ pub fn value_binary_op(left: &Value, op: BinOp, right: &Value) -> Result<Value, 
                 BinOp::Mod => Ok(Value::Int(a % b)),
                 BinOp::Pow => {
                     if *b < 0 {
-                        // Negative exponent: convert to float
                         let result = (*a as f64).powf(*b as f64);
                         Ok(Value::Float(result))
                     } else {
-                        // Positive exponent: try as int, promote to BigInt on overflow
                         match a.checked_pow(*b as u32) {
                             Some(result) => Ok(Value::Int(result)),
                             None => {
-                                // Overflow: promote to BigInt and use optimized version
                                 let a_big = BigInt::from(*a);
                                 Ok(Value::BigInt(bigint_pow_optimized(&a_big, *b as u32)))
                             }
@@ -342,9 +312,6 @@ pub fn value_binary_op(left: &Value, op: BinOp, right: &Value) -> Result<Value, 
             _ => Err(format!("Unsupported operation: bigint {} bigint", op)),
         },
 
-        // For complex operations, fallback to more complex logic if needed
-        // For now, keep only the essential fast paths for Int operations
-
         // Boolean operations
         (Value::Bool(a), Value::Bool(b)) => match op {
             BinOp::And => Ok(Value::Bool(*a && *b)),
@@ -373,10 +340,8 @@ pub fn value_binary_op(left: &Value, op: BinOp, right: &Value) -> Result<Value, 
             )),
         },
 
-        // For other types, we need the full interpreter logic
-        // Fall back to creating an interpreter for these cases
+        // For other types, fall back to full interpreter
         _ => {
-            // Import here to avoid circular dependency at module level
             use crate::interpreter::Interpreter;
             let mut interp = Interpreter::new();
             interp.eval_binary_op(left, op, right)
@@ -387,26 +352,22 @@ pub fn value_binary_op(left: &Value, op: BinOp, right: &Value) -> Result<Value, 
 /// Evaluate unary operation on value
 pub fn value_unary_op(op: UnaryOp, val: &Value) -> Result<Value, String> {
     match op {
-        UnaryOp::Neg => {
-            match val {
-                Value::Int(n) => Ok(Value::Int(-n)),
-                Value::Float(f) => Ok(Value::Float(-f)),
-                Value::BigInt(n) => Ok(Value::BigInt(-n)),
-                Value::Rational(r) => Ok(Value::Rational(-r)),
-                _ => {
-                    // Fall back to interpreter for complex types
-                    use crate::interpreter::Interpreter;
-                    let interp = Interpreter::new();
-                    interp.eval_unary_op(op, val)
-                }
+        UnaryOp::Neg => match val {
+            Value::Int(n) => Ok(Value::Int(-n)),
+            Value::Float(f) => Ok(Value::Float(-f)),
+            Value::BigInt(n) => Ok(Value::BigInt(-n)),
+            Value::Rational(r) => Ok(Value::Rational(-r)),
+            _ => {
+                use crate::interpreter::Interpreter;
+                let interp = Interpreter::new();
+                interp.eval_unary_op(op, val)
             }
-        }
+        },
         UnaryOp::Not => match val {
             Value::Bool(b) => Ok(Value::Bool(!b)),
             _ => Err(format!("Cannot apply 'not' to {}", val.type_name())),
         },
         UnaryOp::Factorial => {
-            // Fall back to interpreter for factorial
             use crate::interpreter::Interpreter;
             let interp = Interpreter::new();
             interp.eval_unary_op(op, val)

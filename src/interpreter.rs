@@ -8,7 +8,6 @@ use crate::builtin;
 use crate::error::{RuminaError, StackFrame};
 use crate::value::*;
 
-// Submodules for code organization
 mod call;
 pub(crate) mod convert;
 mod expr;
@@ -42,10 +41,8 @@ pub struct Interpreter {
     return_value: Option<Value>,
     break_flag: bool,
     continue_flag: bool,
-    // Error tracking fields
     current_file: String,
-    call_stack: Vec<String>, // Stack of function names
-    // Recursion depth tracking for stack overflow prevention
+    call_stack: Vec<String>,
     recursion_depth: usize,
     max_recursion_depth: usize,
 }
@@ -93,7 +90,6 @@ impl Interpreter {
     fn wrap_error(&self, message: String) -> RuminaError {
         let mut error = RuminaError::runtime(message);
 
-        // Add current call stack
         for func_name in self.call_stack.iter().rev() {
             error.add_frame(StackFrame {
                 function_name: func_name.clone(),

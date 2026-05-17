@@ -7,9 +7,7 @@
 /// - Optimize jump patterns
 use crate::vm::{ByteCode, OpCode};
 
-/// Bytecode optimizer that performs peephole optimizations
 pub struct BytecodeOptimizer {
-    /// Track if any optimizations were applied
     modified: bool,
 }
 
@@ -18,12 +16,10 @@ impl BytecodeOptimizer {
         BytecodeOptimizer { modified: false }
     }
 
-    /// Optimize bytecode by applying peephole optimizations
     /// Returns true if any optimizations were applied
     pub fn optimize(&mut self, bytecode: &mut ByteCode) -> bool {
         self.modified = false;
 
-        // Apply multiple passes until no more optimizations can be made
         loop {
             let before_modified = self.modified;
 
@@ -33,7 +29,6 @@ impl BytecodeOptimizer {
             self.optimize_jump_chains(bytecode);
             self.eliminate_nop_patterns(bytecode);
 
-            // If no changes were made in this iteration, we're done
             if self.modified == before_modified {
                 break;
             }
@@ -53,7 +48,6 @@ impl BytecodeOptimizer {
             let next = &bytecode.instructions[i + 1];
 
             match (current, next) {
-                // Push followed by Pop - dead code
                 (OpCode::PushConst(_) | OpCode::PushConstPooled(_), OpCode::Pop) => {
                     removals.push(i);
                     removals.push(i + 1);
@@ -85,7 +79,6 @@ impl BytecodeOptimizer {
             let third = &bytecode.instructions[i + 2];
 
             match (first, second, third) {
-                // PushVar(x) -> Dup -> PopVar(x) leaves just PushVar(x) on stack
                 (OpCode::PushVar(name1), OpCode::Dup, OpCode::PopVar(name2)) if name1 == name2 => {
                     removals.push(i + 1); // Remove Dup
                     removals.push(i + 2); // Remove PopVar
@@ -115,14 +108,12 @@ impl BytecodeOptimizer {
             let second = &bytecode.instructions[i + 1];
             let third = &bytecode.instructions[i + 2];
 
-            // Try to constant-fold integer operations
             if let (
                 OpCode::PushConstPooled(idx1),
                 OpCode::PushConstPooled(idx2),
                 OpCode::Add | OpCode::Sub | OpCode::Mul,
             ) = (first, second, third)
             {
-                // Check if both constants are integers
                 if let (Some(val1), Some(val2)) =
                     (bytecode.constants.get(*idx1), bytecode.constants.get(*idx2))
                 {
@@ -154,10 +145,8 @@ impl BytecodeOptimizer {
 
         // Apply changes (in reverse to maintain indices)
         for (idx, new_op, remove_count) in changes.into_iter().rev() {
-            // Replace first instruction with merged result
             bytecode.instructions[idx] = new_op;
 
-            // Remove the next instructions
             for _ in 1..remove_count {
                 bytecode.instructions.remove(idx + 1);
                 bytecode.line_numbers.remove(idx + 1);
@@ -171,7 +160,6 @@ impl BytecodeOptimizer {
         for i in 0..bytecode.instructions.len() {
             match &bytecode.instructions[i] {
                 OpCode::Jump(target) | OpCode::JumpIfFalse(target) | OpCode::JumpIfTrue(target) => {
-                    // Follow the jump chain
                     let mut final_target = *target;
                     let mut visited = std::collections::HashSet::new();
 
@@ -186,7 +174,6 @@ impl BytecodeOptimizer {
                         }
                     }
 
-                    // Update the instruction with the final target
                     if final_target != *target {
                         match &mut bytecode.instructions[i] {
                             OpCode::Jump(addr) => *addr = final_target,
@@ -212,7 +199,6 @@ impl BytecodeOptimizer {
             let next = &bytecode.instructions[i + 1];
 
             match (current, next) {
-                // Push then immediately pop same variable - no effect
                 (OpCode::PushVar(name1), OpCode::PopVar(name2)) if name1 == name2 => {
                     removals.push(i);
                     removals.push(i + 1);

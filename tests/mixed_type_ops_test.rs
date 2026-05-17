@@ -9,7 +9,6 @@ fn test_int_float_mod() {
     let int_val = Value::Int(10);
     let float_val = Value::Float(3.5);
 
-    // 10 % 3.5 = 3.0
     let result = interpreter.eval_binary_op(&int_val, BinOp::Mod, &float_val);
     assert!(result.is_ok(), "Int % Float should be supported");
     if let Ok(Value::Float(f)) = result {
@@ -25,7 +24,6 @@ fn test_int_float_comparison() {
     let int_val = Value::Int(1);
     let float_val = Value::Float(1.0);
 
-    // 1 == 1.0
     let result = interpreter.eval_binary_op(&int_val, BinOp::Equal, &float_val);
     assert!(result.is_ok(), "Int == Float should be supported");
     assert_eq!(result.unwrap(), Value::Bool(true));
@@ -37,7 +35,6 @@ fn test_float_int_sub() {
     let float_val = Value::Float(3.5);
     let int_val = Value::Int(1);
 
-    // 3.5 - 1 = 2.5
     let result = interpreter.eval_binary_op(&float_val, BinOp::Sub, &int_val);
     assert!(result.is_ok());
     if let Ok(Value::Float(f)) = result {
@@ -53,7 +50,6 @@ fn test_int_rational_mod() {
     let int_val = Value::Int(10);
     let rational_val = Value::Rational(rational_from_integer(BigInt::from(3)));
 
-    // 10 % 3 = 1
     let result = interpreter.eval_binary_op(&int_val, BinOp::Mod, &rational_val);
     assert!(result.is_ok(), "Int % Rational should be supported");
     if let Ok(Value::Rational(r)) = result {

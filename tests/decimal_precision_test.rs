@@ -13,7 +13,6 @@ fn test_decimal_addition_precision() {
     assert!(result.is_ok(), "0.1 + 0.2 should not error");
 
     if let Ok(Some(value)) = result {
-        // Should be a rational: 3/10
         match value {
             Value::Rational(r) => {
                 let expected = expected_rational(3, 10);
@@ -26,7 +25,6 @@ fn test_decimal_addition_precision() {
 
 #[test]
 fn test_decimal_equality() {
-    // Test that 0.1 + 0.2 == 0.3 returns true
     let result = run_rumina("0.1 + 0.2 == 0.3;");
     assert!(result.is_ok());
 
@@ -40,7 +38,6 @@ fn test_decimal_equality() {
 
 #[test]
 fn test_simple_decimal_parsing() {
-    // Test that 0.1 parses to 1/10
     let result = run_rumina("0.1;");
     assert!(result.is_ok());
 
@@ -57,7 +54,6 @@ fn test_simple_decimal_parsing() {
 
 #[test]
 fn test_decimal_quarter() {
-    // Test that 0.25 parses to 1/4
     let result = run_rumina("0.25;");
     assert!(result.is_ok());
 
@@ -74,7 +70,6 @@ fn test_decimal_quarter() {
 
 #[test]
 fn test_decimal_multiplication() {
-    // Test 0.5 * 0.5 = 0.25 (1/4)
     let result = run_rumina("0.5 * 0.5;");
     assert!(result.is_ok());
 
@@ -91,7 +86,6 @@ fn test_decimal_multiplication() {
 
 #[test]
 fn test_decimal_subtraction() {
-    // Test 0.3 - 0.1 = 0.2 (1/5)
     let result = run_rumina("0.3 - 0.1;");
     assert!(result.is_ok());
 
@@ -108,7 +102,6 @@ fn test_decimal_subtraction() {
 
 #[test]
 fn test_decimal_display() {
-    // Test that decimals display as rationals
     let result = run_rumina("0.1;");
     assert!(result.is_ok());
 
@@ -120,7 +113,6 @@ fn test_decimal_display() {
 
 #[test]
 fn test_multiple_decimal_places() {
-    // Test 0.125 = 1/8
     let result = run_rumina("0.125;");
     assert!(result.is_ok());
 
@@ -137,7 +129,6 @@ fn test_multiple_decimal_places() {
 
 #[test]
 fn test_decimal_with_integer_part() {
-    // Test 1.5 = 3/2
     let result = run_rumina("1.5;");
     assert!(result.is_ok());
 
@@ -154,7 +145,6 @@ fn test_decimal_with_integer_part() {
 
 #[test]
 fn test_complex_decimal_expression() {
-    // Test (0.1 + 0.2) * 2 = 0.6 (3/5)
     let result = run_rumina("(0.1 + 0.2) * 2;");
     assert!(result.is_ok());
 
@@ -171,7 +161,6 @@ fn test_complex_decimal_expression() {
 
 #[test]
 fn test_negative_decimal() {
-    // Test negative decimals: -0.1 should equal -1/10
     let result = run_rumina("-0.1;");
     assert!(result.is_ok());
 
@@ -204,7 +193,6 @@ fn test_large_decimal() {
 
 #[test]
 fn test_zero_decimal() {
-    // Test 0.0 should equal 0/1
     let result = run_rumina("0.0;");
     assert!(result.is_ok());
 

@@ -112,21 +112,16 @@ impl Value {
         match self {
             Value::Int(i) => Ok(*i as f64),
             Value::Float(f) => Ok(*f),
-            Value::BigInt(b) => {
-                // Convert BigInt to f64 via string parsing
-                b.to_string()
-                    .parse::<f64>()
-                    .map_err(|_| format!("BigInt {} is too large to convert to float", b))
-            }
+            Value::BigInt(b) => b
+                .to_string()
+                .parse::<f64>()
+                .map_err(|_| format!("BigInt {} is too large to convert to float", b)),
             Value::Rational(r) => {
                 let num = r.numer().to_string().parse::<f64>().unwrap_or(0.0);
                 let den = r.denom().to_string().parse::<f64>().unwrap_or(1.0);
                 Ok(num / den)
             }
-            Value::Irrational(irr) => {
-                // Convert irrational values to their float approximations
-                Ok(irrational_to_float(irr))
-            }
+            Value::Irrational(irr) => Ok(irrational_to_float(irr)),
             Value::Complex(re, im) => {
                 // For complex numbers, only return real part if imaginary is zero
                 let im_float = im.to_float()?;
@@ -184,21 +179,18 @@ impl fmt::Display for Value {
                 let re_str = format!("{}", re);
                 let im_str = format!("{}", im);
 
-                // Check if real part is zero
                 let re_is_zero = match re.as_ref() {
                     Value::Int(0) => true,
                     Value::Rational(r) => r.numer().to_string() == "0",
                     _ => false,
                 };
 
-                // Check if imaginary part is zero
                 let im_is_zero = match im.as_ref() {
                     Value::Int(0) => true,
                     Value::Rational(r) => r.numer().to_string() == "0",
                     _ => false,
                 };
 
-                // Check if imaginary coefficient is 1 or -1
                 let im_is_one = match im.as_ref() {
                     Value::Int(1) => true,
                     Value::Rational(r) => {
@@ -234,7 +226,6 @@ impl fmt::Display for Value {
                     } else if im_is_neg_one {
                         write!(f, "{}-i", re_str)
                     } else {
-                        // Check if imaginary part is negative
                         let im_is_negative = match im.as_ref() {
                             Value::Int(n) if *n < 0 => true,
                             Value::Rational(r) if r.numer().to_string().starts_with('-') => true,
@@ -348,7 +339,6 @@ pub fn irrational_to_float(irr: &IrrationalValue) -> f64 {
         IrrationalValue::Pi => std::f64::consts::PI,
         IrrationalValue::E => std::f64::consts::E,
         IrrationalValue::Sqrt(n) => {
-            // Convert the inner value to float and take square root
             if let Ok(val) = value_to_float_helper(n) {
                 val.sqrt()
             } else {
@@ -356,7 +346,6 @@ pub fn irrational_to_float(irr: &IrrationalValue) -> f64 {
             }
         }
         IrrationalValue::Root(degree, n) => {
-            // Convert to float and take n-th root
             if let Ok(val) = value_to_float_helper(n) {
                 val.powf(1.0 / (*degree as f64))
             } else {
@@ -364,21 +353,16 @@ pub fn irrational_to_float(irr: &IrrationalValue) -> f64 {
             }
         }
         IrrationalValue::Product(coef, inner_irr) => {
-            // Multiply coefficient by the inner irrational
             if let Ok(coef_val) = value_to_float_helper(coef) {
                 coef_val * irrational_to_float(inner_irr)
             } else {
                 f64::NAN
             }
         }
-        IrrationalValue::Sum(left, right) => {
-            // Add two irrational values
-            irrational_to_float(left) + irrational_to_float(right)
-        }
+        IrrationalValue::Sum(left, right) => irrational_to_float(left) + irrational_to_float(right),
     }
 }
 
-// Helper function to convert Value to float (used internally)
 fn value_to_float_helper(val: &Value) -> Result<f64, ()> {
     match val {
         Value::Int(i) => Ok(*i as f64),
@@ -433,11 +417,9 @@ fn format_irrational(irr: &IrrationalValue) -> String {
                 }
             }
             Value::Irrational(irr) => {
-                // For nested irrational like sqrt(irrational), format as √(...)
                 format!("√({})", format_irrational(irr))
             }
             other => {
-                // For other types, just show √(value)
                 format!("√({})", other)
             }
         }
@@ -496,7 +478,6 @@ fn format_irrational(irr: &IrrationalValue) -> String {
                     }
                 }
                 _ => {
-                    // Other cases, format as-is
                     let coef_str = match coef {
                         Value::Int(1) => return format_irrational(irr),
                         Value::Int(n) => n.to_string(),
@@ -545,7 +526,6 @@ fn format_irrational(irr: &IrrationalValue) -> String {
     match irr {
         IrrationalValue::Sqrt(n) => format_sqrt(n),
         IrrationalValue::Root(degree, n) => {
-            // Format n-th root
             match degree {
                 2 => format_sqrt(n), // Use sqrt notation for square roots
                 _ => format!("{}√{}", degree, n),

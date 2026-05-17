@@ -1,6 +1,5 @@
 use crate::numeric::BigInt;
 
-/// Token类型定义
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     // 字面量
